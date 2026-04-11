@@ -1,0 +1,5 @@
+outs:
+- md5: 2a48fcc6e15ddaddc090aa9eff8e01dd
+  size: 10471
+  hash: md5
+  path: spotify_reviews_raw.csv

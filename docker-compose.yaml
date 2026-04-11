@@ -1,0 +1,23 @@
+version: '3.3'
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: spotify_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./mongo-data:/data/db
+  mongo-express:
+    image: mongo-express:latest
+    container_name: spotify_mongo-express
+    ports:
+      - "8085:8081"
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongodb
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: spotify_label_studio
+    ports:
+      - "8086:8080"
+    volumes:
+      - ./label_studio_data:/label-studio/data

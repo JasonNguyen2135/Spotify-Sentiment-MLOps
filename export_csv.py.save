@@ -1,0 +1,35 @@
+import pandas as pd
+from pymongo import MongoClient
+
+def export_mongo_to_csv():
+    try:
+        client = MongoClient('mongodb://localhost:27017/')
+        db = client['spotify_db']
+        collection = db['raw_reviews']
+        cursor = collection.find({}, {
+            '_id': 0, 
+            'userName': 1, 
+            'content': 1, 
+            'score': 1, 
+            'at': 1, 
+            'thumbsUpCount': 1
+        })
+        
+        df = pd.DataFrame(list(cursor))
+        
+        if df.empty:
+            print("Không có dữ liệu trong MongoDB để xuất!")
+            return
+        df = df.sort_values(by='at', ascending=False)
+        output_file = 'spotify_reviews_raw.csv'
+        df.to_csv(output_file, index=False, encoding='utf-8-sig') 
+        
+        print(f"Đã xuất thành công {len(df)} dòng dữ liệu ra file: {output_file}")
+
+    except Exception as e:
+        print(f"Lỗi khi xuất dữ liệu: {e}")
+    finally:
+        client.close()
+
+if __name__ == "__main__":
+    export_mongo_to_csv()
