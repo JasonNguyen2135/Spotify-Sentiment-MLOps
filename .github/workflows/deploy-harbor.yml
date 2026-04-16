@@ -19,7 +19,7 @@ jobs:
 
     - name: Build Docker Image
       run: |
-        docker build -t 172.31.87.182/spotify-mlops/sentiment-api:latest .
+        docker build -t 172.31.87.182/spotify-mlops/sentiment-api:latest ./backend
 
     - name: Push to Harbor
       run: |
