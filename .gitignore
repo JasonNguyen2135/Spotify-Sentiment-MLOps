@@ -2,3 +2,4 @@ mongo-data/
 label_studio_data/
 venv/
 /spotify_reviews_raw.csv
+.env

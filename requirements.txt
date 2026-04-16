@@ -1,2 +1,31 @@
 google-play-scraper
-pymongo
+#pymongo
+# Xử lý và phân tích dữ liệu
+#pandas==2.1.1
+#numpy==1.26.0
+
+# Học máy và Tiền xử lý văn bản
+#scikit-learn==1.3.1
+
+# Quản lý vòng đời mô hình (MLOps)
+#mlflow==2.7.1
+#dagshub==0.3.5
+
+# Kết nối hạ tầng (S3, MySQL, Environment)
+#boto3==1.28.56
+#pymysql==1.1.0
+#python-dotenv==1.0.0
+#cryptography==41.0.4
+
+# Phục vụ mô hình (API - Dự kiến cho tuần sau)
+#fastapi==0.103.2
+#uvicorn==0.23.2
+#python-multipart==0.0.6
+
+fastapi
+uvicorn
+mlflow
+dagshub
+pandas
+scikit-learn
+python-dotenv
