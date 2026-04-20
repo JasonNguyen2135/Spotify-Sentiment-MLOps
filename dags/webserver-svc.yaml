@@ -1,0 +1,16 @@
+# webserver-svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-webserver
+  namespace: airflow
+spec:
+  ports:
+    - name: web
+      port: 8080
+      targetPort: 8080
+  selector:
+    component: webserver
+    release: airflow
+    tier: airflow
+  type: ClusterIP

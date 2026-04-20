@@ -1,7 +1,5 @@
 fastapi
 uvicorn
-mlflow
-dagshub
+python-multipart
 pandas
-scikit-learn
-python-dotenv
+requests

@@ -3,3 +3,4 @@ label_studio_data/
 venv/
 /spotify_reviews_raw.csv
 .env
+dataset/spotify_reviews_raw.csv

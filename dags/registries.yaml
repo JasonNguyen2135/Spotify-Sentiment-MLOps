@@ -1,0 +1,12 @@
+sudo mkdir -p /etc/rancher/k3s
+sudo tee /etc/rancher/k3s/registries.yaml > /dev/null <<EOF
+mirrors:
+  "172.31.87.182":
+    endpoint:
+      - "https://172.31.87.182"
+      - "http://172.31.87.182"
+configs:
+  "172.31.87.182":
+    tls:
+      insecure_skip_verify: true
+EOF

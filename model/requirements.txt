@@ -28,4 +28,3 @@ mlflow
 dagshub
 pandas
 scikit-learn
-python-dotenv

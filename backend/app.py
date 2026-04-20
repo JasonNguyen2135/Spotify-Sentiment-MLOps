@@ -1,41 +1,37 @@
-import os
-from fastapi import FastAPI
-import mlflow.sklearn
+from fastapi import FastAPI, UploadFile, File
 import pandas as pd
-from dotenv import load_dotenv
+import requests
+import os
+import io
 
-load_dotenv()
+app = FastAPI(title="Spotify Backend API")
 
-app = FastAPI(title="Spotify Sentiment API")
+# Trỏ tới Model Service nội bộ
+MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
 
-# Cấu hình DagsHub
-DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME")
-DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN")
-REPO_NAME = "Spotify-Sentiment-MLOps"
+@app.post("/analyze-csv")
+async def analyze_csv(file: UploadFile = File(...)):
+    # Đọc file CSV người dùng gửi
+    content = await file.read()
+    df = pd.read_csv(io.BytesIO(content))
+    
+    # Cột chứa bình luận mặc định là 'review' (tùy file của bạn)
+    col_name = "review" if "review" in df.columns else df.columns[0]
+    
+    results = []
+    # Gọi sang Model Service cho từng dòng (Thực tế nên tối ưu gọi theo batch)
+    for index, row in df.iterrows():
+        text = str(row[col_name])
+        try:
+            # Gọi API của Model Service
+            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text})
+            sentiment = res.json().get("sentiment", "Lỗi")
+        except:
+            sentiment = "Không kết nối được Model"
+            
+        results.append({"Câu bình luận": text, "Cảm xúc": sentiment})
+        
+        # Giới hạn test 10 dòng đầu cho nhanh
+        if index >= 9: break 
 
-os.environ['MLFLOW_TRACKING_USERNAME'] = DAGSHUB_USERNAME
-os.environ['MLFLOW_TRACKING_PASSWORD'] = DAGSHUB_TOKEN
-mlflow.set_tracking_uri(f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}.mlflow")
-
-# Tải model từ Registry (Dùng bản Production)
-model_name = "Spotify_Production_Model"
-model_uri = f"models:/{model_name}/Production"
-
-print(f"⏳ Đang tải model {model_name} từ DagsHub...")
-model = mlflow.sklearn.load_model(model_uri)
-print("✅ Model đã sẵn sàng!")
-
-@app.get("/")
-def home():
-    return {"message": "API Sentiment Spotify đang chạy!", "model_version": "Production"}
-
-@app.post("/predict")
-def predict(review: str):
-    # Dự đoán cảm xúc
-    prediction = model.predict([review])[0]
-    sentiment = "Tích cực" if prediction == 1 else "Tiêu cực"
-    return {
-        "review": review,
-        "sentiment": sentiment,
-        "status": "Success"
-    }
+    return {"results": results}

@@ -30,7 +30,7 @@ def train_and_deploy():
 
     # 4. Đọc dữ liệu Local
     print("Đang nạp dữ liệu spotify_labeled.csv...")
-    df = pd.read_csv("spotify_labeled.csv")
+    df = pd.read_csv("data/spotify_labeled.csv")
     X = df['content'].fillna('')
     y = df['sentiment']
 

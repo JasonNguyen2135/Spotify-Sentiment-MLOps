@@ -1,0 +1,206 @@
+# ==========================================
+# 1. MONGODB (Kèm Volume để giữ Data)
+# ==========================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:latest
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-storage
+          mountPath: /data/db
+      volumes:
+      - name: mongo-storage
+        persistentVolumeClaim:
+          claimName: mongo-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+spec:
+  selector:
+    app: mongodb
+  ports:
+  - port: 27017
+    targetPort: 27017
+
+# ==========================================
+# 2. MODEL SERVICE
+# ==========================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-service
+  template:
+    metadata:
+      labels:
+        app: model-service
+    spec:
+      containers:
+      - name: model-service
+        image: 172.31.87.182/spotify-mlops/model-service:latest # Đổi lại tên Image của bạn
+        imagePullPolicy: IfNotPresent # Dùng Image có sẵn trên máy
+        env:
+          - name: DAGSHUB_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: dagshub-secret
+                key: DAGSHUB_USERNAME
+          - name: DAGSHUB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: dagshub-secret
+                key: DAGSHUB_PASSWORD
+        ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-service
+spec:
+  selector:
+    app: model-service
+  ports:
+  - port: 8000
+    targetPort: 8000
+
+# ==========================================
+# 3. BACKEND
+# ==========================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: 172.31.87.182/spotify-mlops/backend:latest # Đổi lại tên Image của bạn
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        env:
+        - name: MODEL_API_URL
+          value: "http://model-service:8000" # K8s sẽ tự động map tên này sang IP của Pod Model
+        - name: MONGO_URL
+          value: "mongodb://mongodb:27017"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+
+# ==========================================
+# 4. FRONTEND (Giao diện Streamlit)
+# ==========================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: 172.31.87.182/spotify-mlops/frontend:latest # Đổi lại tên Image của bạn
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8501
+        env:
+        - name: BACKEND_API_URL
+          value: "http://backend:8000" # Streamlit gọi nội bộ chuẩn xác!
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: NodePort # Mở cổng ra ngoài Windows cho bạn truy cập
+  selector:
+    app: frontend
+  ports:
+  - port: 8501
+    targetPort: 8501
+    nodePort: 30503 # Cổng truy cập từ trình duyệt (http://localhost:30501)
+
+# ==========================================
+# 5. CRAWLER (Chạy ngầm, không cần Service)
+# ==========================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crawler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crawler
+  template:
+    metadata:
+      labels:
+        app: crawler
+    spec:
+      containers:
+      - name: crawler
+        image: 172.31.87.182/spotify-mlops/crawler:latest # Đổi lại tên Image của bạn
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: MONGO_URL
+          value: "mongodb://mongodb:27017"

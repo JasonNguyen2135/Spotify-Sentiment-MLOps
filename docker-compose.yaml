@@ -18,6 +18,53 @@ services:
       - "8086:8080"
     volumes:
       - label_data:/label-studio/data
+  # 2. Service chứa Model (Chỉ có nhiệm vụ duy nhất là Predict)
+  model-service:
+    build: ./model
+    container_name: spotify_model_api
+    ports:
+      - "8001:8000" # Expose ra 8001 để tránh trùng Backend
+    env_file: 
+      - .env # Chứa token DagsHub để kéo model về
+    restart: always
+
+  # 3. Backend (Điều phối viên)
+  backend:
+    build: ./backend
+    container_name: spotify_backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - model-service
+      - mongodb
+    environment:
+      # Thay vì IP, Backend gọi Model Service qua tên container
+      - MODEL_API_URL=http://model-service:8000 
+      - MONGO_URL=mongodb://mongodb:27017
+    restart: always
+
+  # 4. Frontend (Giao diện)
+  frontend:
+    build: ./frontend
+    container_name: spotify_frontend
+    ports:
+      - "8501:8501" # Nếu dùng Streamlit
+    depends_on:
+      - backend
+    environment:
+      - BACKEND_API_URL=http://backend:8000
+    restart: always
+
+  # 5. Crawler (Cào data tự động)
+  crawler:
+    build: ./crawler
+    container_name: spotify_crawler
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+    # Không cần expose port vì crawler chạy ngầm, không phục vụ API
+    restart: always
 
 # --- KHAI BÁO NAMED VOLUMES ĐỂ DOCKER TỰ QUẢN LÝ ---
 volumes:
