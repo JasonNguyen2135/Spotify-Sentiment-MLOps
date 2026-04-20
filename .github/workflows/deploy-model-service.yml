@@ -19,15 +19,15 @@ jobs:
 
     - name: 🔐 Login to Harbor
       run: |
-        echo "${{ secrets.HARBOR_PASSWORD }}" | docker login 172.31.87.182 -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+        echo "${{ secrets.HARBOR_PASSWORD }}" | docker login 172.31.87.182:80 -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
 
     - name: 🔨 Build Model Service Image
       run: |
         echo "Đang build Model Service với tag: ${{ github.event.inputs.version_tag }}"
         # Lưu ý: Thay ./model bằng tên thư mục chứa Dockerfile của Model Service nếu khác
-        docker build -t 172.31.87.182/spotify-mlops/model-service:${{ github.event.inputs.version_tag }} ./model
+        docker build -t 172.31.87.182:80/spotify-mlops/model-service:${{ github.event.inputs.version_tag }} ./model
 
     - name: 🚀 Push to Harbor
       run: |
         echo "Đang đẩy Image lên Harbor..."
-        docker push 172.31.87.182/spotify-mlops/model-service:${{ github.event.inputs.version_tag }}
+        docker push 172.31.87.182:80/spotify-mlops/model-service:${{ github.event.inputs.version_tag }}
