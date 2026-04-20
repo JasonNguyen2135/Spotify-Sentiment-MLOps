@@ -28,10 +28,10 @@ with DAG(
         namespace="default", 
         
         image="172.31.87.182/spotify-mlops/sentiment-trainer:latest",
-        image_pull_policy="IfNotPresent",
+        image_pull_policy="Never",
         
         # Thẻ quẹt để lấy Image từ Harbor
-        image_pull_secrets=[k8s.V1LocalObjectReference("harbor-secret")],
+        #image_pull_secrets=[k8s.V1LocalObjectReference("harbor-secret")],
         
         cmds=["python", "train.py"],
         
@@ -50,3 +50,4 @@ with DAG(
     )
 
     train_on_k3s
+

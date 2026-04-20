@@ -29,9 +29,9 @@ def train_and_deploy():
     mlflow.set_experiment("Spotify_Sentiment_Analysis")
 
     # 4. Đọc dữ liệu Local
-    print("Đang nạp dữ liệu spotify_labeled.csv...")
-    df = pd.read_csv("data/spotify_labeled.csv")
-    X = df['content'].fillna('')
+    print("Đang nạp dữ liệu spotify_db.raw_reviews.csv...")
+    df = pd.read_csv("dataset/spotify_db.raw_reviews.csv")
+    X = df['text'].fillna('')
     y = df['sentiment']
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
