@@ -1,4 +1,4 @@
-lname: Manual Build and Push Model Service
+name: Manual Build and Push Model Service
 
 on:
   # Cú pháp này cho phép bạn vào tab Actions trên GitHub để bấm nút "Run workflow" bằng tay
