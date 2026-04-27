@@ -7,7 +7,7 @@ app = FastAPI(title="Model Prediction Service")
 
 # ====== LOAD ENV ======
 username = os.getenv("DAGSHUB_USERNAME")
-password = os.getenv("DAGSHUB_PASSWORD")  # 👈 sửa đúng tên
+password = os.getenv("DAGSHUB_PASSWORD")  
 
 if not username or not password:
     raise Exception("❌ Missing DAGSHUB credentials")
@@ -28,8 +28,7 @@ print("✅ Model đã load thành công!")
 @app.post("/predict")
 def predict(review: str):
     prediction = model.predict([review])[0]
-    sentiment = "Tích cực" if prediction == 1 else "Tiêu cực"
-
+    sentiment = str(prediction)
     # gửi đúng format cho Evidently
     log_data = {
         "data": [

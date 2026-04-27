@@ -71,7 +71,7 @@ spec:
       containers:
       - name: model-service
         image: 172.31.87.182/spotify-mlops/model-service:latest # Đổi lại tên Image của bạn
-        imagePullPolicy: IfNotPresent # Dùng Image có sẵn trên máy
+        imagePullPolicy: IfNotPresent 
         env:
           - name: DAGSHUB_USERNAME
             valueFrom:

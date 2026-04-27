@@ -20,8 +20,8 @@ project.save()
 # Tạm thời tạo data giả, sau này Trinh mount file train.csv thật vào đây nhé!
 if not os.path.exists("reference.csv"):
     pd.DataFrame({
-        "text": ["I love this song", "Terrible music", "Amazing beat", "Boring lyrics", "Good vibes"],
-        "prediction": ["1", "0", "1", "0", "1"]
+        "text": ["nghe hay", "app lag quá", "nhạc chất lượng", "quảng cáo nhiều", "trải nghiệm tuyệt vời"],
+        "prediction": ["positive", "negative", "positive", "negative", "positive"]
     }).to_csv("reference.csv", index=False)
 
 reference_data = pd.read_csv("reference.csv")

@@ -1,0 +1,25 @@
+name: Trigger Local Airflow on Push
+
+# Chỉ kích hoạt khi có code mới push lên nhánh main
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  trigger-airflow:
+    # BẮT BUỘC: Dùng self-hosted runner mà bạn đã cài trên WSL
+    runs-on: self-hosted
+
+    steps:
+      - name: Gửi tín hiệu gọi Airflow API
+        run: |
+          # Dùng đúng v2 và endpoint dag_runs cho bản Airflow 3
+          curl -X POST "http://localhost:8081/api/v2/dags/YOUR_DAG_ID/dag_runs" \
+          -H "Content-Type: application/json" \
+          --user "admin:admin" \
+          -d '{
+            "conf": {
+              "commit_sha": "${{ github.sha }}"
+            }
+          }'

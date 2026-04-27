@@ -16,8 +16,12 @@ async def analyze_csv(file: UploadFile = File(...)):
     df = pd.read_csv(io.BytesIO(content))
     
     # Cột chứa bình luận mặc định là 'review' (tùy file của bạn)
-    col_name = "review" if "review" in df.columns else df.columns[0]
-    
+    if "text" in df.columns:
+        col_name = "text"
+    elif "review" in df.columns:
+        col_name = "review"
+    else:
+        col_name = df.columns[0]    
     results = []
     # Gọi sang Model Service cho từng dòng (Thực tế nên tối ưu gọi theo batch)
     for index, row in df.iterrows():
