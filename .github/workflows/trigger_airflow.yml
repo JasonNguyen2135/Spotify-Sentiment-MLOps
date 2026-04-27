@@ -5,6 +5,10 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'model/train.py'                # Nhắm đúng vào file train.py trong thư mục model
+      - 'model/dataset/**'              # Bắt mọi biến động file DVC hoặc CSV trong thư mục dataset
+      - 'dags/spotify_training_dag.py'  # Giữ nguyên cấu hình DAG
   workflow_dispatch:
 
 jobs:
