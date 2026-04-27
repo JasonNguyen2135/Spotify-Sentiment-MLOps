@@ -14,19 +14,23 @@ jobs:
     steps:
       - name: Gửi tín hiệu gọi Airflow API bằng JWT
         run: |
-          # 1. Tự động đổi chìa khóa lấy Thẻ từ (Token)
+          # 1. Lấy Token (Giữ nguyên đoạn cũ)
           TOKEN=$(curl -s -X POST "http://localhost:8081/auth/token" \
             -H "Content-Type: application/json" \
             -d '{"username": "github_bot", "password": "bot_12345"}' | python3 -c "import sys, json; print(json.load(sys.stdin).get('access_token', ''))")
           
-          # 2. Quẹt thẻ kích hoạt DAG
+          # 2. Tạo logical_date theo chuẩn ISO 8601 (Ví dụ: 2026-04-27T10:00:00Z)
+          LOGICAL_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          # 3. Quẹt thẻ kích hoạt DAG với đầy đủ thông tin bắt buộc
           # THAY 'spotify_training_pipeline' bằng ID DAG thật của bạn
           curl -X POST "http://localhost:8081/api/v2/dags/spotify_sentiment_train_k3s_native/dagRuns" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $TOKEN" \
-            -d '{
-              "conf": {
-                "commit_sha": "${{ github.sha }}",
-                "message": "Auto-triggered by GitHub Actions"
+            -d "{
+              \"logical_date\": \"$LOGICAL_DATE\",
+              \"conf\": {
+                \"commit_sha\": \"${{ github.sha }}\",
+                \"message\": \"Auto-triggered by GitHub Actions\"
               }
-            }'
+            }"
