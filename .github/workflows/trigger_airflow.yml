@@ -1,36 +1,21 @@
 name: Trigger Local Airflow on Push
 
-# Chỉ kích hoạt khi có code mới push lên nhánh main
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+
 jobs:
   trigger-airflow:
-    # BẮT BUỘC: Dùng self-hosted runner mà bạn đã cài trên WSL
     runs-on: self-hosted
 
     steps:
-      - name: Gửi tín hiệu gọi Airflow API bằng JWT
+      - name: Kích hoạt DAG trực tiếp qua Kubernetes CLI
         run: |
-          # 1. Lấy Token (Giữ nguyên đoạn cũ)
-          TOKEN=$(curl -s -X POST "http://localhost:8081/auth/token" \
-            -H "Content-Type: application/json" \
-            -d '{"username": "github_bot", "password": "bot_12345"}' | python3 -c "import sys, json; print(json.load(sys.stdin).get('access_token', ''))")
+          echo "🚀 Bắn tín hiệu thẳng vào Pod Scheduler của Airflow..."
           
-          # 2. Tạo logical_date theo chuẩn ISO 8601 (Ví dụ: 2026-04-27T10:00:00Z)
-          LOGICAL_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          # Dùng kubectl exec để chui vào pod và gõ lệnh trigger
+          kubectl exec -i deployment/airflow-scheduler -n airflow -- airflow dags trigger spotify_sentiment_train_k3s_native -c "{\"commit_sha\": \"${{ github.sha }}\", \"message\": \"Auto-triggered by Kubernetes CLI\"}"
           
-          # 3. Quẹt thẻ kích hoạt DAG với đầy đủ thông tin bắt buộc
-          # THAY 'spotify_training_pipeline' bằng ID DAG thật của bạn
-          curl -X POST "http://localhost:8081/api/v2/dags/spotify_sentiment_train_k3s_native/dagRuns" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
-            -d "{
-              \"logical_date\": \"$LOGICAL_DATE\",
-              \"conf\": {
-                \"commit_sha\": \"${{ github.sha }}\",
-                \"message\": \"Auto-triggered by GitHub Actions\"
-              }
-            }"
+          echo "✅ Đã kích hoạt thành công! Pod train sẽ tự động mọc lên."
