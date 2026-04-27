@@ -12,14 +12,21 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Gửi tín hiệu gọi Airflow API
+      - name: Gửi tín hiệu gọi Airflow API bằng JWT
         run: |
-          # Dùng đúng v2 và endpoint dag_runs cho bản Airflow 3
+          # 1. Tự động đổi chìa khóa lấy Thẻ từ (Token)
+          TOKEN=$(curl -s -X POST "http://localhost:8081/auth/token" \
+            -H "Content-Type: application/json" \
+            -d '{"username": "github_bot", "password": "bot_12345"}' | python3 -c "import sys, json; print(json.load(sys.stdin).get('access_token', ''))")
+          
+          # 2. Quẹt thẻ kích hoạt DAG
+          # THAY 'spotify_training_pipeline' bằng ID DAG thật của bạn
           curl -X POST "http://localhost:8081/api/v2/dags/spotify_sentiment_train_k3s_native/dagRuns" \
-          -H "Content-Type: application/json" \
-          --user "admin:admin" \
-          -d '{
-            "conf": {
-              "commit_sha": "${{ github.sha }}"
-            }
-          }'
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d '{
+              "conf": {
+                "commit_sha": "${{ github.sha }}",
+                "message": "Auto-triggered by GitHub Actions"
+              }
+            }'
