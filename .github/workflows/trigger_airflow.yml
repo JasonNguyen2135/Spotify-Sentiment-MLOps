@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-
+  workflow_dispatch:
 jobs:
   trigger-airflow:
     # BẮT BUỘC: Dùng self-hosted runner mà bạn đã cài trên WSL
@@ -15,7 +15,7 @@ jobs:
       - name: Gửi tín hiệu gọi Airflow API
         run: |
           # Dùng đúng v2 và endpoint dag_runs cho bản Airflow 3
-          curl -X POST "http://localhost:8081/api/v2/dags/YOUR_DAG_ID/dag_runs" \
+          curl -X POST "http://localhost:8081/api/v2/dags/spotify_sentiment_train_k3s_native/dag_runs" \
           -H "Content-Type: application/json" \
           --user "admin:admin" \
           -d '{
