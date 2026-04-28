@@ -6,6 +6,10 @@ import io
 
 app = FastAPI(title="Spotify Backend API")
 
+@app.get("/")
+def read_root():
+    return {"status": "Backend is up", "model_api": MODEL_API_URL}
+
 # Trỏ tới Model Service nội bộ
 MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
 

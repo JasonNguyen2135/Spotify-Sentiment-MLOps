@@ -5,37 +5,45 @@ metadata:
   namespace: mlops-sentiment
   annotations:
     kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
 spec:
   rules:
   - host: spotify-mlops.local
     http:
       paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: frontend
-            port:
-              number: 8501
-      - path: /api
-        pathType: Prefix
+      # Cấu hình Backend: /api/ -> backend:/ , /api/analyze-csv -> backend:/analyze-csv
+      - path: /api(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: backend
             port:
               number: 8000
-      - path: /model
-        pathType: Prefix
+      
+      # Model Service
+      - path: /model(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: model-service
             port:
               number: 8000
-      - path: /evidently
-        pathType: Prefix
+
+      # Monitoring
+      - path: /evidently(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: evidently-service
             port:
               number: 8086
+
+      # Frontend
+      - path: /()(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 8501
