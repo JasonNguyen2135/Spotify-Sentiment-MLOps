@@ -1,6 +1,5 @@
 name: CI/CD Pipeline - Spotify MLOps
 
-
 on:
   push:
     branches:
@@ -13,27 +12,23 @@ on:
 
 jobs:
   deploy-and-train:
-  
     runs-on: self-hosted
 
     steps:
       - name: Checkout code từ GitHub về máy Runner
         uses: actions/checkout@v4
 
-      - name: Đẩy file DAG trực tiếp vào cụm K8s (Deploy)
+      - name: Nạp file DAG vào ổ cứng K8s (Deploy)
         run: |
-          echo "Tìm tọa độ Pod Scheduler và Dag-Processor..."
-          SCHEDULER_POD=$(kubectl get pods -n airflow -l component=scheduler -o jsonpath='{.items[0].metadata.name}')
-          PROCESSOR_POD=$(kubectl get pods -n airflow -l component=dag-processor -o jsonpath='{.items[0].metadata.name}')
+          echo "Bơm file spotify_training_dag.py vào thẳng ổ cứng chung PVC..."
+          kubectl cp dags/spotify_training_dag.py airflow/airflow-scheduler-0:/opt/airflow/dags/
           
-          echo "Inject file spotify_training_dag.py vào hệ thống Airflow..."
-          kubectl cp dags/spotify_training_dag.py airflow/$SCHEDULER_POD:/opt/airflow/dags/
-          kubectl cp dags/spotify_training_dag.py airflow/$PROCESSOR_POD:/opt/airflow/dags/
-          
-          sleep 5
+          echo " Airflow Processor quét và cập nhật code mới..."
+          sleep 45
 
-      - name: Pod Train Model trên K8s (Trigger)
+      - name:  Pod Train Model trên K8s (Trigger)
         run: |
           echo "Trigger DAG..."
-          kubectl exec -i deployment/airflow-scheduler -n airflow -- airflow dags trigger spotify_sentiment_train_k3s_native -c "{\"commit_sha\": \"${{ github.sha }}\", \"message\": \"Auto-deployed and triggered by CI\"}"
-          echo "Huấn luyện thành công"
+          # Bắn lệnh thẳng vào tên mới của Giám đốc (airflow-scheduler-0)
+          kubectl exec -i airflow-scheduler-0 -n airflow -- airflow dags trigger spotify_sentiment_train_k3s_native -c "{\"commit_sha\": \"${{ github.sha }}\", \"message\": \"Auto-deployed and triggered by CI\"}"
+          echo "Đã ra lệnh huấn luyện thành công!"
