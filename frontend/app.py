@@ -6,7 +6,7 @@ import os
 # Lấy địa chỉ Backend từ biến môi trường (Docker Compose cấu hình)
 BACKEND_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000")
 
-st.title("🎵 Spotify Sentiment Analyzer")
+st.title("🎵 Spotify Sentiment Analyzer (GitOps Version)")
 st.write("Tải lên file CSV chứa bình luận Spotify để máy học phân tích cảm xúc!")
 
 uploaded_file = st.file_uploader("Chọn file CSV", type=["csv"])

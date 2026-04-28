@@ -1,0 +1,89 @@
+name: Spotify Sentiment MLOps CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-changes:
+    runs-on: self-hosted
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      model: ${{ steps.filter.outputs.model }}
+      crawler: ${{ steps.filter.outputs.crawler }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+            model:
+              - 'model/**'
+            crawler:
+              - 'crawler/**'
+
+  build-and-gitops:
+    needs: check-changes
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # 1. Chỉ thực hiện BUILD (không Push)
+      - name: Build Services
+        run: |
+          if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
+            docker build -t 172.31.87.182/spotify-mlops/backend:${{ github.sha }} ./backend
+          fi
+          if [ "${{ needs.check-changes.outputs.frontend }}" == "true" ]; then
+            docker build -t 172.31.87.182/spotify-mlops/frontend:${{ github.sha }} ./frontend
+          fi
+          if [ "${{ needs.check-changes.outputs.model }}" == "true" ]; then
+            docker build -t 172.31.87.182/spotify-mlops/model-service:${{ github.sha }} ./model
+          fi
+          if [ "${{ needs.check-changes.outputs.crawler }}" == "true" ]; then
+            docker build -t 172.31.87.182/spotify-mlops/crawler:${{ github.sha }} ./crawler
+          fi
+
+      # 2. Cập nhật Manifest và đẩy sang nhánh deploy (Để ArgoCD nhận diện thay đổi)
+      - name: Update Manifest and Push to Deploy Branch
+        run: |
+          git config --global user.email "ci-bot@example.com"
+          git config --global user.name "CI Bot"
+          
+          BACKEND_IMG="172.31.87.182/spotify-mlops/backend:${{ github.sha }}"
+          FRONTEND_IMG="172.31.87.182/spotify-mlops/frontend:${{ github.sha }}"
+          MODEL_IMG="172.31.87.182/spotify-mlops/model-service:${{ github.sha }}"
+          CRAWLER_IMG="172.31.87.182/spotify-mlops/crawler:${{ github.sha }}"
+
+          # Switch sang nhánh deploy (tạo mới nếu chưa có)
+          git checkout -b deploy || git checkout deploy
+          
+          # Cập nhật tag mới vào file YAML
+          if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
+            sed -i "s|image: 172.31.87.182/spotify-mlops/backend:.*|image: $BACKEND_IMG|g" k8s/spotify-app.yaml
+          fi
+          if [ "${{ needs.check-changes.outputs.frontend }}" == "true" ]; then
+            sed -i "s|image: 172.31.87.182/spotify-mlops/frontend:.*|image: $FRONTEND_IMG|g" k8s/spotify-app.yaml
+          fi
+          if [ "${{ needs.check-changes.outputs.model }}" == "true" ]; then
+            sed -i "s|image: 172.31.87.182/spotify-mlops/model-service:.*|image: $MODEL_IMG|g" k8s/spotify-app.yaml
+          fi
+          if [ "${{ needs.check-changes.outputs.crawler }}" == "true" ]; then
+            sed -i "s|image: 172.31.87.182/spotify-mlops/crawler:.*|image: $CRAWLER_IMG|g" k8s/spotify-app.yaml
+          fi
+
+          git add k8s/spotify-app.yaml
+          git commit -m "deploy: sync manifest for version ${{ github.sha }} [skip ci]" || echo "No changes to commit"
+          git push origin deploy --force
