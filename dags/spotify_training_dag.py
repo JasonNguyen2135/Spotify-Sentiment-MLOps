@@ -27,7 +27,7 @@ with DAG(
         namespace="airflow",
 
         image="172.31.87.182/spotify-mlops/sentiment-trainer:latest",
-        image_pull_policy="Never",
+        image_pull_policy="IfNotPresent",
         cmds=["python", "train.py"],
         env_vars=[
             k8s.V1EnvVar(name="DAGSHUB_USERNAME", value="{{ var.value.DAGSHUB_USERNAME }}"),
