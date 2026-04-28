@@ -1,5 +1,5 @@
 # ==========================================
-# 1. MONGODB (Kèm Volume để giữ Data)
+# 1. MONGODB (StatefulSet đề xuất cho Database)
 # ==========================================
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -34,6 +34,13 @@ spec:
         volumeMounts:
         - name: mongo-storage
           mountPath: /data/db
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
       volumes:
       - name: mongo-storage
         persistentVolumeClaim:
@@ -70,8 +77,8 @@ spec:
     spec:
       containers:
       - name: model-service
-        image: 172.31.87.182/spotify-mlops/model-service:latest # Đổi lại tên Image của bạn
-        imagePullPolicy: IfNotPresent 
+        image: 172.31.87.182/spotify-mlops/model-service:latest
+        imagePullPolicy: IfNotPresent
         env:
           - name: DAGSHUB_USERNAME
             valueFrom:
@@ -85,6 +92,13 @@ spec:
                 key: DAGSHUB_PASSWORD
         ports:
         - containerPort: 8000
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
 ---
 apiVersion: v1
 kind: Service
@@ -117,15 +131,22 @@ spec:
     spec:
       containers:
       - name: backend
-        image: 172.31.87.182/spotify-mlops/backend:latest # Đổi lại tên Image của bạn
+        image: 172.31.87.182/spotify-mlops/backend:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
         env:
         - name: MODEL_API_URL
-          value: "http://model-service:8000" # K8s sẽ tự động map tên này sang IP của Pod Model
+          value: "http://model-service:8000"
         - name: MONGO_URL
           value: "mongodb://mongodb:27017"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -158,29 +179,34 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: 172.31.87.182/spotify-mlops/frontend:latest # Đổi lại tên Image của bạn
+        image: 172.31.87.182/spotify-mlops/frontend:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8501
         env:
         - name: BACKEND_API_URL
-          value: "http://backend:8000" # Streamlit gọi nội bộ chuẩn xác!
+          value: "http://backend:8000"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend
 spec:
-  type: NodePort # Mở cổng ra ngoài Windows cho bạn truy cập
   selector:
     app: frontend
   ports:
   - port: 8501
     targetPort: 8501
-    nodePort: 30503 # Cổng truy cập từ trình duyệt (http://localhost:30501)
 
 # ==========================================
-# 5. CRAWLER (Chạy ngầm, không cần Service)
+# 5. CRAWLER
 # ==========================================
 ---
 apiVersion: apps/v1
@@ -199,8 +225,15 @@ spec:
     spec:
       containers:
       - name: crawler
-        image: 172.31.87.182/spotify-mlops/crawler:latest # Đổi lại tên Image của bạn
+        image: 172.31.87.182/spotify-mlops/crawler:latest
         imagePullPolicy: IfNotPresent
         env:
         - name: MONGO_URL
           value: "mongodb://mongodb:27017"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
