@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Upload, CheckCircle2, AlertCircle, FileText, Loader2 } from 'lucide-react';
+import { clsx } from 'clsx';
 
 interface AnalysisResult {
   "Câu bình luận": string;
