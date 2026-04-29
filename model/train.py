@@ -28,7 +28,7 @@ def train_and_deploy():
     print("📡 Đang tải dữ liệu trực tiếp từ DagsHub...")
     
     # URL sạch, không kẹp token vào chuỗi
-    clean_url = f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/dataset/spotify_db.raw_reviews.csv"
+    clean_url = f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv"
     
     # Dùng requests tải data và truyền Auth cực chuẩn
     response = requests.get(clean_url, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
