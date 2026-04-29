@@ -12,7 +12,16 @@ spec:
   - host: spotify-mlops.local
     http:
       paths:
-      # Cấu hình Backend: /api/ -> backend:/ , /api/analyze-csv -> backend:/analyze-csv
+      # --- EVIDENTLY ASSETS (Sửa lỗi 404 Iframe) ---
+      - path: /(index-.*|vendor-.*|manifest\.json|assets/.*)()(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: evidently-service
+            port:
+              number: 8086
+
+      # --- BACKEND ---
       - path: /api(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -21,7 +30,7 @@ spec:
             port:
               number: 8000
       
-      # Model Service
+      # --- MODEL SERVICE ---
       - path: /model(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -30,7 +39,7 @@ spec:
             port:
               number: 8000
 
-      # Monitoring
+      # --- EVIDENTLY MAIN ---
       - path: /evidently(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -39,7 +48,7 @@ spec:
             port:
               number: 8086
 
-      # Frontend
+      # --- FRONTEND ---
       - path: /()(.*)
         pathType: ImplementationSpecific
         backend:

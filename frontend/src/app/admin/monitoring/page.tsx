@@ -48,6 +48,7 @@ export default function MonitoringPage() {
           allowFullScreen
         />
       </div>
+
       
       <div className="mt-4 text-center">
         <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">
