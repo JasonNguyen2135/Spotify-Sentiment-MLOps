@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: manual-train-test
+  namespace: airflow
+spec:
+  initContainers:
+  - name: git-clone-code
+    image: alpine/git:latest
+    command: ["/bin/sh", "-c"]
+    args:
+      - "git clone https://github.com/davidmoi2135/Spotify-Sentiment-MLOps.git /opt/repo"
+    volumeMounts:
+    - name: shared-code
+      mount_path: /opt/repo
+
+  containers:
+  - name: train-container
+    image: 172.31.87.182/spotify-mlops/sentiment-trainer:latest
+    imagePullPolicy: IfNotPresent
+    workingDir: /opt/repo/model
+    command: ["python", "train.py"]
+    env:
+    # LƯU Ý: Bạn cần đảm bảo 2 secret này tồn tại trong namespace airflow
+    # Hoặc thay bằng giá trị trực tiếp để test nhanh (không khuyến khích)
+    - name: DAGSHUB_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: dagshub-secret
+          key: DAGSHUB_USERNAME
+    - name: DAGSHUB_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: dagshub-secret
+          key: DAGSHUB_PASSWORD
+    volumeMounts:
+    - name: shared-code
+      mount_path: /opt/repo
+
+  volumes:
+  - name: shared-code
+    emptyDir: {}
+  
+  restartPolicy: Never

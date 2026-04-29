@@ -54,6 +54,12 @@ jobs:
         run: |
           for i in {1..5}; do docker build -t 172.31.87.182/spotify-mlops/model-service:${{ github.sha }} ./model && break || sleep 15; done
 
+      # BUILD TRAINER IMAGE (Mới thêm)
+      - name: Build Sentiment Trainer
+        if: needs.check-changes.outputs.model == 'true'
+        run: |
+          for i in {1..5}; do docker build -t 172.31.87.182/spotify-mlops/sentiment-trainer:latest -f model/Dockerfile.train ./model && break || sleep 15; done
+
       - name: Build Crawler
         if: needs.check-changes.outputs.crawler == 'true'
         run: |
@@ -71,18 +77,13 @@ jobs:
           git config --global user.name "CI Bot"
           TAG="${{ github.sha }}"
 
-          # Tạm lưu file hạ tầng từ main
           mkdir -p /tmp/k8s-sync
-          cp k8s/ingress.yaml k8s/hpa.yaml /tmp/k8s-sync/ || true
+          cp k8s/*.yaml /tmp/k8s-sync/ || true
 
-          # Sang nhánh deploy
           git fetch origin deploy
           git checkout deploy || git checkout -b deploy
-
-          # Cập nhật hạ tầng
           cp /tmp/k8s-sync/* k8s/ || true
           
-          # Sửa tag cho những gì vừa build (Giữ nguyên SHA cũ của những cái khác)
           if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
             sed -i "s|image: 172.31.87.182/spotify-mlops/backend:.*|image: 172.31.87.182/spotify-mlops/backend:$TAG|g" k8s/spotify-app.yaml
           fi
@@ -100,5 +101,5 @@ jobs:
           fi
 
           git add k8s/
-          git commit -m "deploy: precise surgical sync from $TAG [skip ci]" || echo "No changes"
+          git commit -m "deploy: update manifests and trainer image [skip ci]" || echo "No changes"
           git push origin HEAD:deploy --force
