@@ -12,7 +12,7 @@ export default function Home() {
     <div className="animate-in fade-in duration-700">
       <div className="mb-10 text-center md:text-left">
         <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight mb-2">
-          Spotify <span className="text-spotify">MLOps</span> Dashboard
+          Spotify <span className="text-spotify">MLOps</span> GitOps Dashboard
         </h1>
         <p className="text-slate-500 text-lg">Hệ thống phân tích cảm xúc bình luận thời gian thực.</p>
       </div>
