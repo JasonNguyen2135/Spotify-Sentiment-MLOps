@@ -10,4 +10,4 @@ passlib[bcrypt]
 bcrypt==4.0.1
 python-dotenv
 pymongo
-evidently
+evidently==0.4.33
