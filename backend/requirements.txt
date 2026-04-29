@@ -3,9 +3,9 @@ uvicorn
 pandas
 requests
 python-multipart
-# Auth & Postgres
 sqlalchemy
 psycopg2-binary
 python-jose[cryptography]
 passlib[bcrypt]
 python-dotenv
+pymongo

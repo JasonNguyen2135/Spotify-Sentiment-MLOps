@@ -1,12 +1,41 @@
-import { Activity, Users, Database, Zap } from 'lucide-react';
+'use client';
+import { useEffect, useState } from 'react';
+import axios from 'axios';
+import { Activity, Users, Database, Zap, Loader2 } from 'lucide-react';
 
 export default function Home() {
-  const stats = [
-    { name: 'Model Version', value: 'v1.2.0', icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-50' },
-    { name: 'Total Predictions', value: '14,205', icon: Activity, color: 'text-blue-500', bg: 'bg-blue-50' },
-    { name: 'Dataset Size', value: '1.2 GB', icon: Database, color: 'text-green-500', bg: 'bg-green-50' },
-    { name: 'Active Users', value: '24', icon: Users, color: 'text-purple-500', bg: 'bg-purple-50' },
-  ];
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await axios.get('/api/stats');
+        setStats(response.data);
+      } catch (err) {
+        console.error("Failed to fetch stats", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  const statItems = stats ? [
+    { name: 'Model Version', value: stats.model_version, icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-50' },
+    { name: 'Total Predictions', value: stats.total_predictions.toLocaleString(), icon: Activity, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { name: 'Dataset Size', value: stats.dataset_size, icon: Database, color: 'text-green-500', bg: 'bg-green-50' },
+    { name: 'Active Users', value: stats.active_users, icon: Users, color: 'text-purple-500', bg: 'bg-purple-50' },
+  ] : [];
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh]">
+        <Loader2 className="w-12 h-12 text-spotify animate-spin mb-4" />
+        <p className="text-gray-500 font-medium italic">Đang tải dữ liệu hệ thống...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in duration-700">
@@ -18,13 +47,13 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((item) => (
-          <div key={item.name} className="bg-white p-6 rounded-2xl border border-slate-100 hover-card">
+        {statItems.map((item) => (
+          <div key={item.name} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm transition-all hover:shadow-md">
             <div className="flex items-center justify-between mb-4">
               <div className={`${item.bg} ${item.color} p-3 rounded-xl`}>
                 <item.icon className="w-6 h-6" />
               </div>
-              <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-lg">LIVE</span>
+              <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg uppercase">Realtime</span>
             </div>
             <h3 className="text-slate-500 text-sm font-semibold uppercase tracking-wider">{item.name}</h3>
             <p className="text-3xl font-bold text-slate-900 mt-1">{item.value}</p>
@@ -51,5 +80,5 @@ export default function Home() {
         </div>
       </div>
     </div>
-  )
+  );
 }
