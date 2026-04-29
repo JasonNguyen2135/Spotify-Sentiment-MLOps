@@ -36,39 +36,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Chỉ build những gì thay đổi để tiết kiệm thời gian
-      - name: Build Services
-        run: |
-          if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
-            docker build -t 172.31.87.182/spotify-mlops/backend:${{ github.sha }} ./backend
-          fi
-          if [ "${{ needs.check-changes.outputs.frontend }}" == "true" ]; then
-            docker build -t 172.31.87.182/spotify-mlops/frontend:${{ github.sha }} ./frontend
-          fi
-          if [ "${{ needs.check-changes.outputs.model }}" == "true" ]; then
-            docker build -t 172.31.87.182/spotify-mlops/model-service:${{ github.sha }} ./model
-          fi
-          if [ "${{ needs.check-changes.outputs.crawler }}" == "true" ]; then
-            docker build -t 172.31.87.182/spotify-mlops/crawler:${{ github.sha }} ./crawler
-          fi
+      # BUILD SERVICES (Chỉ build nếu có thay đổi)
+      - name: Build Backend
+        if: needs.check-changes.outputs.backend == 'true'
+        run: docker build -t 172.31.87.182/spotify-mlops/backend:${{ github.sha }} ./backend
 
-      - name: Update Manifest and Push to Deploy Branch
+      - name: Build Frontend
+        if: needs.check-changes.outputs.frontend == 'true'
+        run: docker build -t 172.31.87.182/spotify-mlops/frontend:${{ github.sha }} ./frontend
+
+      - name: Build Model Service
+        if: needs.check-changes.outputs.model == 'true'
+        run: docker build -t 172.31.87.182/spotify-mlops/model-service:${{ github.sha }} ./model
+
+      - name: Build Crawler
+        if: needs.check-changes.outputs.crawler == 'true'
+        run: docker build -t 172.31.87.182/spotify-mlops/crawler:${{ github.sha }} ./crawler
+
+      # UPDATE MANIFEST (Chỉ cập nhật tag cho những gì vừa build)
+      - name: Update Manifest and Push
         run: |
           git config --global user.email "ci-bot@example.com"
           git config --global user.name "CI Bot"
-          
-          # Luôn lấy SHA hiện tại cho các image (vì chúng ta build local)
-          # Nếu service không build lần này, nó sẽ dùng image đã build từ commit trước đó (vẫn tồn tại ở local)
           TAG="${{ github.sha }}"
 
           git checkout -b deploy || git checkout deploy
           
-          # Cập nhật TẤT CẢ các tag image sang mã SHA mới nhất
-          sed -i "s|image: 172.31.87.182/spotify-mlops/backend:.*|image: 172.31.87.182/spotify-mlops/backend:$TAG|g" k8s/spotify-app.yaml
-          sed -i "s|image: 172.31.87.182/spotify-mlops/frontend:.*|image: 172.31.87.182/spotify-mlops/frontend:$TAG|g" k8s/spotify-app.yaml
-          sed -i "s|image: 172.31.87.182/spotify-mlops/model-service:.*|image: 172.31.87.182/spotify-mlops/model-service:$TAG|g" k8s/spotify-app.yaml
-          sed -i "s|image: 172.31.87.182/spotify-mlops/crawler:.*|image: 172.31.87.182/spotify-mlops/crawler:$TAG|g" k8s/spotify-app.yaml
+          # Chỉ dùng sed nếu service đó được build
+          if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
+            sed -i "s|image: 172.31.87.182/spotify-mlops/backend:.*|image: 172.31.87.182/spotify-mlops/backend:$TAG|g" k8s/spotify-app.yaml
+          fi
+          if [ "${{ needs.check-changes.outputs.frontend }}" == "true" ]; then
+            sed -i "s|image: 172.31.87.182/spotify-mlops/frontend:.*|image: 172.31.87.182/spotify-mlops/frontend:$TAG|g" k8s/spotify-app.yaml
+          fi
+          if [ "${{ needs.check-changes.outputs.model }}" == "true" ]; then
+            sed -i "s|image: 172.31.87.182/spotify-mlops/model-service:.*|image: 172.31.87.182/spotify-mlops/model-service:$TAG|g" k8s/spotify-app.yaml
+          fi
+          if [ "${{ needs.check-changes.outputs.crawler }}" == "true" ]; then
+            sed -i "s|image: 172.31.87.182/spotify-mlops/crawler:.*|image: 172.31.87.182/spotify-mlops/crawler:$TAG|g" k8s/spotify-app.yaml
+          fi
 
           git add k8s/spotify-app.yaml
-          git commit -m "deploy: update all images to $TAG [skip ci]" || echo "No changes"
+          git commit -m "deploy: update changed images to $TAG [skip ci]" || echo "No changes"
           git push origin deploy --force
