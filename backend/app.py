@@ -45,9 +45,12 @@ class User(Base):
     role = Column(String, default="user")
 
 Base.metadata.create_all(bind=engine)
+
+# MongoDB Connection
 mongo_client = MongoClient(MONGO_URL)
 mongo_db = mongo_client["spotify_db"]
 reviews_col = mongo_db["raw_reviews"]
+preds_log_col = mongo_db["predictions_log"] # Lưu log dự đoán để đếm
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def create_default_admin():
@@ -59,8 +62,6 @@ def create_default_admin():
     finally: db.close()
 
 create_default_admin()
-
-# QUAN TRỌNG: tokenUrl phải khớp với route login (đã bị ingress cắt /api)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 def get_db():
@@ -83,11 +84,46 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 app = FastAPI(title="Spotify Backend API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-@app.get("/")
-def read_root():
-    return {"status": "Backend is up"}
+@app.get("/stats")
+def get_stats(db: Session = Depends(get_db)):
+    user_count = db.query(func.count(User.id)).scalar()
+    
+    # 1. Lấy Accuracy từ MLflow (Cải tiến logic tìm kiếm)
+    accuracy = "N/A"
+    if DAGSHUB_USER:
+        try:
+            client = MlflowClient(tracking_uri=TRACKING_URI)
+            # Thử tìm theo Model Registry trước
+            try:
+                versions = client.get_latest_versions("Spotify_Production_Model", stages=["Production"])
+                if versions:
+                    run = client.get_run(versions[0].run_id)
+                    acc_val = run.data.metrics.get("accuracy") or run.data.metrics.get("acc")
+                    if acc_val: accuracy = f"{acc_val * 100:.1f}%" if acc_val <= 1 else f"{acc_val:.1f}%"
+            except:
+                # Nếu Registry lỗi, tìm trong Experiment
+                runs = mlflow.search_runs(order_by=["metrics.accuracy DESC"], max_results=1)
+                if not runs.empty:
+                    acc_val = runs.iloc[0].get("metrics.accuracy") or runs.iloc[0].get("metrics.acc")
+                    if acc_val: accuracy = f"{acc_val * 100:.1f}%" if acc_val <= 1 else f"{acc_val:.1f}%"
+        except: pass
 
-# ROUTE: register (Ingress gọi /api/register -> Backend nhận /register)
+    # 2. Đếm số lượng dự đoán thật từ MongoDB
+    try: total_preds = preds_log_col.count_documents({})
+    except: total_preds = 0
+
+    # 3. Dataset size
+    try: crawled_count = reviews_col.count_documents({})
+    except: crawled_count = 0
+    
+    return {
+        "model_version": "v1.2.0-Prod",
+        "total_predictions": total_preds, # CON SỐ THẬT
+        "dataset_size": f"{crawled_count} reviews",
+        "active_users": user_count,
+        "accuracy": accuracy
+    }
+
 @app.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first():
@@ -96,7 +132,6 @@ def register(username: str, password: str, role: str = "user", db: Session = Dep
     db.commit()
     return {"message": "Success"}
 
-# ROUTE: login (Ingress gọi /api/login -> Backend nhận /login)
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
@@ -104,51 +139,44 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=400, detail="Invalid credentials")
     return {"access_token": create_access_token(data={"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
 
-# ROUTE: stats (Ingress gọi /api/stats -> Backend nhận /stats)
-@app.get("/stats")
-def get_stats(db: Session = Depends(get_db)):
-    user_count = db.query(func.count(User.id)).scalar()
-    accuracy = "N/A"
-    if DAGSHUB_USER:
-        try:
-            client = MlflowClient(tracking_uri=TRACKING_URI)
-            model_name = "Spotify_Production_Model"
-            versions = client.get_latest_versions(model_name, stages=["Production"])
-            if versions:
-                run = client.get_run(versions[0].run_id)
-                acc_val = run.data.metrics.get("accuracy") or run.data.metrics.get("acc") or run.data.metrics.get("val_accuracy")
-                if acc_val:
-                    accuracy = f"{acc_val * 100:.1f}%" if acc_val <= 1 else f"{acc_val:.1f}%"
-        except: pass
-    try: crawled_count = reviews_col.count_documents({})
-    except: crawled_count = 0
-    return {
-        "model_version": "v1.2.0-Prod",
-        "total_predictions": 14205,
-        "dataset_size": f"{crawled_count} reviews",
-        "active_users": user_count,
-        "accuracy": accuracy
-    }
-
-# ROUTE: predict (Ingress gọi /api/predict -> Backend nhận /predict)
 @app.post("/predict")
 async def predict_single(review_text: str, current_user: User = Depends(get_current_user)):
     try:
         res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10)
-        return res.json()
+        result = res.json()
+        # LƯU LOG VÀO MONGODB ĐỂ TĂNG TOTAL PREDICTIONS
+        preds_log_col.insert_one({
+            "text": review_text,
+            "sentiment": result.get("sentiment"),
+            "user": current_user.username,
+            "timestamp": datetime.utcnow()
+        })
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
 
-# ROUTE: analyze-csv
 @app.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     col = "text" if "text" in df.columns else ("review" if "review" in df.columns else df.columns[0])
     results = []
-    for i, row in df.head(10).iterrows():
+    log_entries = []
+    
+    for i, row in df.head(20).iterrows(): # Tăng lên 20 dòng cho máu
+        text = str(row[col])
         try:
-            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": str(row[col])})
+            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text})
             sentiment = res.json().get("sentiment", "Error")
         except: sentiment = "Conn Error"
-        results.append({"Câu bình luận": str(row[col]), "Cảm xúc": sentiment})
+        
+        results.append({"Câu bình luận": text, "Cảm xúc": sentiment})
+        # Chuẩn bị log để insert batch
+        log_entries.append({
+            "text": text, "sentiment": sentiment, "user": current_user.username, "timestamp": datetime.utcnow()
+        })
+
+    # Lưu hàng loạt vào MongoDB
+    if log_entries:
+        preds_log_col.insert_many(log_entries)
+        
     return {"results": results}
