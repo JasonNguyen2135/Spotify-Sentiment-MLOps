@@ -12,8 +12,8 @@ spec:
   - host: spotify-mlops.local
     http:
       paths:
-      # --- EVIDENTLY ASSETS (Sửa lỗi 404 Iframe) ---
-      - path: /(index-.*|vendor-.*|manifest\.json|assets/.*)()(.*)
+      # 1. Bắt các file tĩnh của Evidently (JS, CSS) khi chúng gọi từ root
+      - path: /()(index-.*|vendor-.*|manifest\.json|assets/.*)
         pathType: ImplementationSpecific
         backend:
           service:
@@ -21,7 +21,7 @@ spec:
             port:
               number: 8086
 
-      # --- BACKEND ---
+      # 2. Định tuyến Backend (/api/xxx -> backend/xxx)
       - path: /api(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -30,7 +30,7 @@ spec:
             port:
               number: 8000
       
-      # --- MODEL SERVICE ---
+      # 3. Định tuyến Model Service
       - path: /model(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -39,7 +39,7 @@ spec:
             port:
               number: 8000
 
-      # --- EVIDENTLY MAIN ---
+      # 4. Định tuyến Evidently UI chính
       - path: /evidently(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -48,7 +48,7 @@ spec:
             port:
               number: 8086
 
-      # --- FRONTEND ---
+      # 5. Định tuyến Frontend (Giữ nguyên path để Next.js xử lý routing nội bộ)
       - path: /()(.*)
         pathType: ImplementationSpecific
         backend:
