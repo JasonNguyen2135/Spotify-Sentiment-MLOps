@@ -42,7 +42,7 @@ spec:
       - name: mongo-storage
         persistentVolumeClaim: { claimName: mongo-pvc }
 ---
-# PostgreSQL Deployment (Lưu User/Role)
+# PostgreSQL Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -108,7 +108,7 @@ spec:
     spec:
       containers:
       - name: model-service
-        image: 172.31.87.182/spotify-mlops/model-service:latest
+        image: 172.31.87.182/spotify-mlops/model-service:v1.0.0
         imagePullPolicy: IfNotPresent
         env:
           - name: DAGSHUB_USERNAME
@@ -129,7 +129,7 @@ spec:
   ports: [{ port: 8000, targetPort: 8000 }]
 
 # ==========================================
-# 3. BACKEND (With Auth & Postgres)
+# 3. BACKEND
 # ==========================================
 ---
 apiVersion: apps/v1
@@ -146,7 +146,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: 172.31.87.182/spotify-mlops/backend:latest
+        image: 172.31.87.182/spotify-mlops/backend:v1.0.0
         imagePullPolicy: IfNotPresent
         ports: [{ containerPort: 8000 }]
         env:
@@ -171,7 +171,7 @@ spec:
   ports: [{ port: 8000, targetPort: 8000 }]
 
 # ==========================================
-# 4. FRONTEND (Next.js)
+# 4. FRONTEND
 # ==========================================
 ---
 apiVersion: apps/v1
@@ -188,7 +188,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: 172.31.87.182/spotify-mlops/frontend:latest
+        image: 172.31.87.182/spotify-mlops/frontend:v1.0.0
         imagePullPolicy: IfNotPresent
         ports: [{ containerPort: 3000 }]
         env:
@@ -204,7 +204,9 @@ metadata:
   name: frontend
 spec:
   selector: { app: frontend }
-  ports: [{ port: 8501, targetPort: 3000 }]
+  ports:
+  - port: 8501
+    targetPort: 3000
 
 # ==========================================
 # 5. CRAWLER
@@ -224,7 +226,7 @@ spec:
     spec:
       containers:
       - name: crawler
-        image: 172.31.87.182/spotify-mlops/crawler:latest
+        image: 172.31.87.182/spotify-mlops/crawler:v1.0.0
         imagePullPolicy: IfNotPresent
         env:
         - name: MONGO_URL
