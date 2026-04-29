@@ -59,7 +59,9 @@ def create_default_admin():
     finally: db.close()
 
 create_default_admin()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+
+# QUAN TRỌNG: tokenUrl phải khớp với route login (đã bị ingress cắt /api)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 def get_db():
     db = SessionLocal(); yield db; db.close()
@@ -81,39 +83,45 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 app = FastAPI(title="Spotify Backend API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/")
+def read_root():
+    return {"status": "Backend is up"}
+
+# ROUTE: register (Ingress gọi /api/register -> Backend nhận /register)
+@app.post("/register")
+def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
+    if db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=400, detail="Username exists")
+    db.add(User(username=username, hashed_password=pwd_context.hash(password), role=role))
+    db.commit()
+    return {"message": "Success"}
+
+# ROUTE: login (Ingress gọi /api/login -> Backend nhận /login)
+@app.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+    return {"access_token": create_access_token(data={"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
+
+# ROUTE: stats (Ingress gọi /api/stats -> Backend nhận /stats)
 @app.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
     user_count = db.query(func.count(User.id)).scalar()
     accuracy = "N/A"
-    
     if DAGSHUB_USER:
         try:
-            # Ép client sử dụng Tracking URI của DagsHub
             client = MlflowClient(tracking_uri=TRACKING_URI)
-            
-            # Thử tìm Model với tên chính xác hoặc tìm trong danh sách model
             model_name = "Spotify_Production_Model"
             versions = client.get_latest_versions(model_name, stages=["Production"])
-            
             if versions:
                 run = client.get_run(versions[0].run_id)
                 acc_val = run.data.metrics.get("accuracy") or run.data.metrics.get("acc") or run.data.metrics.get("val_accuracy")
                 if acc_val:
                     accuracy = f"{acc_val * 100:.1f}%" if acc_val <= 1 else f"{acc_val:.1f}%"
-        except Exception as e:
-            print(f"⚠️ MLflow Error: {e}")
-            # Fallback: Thử lấy metric từ Run gần nhất trong experiment
-            try:
-                exp = mlflow.get_experiment_by_name("default") or mlflow.search_experiments()[0]
-                runs = mlflow.search_runs(experiment_ids=[exp.experiment_id], max_results=1)
-                if not runs.empty:
-                    acc_val = runs.iloc[0].get("metrics.accuracy") or runs.iloc[0].get("metrics.acc")
-                    if acc_val: accuracy = f"{acc_val * 100:.1f}%"
-            except: pass
-
+        except: pass
     try: crawled_count = reviews_col.count_documents({})
     except: crawled_count = 0
-    
     return {
         "model_version": "v1.2.0-Prod",
         "total_predictions": 14205,
@@ -122,22 +130,8 @@ def get_stats(db: Session = Depends(get_db)):
         "accuracy": accuracy
     }
 
-@app.post("/api/register")
-def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == username).first():
-        raise HTTPException(status_code=400, detail="Username exists")
-    db.add(User(username=username, hashed_password=pwd_context.hash(password), role=role))
-    db.commit()
-    return {"message": "Success"}
-
-@app.post("/api/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
-    return {"access_token": create_access_token(data={"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
-
-@app.post("/api/predict")
+# ROUTE: predict (Ingress gọi /api/predict -> Backend nhận /predict)
+@app.post("/predict")
 async def predict_single(review_text: str, current_user: User = Depends(get_current_user)):
     try:
         res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10)
@@ -145,7 +139,8 @@ async def predict_single(review_text: str, current_user: User = Depends(get_curr
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
 
-@app.post("/api/analyze-csv")
+# ROUTE: analyze-csv
+@app.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     col = "text" if "text" in df.columns else ("review" if "review" in df.columns else df.columns[0])
