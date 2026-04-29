@@ -12,7 +12,7 @@ from sklearn.metrics import accuracy_score
 # 1. Nạp biến môi trường
 DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME")
 DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN")
-REPO_NAME = "Spotify-Sentiment-MLOps" 
+REPO_NAME = "Spotify-Sentiment-MLOps"
 
 def train_and_deploy():
     os.environ['MLFLOW_TRACKING_USERNAME'] = DAGSHUB_USERNAME
@@ -22,17 +22,15 @@ def train_and_deploy():
     mlflow.set_tracking_uri(dagshub_uri)
     mlflow.set_experiment("Spotify_Sentiment_Analysis")
 
-    # 4. Đọc dữ liệu (Ưu tiên đọc file cục bộ mà InitContainer đã kéo về)
-    local_data_path = "dataset/spotify_db.raw_reviews.csv"
-    data_url = f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv"
+    # 4. KÉO DỮ LIỆU ĐỘNG (Bỏ qua DVC, kéo thẳng raw file)
+    print("📡 Đang tải dữ liệu trực tiếp từ DagsHub...")
     
-    if os.path.exists(local_data_path):
-        print(f"📁 Đang nạp dữ liệu từ bộ nhớ cục bộ Pod: {local_data_path}")
-        df = pd.read_csv(local_data_path)
-    else:
-        print(f"📡 Không thấy file cục bộ, đang tải từ DagsHub URL: {data_url}")
-        df = pd.read_csv(data_url, storage_options={'Authorization': f'token {DAGSHUB_TOKEN}'})
+    # Kẹp Username và Token vào URL (Giống hệt cơ chế curl -u)
+    data_url = f"https://{DAGSHUB_USERNAME}:{DAGSHUB_TOKEN}@dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/dataset/spotify_db.raw_reviews.csv"
     
+    df = pd.read_csv(data_url)
+    print("✅ Đã nạp dữ liệu thành công vào RAM!")
+
     X = df['text'].fillna('')
     y = df['sentiment']
 
@@ -59,7 +57,7 @@ def train_and_deploy():
             artifact_path="model_files",
             registered_model_name=model_name
         )
-        
+
     # 7. Gán nhãn Production
     client = MlflowClient()
     versions = client.get_latest_versions(model_name, stages=["None"])

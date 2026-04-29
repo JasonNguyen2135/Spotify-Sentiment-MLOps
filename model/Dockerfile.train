@@ -2,17 +2,15 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Cài đặt git và các thư viện cần thiết
+# Cài đặt git (để InitContainer dùng clone code)
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-# Cài đặt thư viện ML và DVC (để kéo dữ liệu)
+# Cài đặt thư viện ML cốt lõi (Không cần DVC nữa)
 RUN pip install --no-cache-dir \
     pandas \
     scikit-learn \
     mlflow \
-    requests \
-    python-dotenv \
-    "dvc[s3]"
+    python-dotenv
 
-# Không copy code vì dùng InitContainer
+# Pod sẽ tự kéo code vào thư mục này lúc chạy, nên không cần COPY code
 CMD ["python", "train.py"]

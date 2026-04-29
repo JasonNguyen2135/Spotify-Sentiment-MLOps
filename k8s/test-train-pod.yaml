@@ -5,35 +5,19 @@ metadata:
   namespace: airflow
 spec:
   initContainers:
-  - name: git-and-dvc-pull
+  - name: git-pull-only
     image: 172.31.87.182/spotify-mlops/sentiment-trainer:latest
     imagePullPolicy: IfNotPresent
     command: ["/bin/sh", "-c"]
     args:
       - |
-        echo "🚀 1. Cloning Source Code..."
+        echo "🚀 Cloning Source Code from GitHub..."
+        # Kéo code mới nhất về ổ cứng dùng chung
         git clone https://davidmoi2135:${GITHUB_TOKEN}@github.com/davidmoi2135/Spotify-Sentiment-MLOps.git /opt/repo
-        cd /opt/repo
-        
-        echo "📡 2. Configuring DVC Auth..."
-        # Mặc định dvc dùng remote tên 'origin' trỏ về dagshub
-        dvc remote modify origin --project auth token ${DAGSHUB_TOKEN}
-        
-        echo "📦 3. Pulling Data from DVC..."
-        dvc pull model/dataset/spotify_db.raw_reviews.csv.dvc
-        
-        echo "✅ All set! Code and Data are ready."
+        echo "✅ Code pulled successfully!"
     env:
     - name: GITHUB_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: train-secrets
-          key: GITHUB_TOKEN
-    - name: DAGSHUB_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: train-secrets
-          key: DAGSHUB_TOKEN
+      valueFrom: { secretKeyRef: { name: train-secrets, key: GITHUB_TOKEN } }
     volumeMounts:
     - name: shared-code
       mountPath: /opt/repo
@@ -59,5 +43,5 @@ spec:
   volumes:
   - name: shared-code
     emptyDir: {}
-  
+
   restartPolicy: Never
