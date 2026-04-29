@@ -5,15 +5,15 @@ metadata:
   namespace: mlops-sentiment
   annotations:
     kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/rewrite-target: /$1$2
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/use-regex: "true"
 spec:
   rules:
   - host: spotify-mlops.local
     http:
       paths:
-      # 1. Định tuyến các thành phần của Evidently UI
-      - path: /(static|api/version|api/projects|api/workspace|manifest\.json|favicon\.ico)(.*)
+      # 1. Định tuyến các thành phần tĩnh của Evidently (Giữ nguyên path)
+      - path: /()(static/.*|api/version|api/projects|api/workspace|manifest\.json|favicon\.ico)
         pathType: ImplementationSpecific
         backend:
           service:
@@ -21,7 +21,7 @@ spec:
             port:
               number: 8086
 
-      # 2. Định tuyến Backend (/api/xxx -> backend/xxx)
+      # 2. Định tuyến Backend (/api/xxx -> /xxx)
       - path: /api(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -30,7 +30,7 @@ spec:
             port:
               number: 8000
       
-      # 3. Định tuyến Model Service
+      # 3. Định tuyến Model Service (/model/xxx -> /xxx)
       - path: /model(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
