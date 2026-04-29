@@ -36,7 +36,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. BUILD SERVICES (Với cơ chế tự động thử lại 5 lần nếu lỗi mạng)
+      # 1. BUILD SERVICES
       - name: Build Backend
         if: needs.check-changes.outputs.backend == 'true'
         run: |
@@ -65,18 +65,25 @@ jobs:
             docker build -t 172.31.87.182/spotify-mlops/crawler:${{ github.sha }} ./crawler && break || sleep 15
           done
 
-      # 2. CẬP NHẬT GITOPS (Chỉ đè tag của service vừa build, giữ nguyên tag đang chạy của service khác)
+      # 2. CẬP NHẬT GITOPS (Đồng bộ TOÀN BỘ thư mục k8s)
       - name: Update Manifest
         run: |
           git config --global user.email "ci-bot@example.com"
           git config --global user.name "CI Bot"
           
-          # Lấy manifest đang chạy trên nhánh deploy
-          git fetch origin deploy || git checkout -b deploy
-          git checkout origin/deploy -- k8s/spotify-app.yaml || echo "First time deploy"
-
+          # Lưu lại mã SHA và nội dung thư mục k8s hiện tại
           TAG="${{ github.sha }}"
+          mkdir -p /tmp/k8s-new
+          cp -r k8s/* /tmp/k8s-new/
 
+          # Chuyển sang nhánh deploy
+          git fetch origin deploy
+          git checkout deploy || git checkout -b deploy
+
+          # Copy đè toàn bộ file manifest mới vào nhánh deploy
+          cp -r /tmp/k8s-new/* k8s/
+          
+          # Cập nhật tag image cho những service vừa build
           if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
             sed -i "s|image: 172.31.87.182/spotify-mlops/backend:.*|image: 172.31.87.182/spotify-mlops/backend:$TAG|g" k8s/spotify-app.yaml
           fi
@@ -90,6 +97,7 @@ jobs:
             sed -i "s|image: 172.31.87.182/spotify-mlops/crawler:.*|image: 172.31.87.182/spotify-mlops/crawler:$TAG|g" k8s/spotify-app.yaml
           fi
 
-          git add k8s/spotify-app.yaml
-          git commit -m "deploy: partial updates from ${{ github.sha }} [skip ci]" || echo "No changes"
-          git push origin HEAD:deploy --force
+          # Push toàn bộ thư mục k8s lên nhánh deploy
+          git add k8s/
+          git commit -m "deploy: sync all manifests from commit $TAG [skip ci]" || echo "No changes"
+          git push origin deploy --force
