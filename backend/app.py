@@ -12,13 +12,23 @@ import requests
 import os
 import io
 from pymongo import MongoClient
+import mlflow
 
 # ====== CONFIG ======
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@postgres:5432/mlops_auth")
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
+MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
 SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 
+
+# DagsHub / MLflow Config
+DAGSHUB_USER = os.getenv("DAGSHUB_USERNAME")
+DAGSHUB_PASS = os.getenv("DAGSHUB_PASSWORD")
+if DAGSHUB_USER:
+    os.environ['MLFLOW_TRACKING_USERNAME'] = DAGSHUB_USER
+    os.environ['MLFLOW_TRACKING_PASSWORD'] = DAGSHUB_PASS
+    mlflow.set_tracking_uri(f"https://dagshub.com/{DAGSHUB_USER}/Spotify-Sentiment-MLOps.mlflow")
 
 # ====== DATABASE SETUP ======
 engine = create_engine(DATABASE_URL)
@@ -46,11 +56,9 @@ def create_default_admin():
             new_admin = User(username="admin", hashed_password=pwd_context.hash("admin123"), role="admin")
             db.add(new_admin)
             db.commit()
-    finally:
-        db.close()
+    finally: db.close()
 
 create_default_admin()
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
 def get_db():
@@ -78,10 +86,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 app = FastAPI(title="Spotify Backend API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-@app.get("/")
-def read_root():
-    return {"status": "Backend is up"}
-
 @app.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first():
@@ -102,20 +106,44 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @app.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
     user_count = db.query(func.count(User.id)).scalar()
+    
+    # 1. Lấy Accuracy từ MLflow
+    accuracy = "N/A"
     try:
-        crawled_count = reviews_col.count_documents({})
-    except:
-        crawled_count = 0
+        client = mlflow.tracking.MlflowClient()
+        # Tìm version mới nhất của model 'Spotify_Production_Model'
+        latest_versions = client.get_latest_versions("Spotify_Production_Model", stages=["Production"])
+        if latest_versions:
+            run_id = latest_versions[0].run_id
+            run = client.get_run(run_id)
+            acc_val = run.data.metrics.get("accuracy") or run.data.metrics.get("acc")
+            if acc_val:
+                accuracy = f"{acc_val * 100:.1f}%" if acc_val <= 1 else f"{acc_val:.1f}%"
+    except Exception as e:
+        print(f"⚠️ MLflow error: {e}")
+
+    # 2. MongoDB count
+    try: crawled_count = reviews_col.count_documents({})
+    except: crawled_count = 0
+    
     return {
-        "model_version": "v1.2.0-Production",
+        "model_version": "v1.2.0-Prod",
         "total_predictions": 14205,
         "dataset_size": f"{crawled_count} reviews",
         "active_users": user_count,
-        "accuracy": "94.5%" # Thông số mới
+        "accuracy": accuracy
     }
 
-MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
+# SINGLE PREDICTION API
+@app.post("/predict")
+async def predict_single(review_text: str, current_user: User = Depends(get_current_user)):
+    try:
+        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10)
+        return res.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Model Service error: {str(e)}")
 
+# BATCH ANALYZE CSV
 @app.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     content = await file.read()

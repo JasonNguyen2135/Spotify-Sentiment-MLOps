@@ -38,26 +38,18 @@ export default function Home() {
     if (!review.trim()) return;
     
     setPredicting(true);
+    setPrediction(null);
     try {
       const token = localStorage.getItem('token');
-      // Chúng ta tái sử dụng logic analyze nhưng cho 1 câu (Fake backend logic hoặc gọi thẳng Model)
-      // Để nhanh, tôi sẽ gọi endpoint mới hoặc giả lập qua backend hiện tại
-      const response = await axios.post(`/api/analyze-csv`, null, {
-          params: { review_text: review }, // Cần backend hỗ trợ thêm hoặc dùng endpoint này
+      // Gọi tới endpoint thật ở Backend
+      const response = await axios.post(`/api/predict`, null, {
+          params: { review_text: review },
           headers: { 'Authorization': `Bearer ${token}` }
       });
-      // Vì backend analyze-csv trả về list kết quả của file, ở đây ta giả lập lấy kết quả đầu
-      // Thực tế nên có 1 endpoint riêng /api/predict
-      setPrediction({ sentiment: "Analyzing..." });
-      
-      // Giả lập kết quả cho demo nhanh nếu backend chưa có endpoint lẻ
-      setTimeout(() => {
-          setPrediction({ sentiment: review.length % 2 === 0 ? "positive" : "negative" });
-          setPredicting(false);
-      }, 800);
-
+      setPrediction(response.data);
     } catch (err) {
-      console.error(err);
+      console.error("Prediction failed", err);
+    } finally {
       setPredicting(false);
     }
   };
