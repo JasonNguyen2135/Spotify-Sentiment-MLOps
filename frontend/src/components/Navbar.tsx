@@ -14,12 +14,7 @@ export default function Navbar() {
     { name: 'Analyze CSV', href: '/analyze', icon: BarChart3 },
   ];
 
-  const adminItems = [
-    { name: 'Monitoring', href: '/admin/monitoring', icon: ShieldCheck },
-    { name: 'Pipeline', href: '/admin/pipeline', icon: Settings },
-  ];
-
-  if (pathname === '/login') return null;
+  if (pathname === '/login' || pathname === '/register') return null;
 
   return (
     <nav className="bg-white shadow-sm border-b">
@@ -27,7 +22,7 @@ export default function Navbar() {
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center gap-2">
             <Music className="text-spotify w-8 h-8" />
-            <span className="font-bold text-xl tracking-tight">Spotify MLOps</span>
+            <span className="font-bold text-xl tracking-tight text-gray-900">Spotify MLOps</span>
           </div>
           
           <div className="flex gap-6 items-center">
@@ -46,20 +41,27 @@ export default function Navbar() {
             ))}
 
             {user?.role === 'admin' && (
-              <div className="flex gap-6 border-l pl-6">
-                {adminItems.map((item) => (
-                  <Link 
-                    key={item.href}
-                    href={item.href}
-                    className={clsx(
-                      "flex items-center gap-1 text-sm font-medium transition-colors",
-                      pathname === item.href ? "text-red-500" : "text-gray-600 hover:text-red-500"
-                    )}
-                  >
-                    <item.icon className="w-4 h-4" />
-                    {item.name}
-                  </Link>
-                ))}
+              <div className="flex gap-6 border-l pl-6 ml-2">
+                {/* Monitoring mở tab mới trỏ thẳng vào Ingress path */}
+                <a 
+                  href="/evidently/" 
+                  target="_blank"
+                  className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-red-500 transition-colors"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  Monitoring
+                </a>
+
+                <Link 
+                  href="/admin/pipeline"
+                  className={clsx(
+                    "flex items-center gap-1 text-sm font-medium transition-colors",
+                    pathname === "/admin/pipeline" ? "text-red-500" : "text-gray-600 hover:text-red-500"
+                  )}
+                >
+                  <Settings className="w-4 h-4" />
+                  Pipeline
+                </Link>
               </div>
             )}
 

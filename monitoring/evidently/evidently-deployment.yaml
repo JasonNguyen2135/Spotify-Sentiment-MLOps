@@ -21,15 +21,15 @@ spec:
         image: 172.31.87.182/spotify-mlops/evidently-service:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8085 # Cổng API
-        - containerPort: 8086 # Cổng UI
+        - containerPort: 8085 # API
+        - containerPort: 8086 # UI
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: evidently-service
 spec:
-  type: NodePort
+  type: ClusterIP # Chuyển thành ClusterIP để bảo mật
   selector:
     app: evidently
   ports:
@@ -39,4 +39,3 @@ spec:
   - name: ui
     port: 8086
     targetPort: 8086
-    nodePort: 30509 # Mở ra trình duyệt Windows
