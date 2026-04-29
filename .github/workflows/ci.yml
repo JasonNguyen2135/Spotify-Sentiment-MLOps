@@ -16,6 +16,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       model: ${{ steps.filter.outputs.model }}
       crawler: ${{ steps.filter.outputs.crawler }}
+      evidently: ${{ steps.filter.outputs.evidently }}
     steps:
       - uses: actions/checkout@v3
       - uses: dorny/paths-filter@v2
@@ -26,6 +27,7 @@ jobs:
             frontend: ['frontend/**']
             model: ['model/**']
             crawler: ['crawler/**']
+            evidently: ['monitoring/evidently/**']
 
   build-and-gitops:
     needs: check-changes
@@ -36,7 +38,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. BUILD SERVICES (Với cơ chế tự động thử lại 5 lần nếu lỗi mạng)
+      # 1. BUILD SERVICES (Với cơ chế tự động thử lại)
       - name: Build Backend
         if: needs.check-changes.outputs.backend == 'true'
         run: |
@@ -65,25 +67,28 @@ jobs:
             docker build -t 172.31.87.182/spotify-mlops/crawler:${{ github.sha }} ./crawler && break || sleep 15
           done
 
-      # 2. CẬP NHẬT GITOPS (Surgical Update)
+      - name: Build Evidently
+        if: needs.check-changes.outputs.evidently == 'true'
+        run: |
+          for i in {1..5}; do
+            docker build -t 172.31.87.182/spotify-mlops/evidently-service:${{ github.sha }} ./monitoring/evidently && break || sleep 15
+          done
+
+      # 2. CẬP NHẬT GITOPS
       - name: Update Manifest
         run: |
           git config --global user.email "ci-bot@example.com"
           git config --global user.name "CI Bot"
           TAG="${{ github.sha }}"
 
-          # Lưu lại các file cấu hình khác từ main
           mkdir -p /tmp/k8s-sync
-          cp k8s/ingress.yaml k8s/hpa.yaml k8s/evidently-deployment.yaml /tmp/k8s-sync/ || true
+          cp k8s/*.yaml /tmp/k8s-sync/ || true
 
-          # Chuyển sang nhánh deploy
           git fetch origin deploy
           git checkout deploy || git checkout -b deploy
 
-          # Cập nhật Ingress/HPA từ main sang deploy
           cp /tmp/k8s-sync/* k8s/ || true
           
-          # CHỈ cập nhật tag image cho service vừa build, giữ nguyên các SHA khác đang có trên deploy
           if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
             sed -i "s|image: 172.31.87.182/spotify-mlops/backend:.*|image: 172.31.87.182/spotify-mlops/backend:$TAG|g" k8s/spotify-app.yaml
           fi
@@ -95,6 +100,9 @@ jobs:
           fi
           if [ "${{ needs.check-changes.outputs.crawler }}" == "true" ]; then
             sed -i "s|image: 172.31.87.182/spotify-mlops/crawler:.*|image: 172.31.87.182/spotify-mlops/crawler:$TAG|g" k8s/spotify-app.yaml
+          fi
+          if [ "${{ needs.check-changes.outputs.evidently }}" == "true" ]; then
+            sed -i "s|image: 172.31.87.182/spotify-mlops/evidently-service:.*|image: 172.31.87.182/spotify-mlops/evidently-service:$TAG|g" k8s/evidently-deployment.yaml
           fi
 
           git add k8s/
