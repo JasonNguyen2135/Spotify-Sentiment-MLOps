@@ -5,15 +5,14 @@ WORKDIR /app
 # Cài đặt git và các thư viện cần thiết
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-# Cài đặt thư viện ML
+# Cài đặt thư viện ML và DVC (để kéo dữ liệu)
 RUN pip install --no-cache-dir \
     pandas \
     scikit-learn \
     mlflow \
     requests \
-    python-dotenv
+    python-dotenv \
+    "dvc[s3]"
 
-# Lưu ý: Chúng ta KHÔNG copy code vào đây 
-# Vì code sẽ được InitContainer kéo từ Git về lúc chạy.
-
+# Không copy code vì dùng InitContainer
 CMD ["python", "train.py"]

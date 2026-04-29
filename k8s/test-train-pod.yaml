@@ -5,14 +5,34 @@ metadata:
   namespace: airflow
 spec:
   initContainers:
-  - name: git-clone-code
-    image: alpine/git:latest
+  - name: git-and-dvc-pull
+    # Dùng image trainer của bạn vì nó có sẵn môi trường ổn định
+    image: 172.31.87.182/spotify-mlops/sentiment-trainer:latest
+    imagePullPolicy: IfNotPresent
     command: ["/bin/sh", "-c"]
     args:
-      - "git clone https://github.com/davidmoi2135/Spotify-Sentiment-MLOps.git /opt/repo"
+      - |
+        echo "🚀 Cloning Repo..."
+        git clone https://davidmoi2135:${GITHUB_TOKEN}@github.com/davidmoi2135/Spotify-Sentiment-MLOps.git /opt/repo
+        cd /opt/repo
+        
+        echo "📦 Installing DVC..."
+        pip install dvc[s3] # Hoặc dvc đơn thuần tùy storage của bạn
+        
+        echo "📡 Pulling Data from DVC..."
+        # Cấu hình remote dvc nếu chưa có trong code (DagsHub dùng remote mặc định là origin)
+        dvc pull model/dataset/spotify_db.raw_reviews.csv.dvc
+        
+        echo "✅ Data is ready!"
+    env:
+    - name: GITHUB_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: train-secrets
+          key: GITHUB_TOKEN
     volumeMounts:
     - name: shared-code
-      mount_path: /opt/repo
+      mountPath: /opt/repo
 
   containers:
   - name: train-container
@@ -21,21 +41,16 @@ spec:
     workingDir: /opt/repo/model
     command: ["python", "train.py"]
     env:
-    # LƯU Ý: Bạn cần đảm bảo 2 secret này tồn tại trong namespace airflow
-    # Hoặc thay bằng giá trị trực tiếp để test nhanh (không khuyến khích)
     - name: DAGSHUB_USERNAME
-      valueFrom:
-        secretKeyRef:
-          name: dagshub-secret
-          key: DAGSHUB_USERNAME
+      value: "davidmoi2135"
     - name: DAGSHUB_TOKEN
       valueFrom:
         secretKeyRef:
-          name: dagshub-secret
-          key: DAGSHUB_PASSWORD
+          name: train-secrets
+          key: DAGSHUB_TOKEN
     volumeMounts:
     - name: shared-code
-      mount_path: /opt/repo
+      mountPath: /opt/repo
 
   volumes:
   - name: shared-code
