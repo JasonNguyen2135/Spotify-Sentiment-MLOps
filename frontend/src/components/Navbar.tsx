@@ -1,0 +1,92 @@
+'use client';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Music, LayoutDashboard, BarChart3, Settings, ShieldCheck, LogOut, User } from 'lucide-react';
+import { clsx } from 'clsx';
+import { useAuth } from '@/context/AuthContext';
+
+export default function Navbar() {
+  const pathname = usePathname();
+  const { user, logout } = useAuth();
+
+  const navItems = [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Analyze CSV', href: '/analyze', icon: BarChart3 },
+  ];
+
+  const adminItems = [
+    { name: 'Monitoring', href: '/admin/monitoring', icon: ShieldCheck },
+    { name: 'Pipeline', href: '/admin/pipeline', icon: Settings },
+  ];
+
+  if (pathname === '/login') return null;
+
+  return (
+    <nav className="bg-white shadow-sm border-b">
+      <div className="container mx-auto px-4">
+        <div className="flex justify-between h-16 items-center">
+          <div className="flex items-center gap-2">
+            <Music className="text-spotify w-8 h-8" />
+            <span className="font-bold text-xl tracking-tight">Spotify MLOps</span>
+          </div>
+          
+          <div className="flex gap-6 items-center">
+            {navItems.map((item) => (
+              <Link 
+                key={item.href}
+                href={item.href}
+                className={clsx(
+                  "flex items-center gap-1 text-sm font-medium transition-colors",
+                  pathname === item.href ? "text-spotify" : "text-gray-600 hover:text-spotify"
+                )}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.name}
+              </Link>
+            ))}
+
+            {user?.role === 'admin' && (
+              <div className="flex gap-6 border-l pl-6">
+                {adminItems.map((item) => (
+                  <Link 
+                    key={item.href}
+                    href={item.href}
+                    className={clsx(
+                      "flex items-center gap-1 text-sm font-medium transition-colors",
+                      pathname === item.href ? "text-red-500" : "text-gray-600 hover:text-red-500"
+                    )}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.name}
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-4 ml-6 pl-6 border-l">
+              {user ? (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <User className="w-4 h-4" />
+                    {user.username} 
+                    <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded uppercase">{user.role}</span>
+                  </div>
+                  <button 
+                    onClick={logout}
+                    className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-full transition-all"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <Link href="/login" className="text-sm font-bold text-spotify hover:underline">
+                  Sign In
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+}

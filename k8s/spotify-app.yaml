@@ -1,17 +1,23 @@
 # ==========================================
-# 1. MONGODB (StatefulSet đề xuất cho Database)
+# 1. DATABASES (MongoDB & PostgreSQL)
 # ==========================================
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mongo-pvc
 spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 5Gi } }
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 5Gi } }
+---
+# MongoDB Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,43 +25,70 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: mongodb
+    matchLabels: { app: mongodb }
   template:
     metadata:
-      labels:
-        app: mongodb
+      labels: { app: mongodb }
     spec:
       containers:
       - name: mongodb
         image: mongo:latest
-        ports:
-        - containerPort: 27017
-        volumeMounts:
-        - name: mongo-storage
-          mountPath: /data/db
+        ports: [{ containerPort: 27017 }]
+        volumeMounts: [{ name: mongo-storage, mountPath: /data/db }]
         resources:
-          requests:
-            cpu: "100m"
-            memory: "256Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { cpu: 500m, memory: 512Mi }
       volumes:
       - name: mongo-storage
-        persistentVolumeClaim:
-          claimName: mongo-pvc
+        persistentVolumeClaim: { claimName: mongo-pvc }
+---
+# PostgreSQL Deployment (Lưu User/Role)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15
+        ports: [{ containerPort: 5432 }]
+        env:
+        - name: POSTGRES_DB
+          value: "mlops_auth"
+        - name: POSTGRES_USER
+          value: "admin"
+        - name: POSTGRES_PASSWORD
+          value: "admin123"
+        volumeMounts: [{ name: postgres-storage, mountPath: /var/lib/postgresql/data }]
+        resources:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { cpu: 500m, memory: 512Mi }
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim: { claimName: postgres-pvc }
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: mongodb
 spec:
-  selector:
-    app: mongodb
-  ports:
-  - port: 27017
-    targetPort: 27017
+  selector: { app: mongodb }
+  ports: [{ port: 27017, targetPort: 27017 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]
 
 # ==========================================
 # 2. MODEL SERVICE
@@ -68,12 +101,10 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: model-service
+    matchLabels: { app: model-service }
   template:
     metadata:
-      labels:
-        app: model-service
+      labels: { app: model-service }
     spec:
       containers:
       - name: model-service
@@ -81,38 +112,24 @@ spec:
         imagePullPolicy: IfNotPresent
         env:
           - name: DAGSHUB_USERNAME
-            valueFrom:
-              secretKeyRef:
-                name: dagshub-secret
-                key: DAGSHUB_USERNAME
+            valueFrom: { secretKeyRef: { name: dagshub-secret, key: DAGSHUB_USERNAME } }
           - name: DAGSHUB_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: dagshub-secret
-                key: DAGSHUB_PASSWORD
-        ports:
-        - containerPort: 8000
+            valueFrom: { secretKeyRef: { name: dagshub-secret, key: DAGSHUB_PASSWORD } }
+        ports: [{ containerPort: 8000 }]
         resources:
-          requests:
-            cpu: "200m"
-            memory: "512Mi"
-          limits:
-            cpu: "1000m"
-            memory: "1Gi"
+          requests: { cpu: 200m, memory: 512Mi }
+          limits: { cpu: 1000m, memory: 1Gi }
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: model-service
 spec:
-  selector:
-    app: model-service
-  ports:
-  - port: 8000
-    targetPort: 8000
+  selector: { app: model-service }
+  ports: [{ port: 8000, targetPort: 8000 }]
 
 # ==========================================
-# 3. BACKEND
+# 3. BACKEND (With Auth & Postgres)
 # ==========================================
 ---
 apiVersion: apps/v1
@@ -122,45 +139,39 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: backend
+    matchLabels: { app: backend }
   template:
     metadata:
-      labels:
-        app: backend
+      labels: { app: backend }
     spec:
       containers:
       - name: backend
         image: 172.31.87.182/spotify-mlops/backend:latest
         imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 8000
+        ports: [{ containerPort: 8000 }]
         env:
         - name: MODEL_API_URL
           value: "http://model-service:8000"
         - name: MONGO_URL
           value: "mongodb://mongodb:27017"
+        - name: DATABASE_URL
+          value: "postgresql://admin:admin123@postgres:5432/mlops_auth"
+        - name: JWT_SECRET
+          value: "super-secret-key-change-me-in-production"
         resources:
-          requests:
-            cpu: "100m"
-            memory: "256Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { cpu: 500m, memory: 512Mi }
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: backend
 spec:
-  selector:
-    app: backend
-  ports:
-  - port: 8000
-    targetPort: 8000
+  selector: { app: backend }
+  ports: [{ port: 8000, targetPort: 8000 }]
 
 # ==========================================
-# 4. FRONTEND (Giao diện Streamlit)
+# 4. FRONTEND (Next.js)
 # ==========================================
 ---
 apiVersion: apps/v1
@@ -170,40 +181,30 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: frontend
+    matchLabels: { app: frontend }
   template:
     metadata:
-      labels:
-        app: frontend
+      labels: { app: frontend }
     spec:
       containers:
       - name: frontend
         image: 172.31.87.182/spotify-mlops/frontend:latest
         imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 8501
+        ports: [{ containerPort: 3000 }]
         env:
         - name: BACKEND_API_URL
           value: "http://backend:8000"
         resources:
-          requests:
-            cpu: "100m"
-            memory: "256Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { cpu: 500m, memory: 512Mi }
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend
 spec:
-  selector:
-    app: frontend
-  ports:
-  - port: 8501
-    targetPort: 8501
+  selector: { app: frontend }
+  ports: [{ port: 8501, targetPort: 3000 }]
 
 # ==========================================
 # 5. CRAWLER
@@ -216,12 +217,10 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: crawler
+    matchLabels: { app: crawler }
   template:
     metadata:
-      labels:
-        app: crawler
+      labels: { app: crawler }
     spec:
       containers:
       - name: crawler
@@ -231,9 +230,5 @@ spec:
         - name: MONGO_URL
           value: "mongodb://mongodb:27017"
         resources:
-          requests:
-            cpu: "50m"
-            memory: "128Mi"
-          limits:
-            cpu: "200m"
-            memory: "256Mi"
+          requests: { cpu: 50m, memory: 128Mi }
+          limits: { cpu: 200m, memory: 256Mi }
