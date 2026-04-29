@@ -8,6 +8,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score
+import requests  # Thêm dòng này
+import io        # Thêm dòng này
 
 # 1. Nạp biến môi trường
 DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME")
@@ -22,13 +24,20 @@ def train_and_deploy():
     mlflow.set_tracking_uri(dagshub_uri)
     mlflow.set_experiment("Spotify_Sentiment_Analysis")
 
-    # 4. KÉO DỮ LIỆU ĐỘNG (Bỏ qua DVC, kéo thẳng raw file)
+    # 4. KÉO DỮ LIỆU ĐỘNG (Cách siêu an toàn bằng requests)
     print("📡 Đang tải dữ liệu trực tiếp từ DagsHub...")
     
-    # Kẹp Username và Token vào URL (Giống hệt cơ chế curl -u)
-    data_url = f"https://{DAGSHUB_USERNAME}:{DAGSHUB_TOKEN}@dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv"
+    # URL sạch, không kẹp token vào chuỗi
+    clean_url = f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/dataset/spotify_db.raw_reviews.csv"
     
-    df = pd.read_csv(data_url)
+    # Dùng requests tải data và truyền Auth cực chuẩn
+    response = requests.get(clean_url, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
+    
+    # Kêu to nếu tải thất bại (sai pass, sai link...)
+    response.raise_for_status() 
+    
+    # Biến nội dung tải được thành file ảo trong RAM cho Pandas đọc
+    df = pd.read_csv(io.StringIO(response.text))
     print("✅ Đã nạp dữ liệu thành công vào RAM!")
 
     X = df['text'].fillna('')
