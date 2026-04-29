@@ -34,12 +34,10 @@ class User(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# MongoDB Connection
 mongo_client = MongoClient(MONGO_URL)
 mongo_db = mongo_client["spotify_db"]
 reviews_col = mongo_db["raw_reviews"]
 
-# ====== TỰ ĐỘNG TẠO ADMIN ======
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def create_default_admin():
     db = SessionLocal()
@@ -53,8 +51,7 @@ def create_default_admin():
 
 create_default_admin()
 
-# ====== SECURITY ======
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
 def get_db():
     db = SessionLocal()
@@ -83,9 +80,9 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 
 @app.get("/")
 def read_root():
-    return {"status": "Backend is up", "model_api": os.getenv("MODEL_API_URL")}
+    return {"status": "Backend is up"}
 
-@app.post("/api/register")
+@app.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first():
         raise HTTPException(status_code=400, detail="Username exists")
@@ -102,7 +99,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     token = create_access_token(data={"sub": user.username, "role": user.role})
     return {"access_token": token, "token_type": "bearer", "role": user.role}
 
-@app.get("/api/stats")
+@app.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
     user_count = db.query(func.count(User.id)).scalar()
     try:
@@ -116,10 +113,9 @@ def get_stats(db: Session = Depends(get_db)):
         "active_users": user_count
     }
 
-# ====== ML LOGIC ======
 MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
 
-@app.post("/api/analyze-csv")
+@app.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     content = await file.read()
     df = pd.read_csv(io.BytesIO(content))

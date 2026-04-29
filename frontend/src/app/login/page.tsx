@@ -21,7 +21,7 @@ export default function LoginPage() {
     formData.append('password', password);
 
     try {
-      const response = await axios.post('/login', formData);
+      const response = await axios.post('/api/login', formData);
       login(response.data.access_token, response.data.role, username);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Login failed");

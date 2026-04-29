@@ -17,6 +17,7 @@ export default function RegisterPage() {
     setError('');
 
     try {
+      // Gọi qua Ingress /api/register
       await axios.post(`/api/register?username=${username}&password=${password}&role=user`);
       setSuccess(true);
     } catch (err: any) {
