@@ -77,6 +77,10 @@ export default function LoginPage() {
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In"}
         </button>
+
+        <p className="text-center text-sm text-gray-500">
+          Don't have an account? <a href="/register" className="text-spotify font-bold hover:underline">Create Account</a>
+        </p>
       </form>
     </div>
   );
