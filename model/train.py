@@ -26,7 +26,7 @@ def train_and_deploy():
     print("📡 Đang tải dữ liệu trực tiếp từ DagsHub...")
     
     # Kẹp Username và Token vào URL (Giống hệt cơ chế curl -u)
-    data_url = f"https://{DAGSHUB_USERNAME}:{DAGSHUB_TOKEN}@dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/dataset/spotify_db.raw_reviews.csv"
+    data_url = f"https://{DAGSHUB_USERNAME}:{DAGSHUB_TOKEN}@dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv"
     
     df = pd.read_csv(data_url)
     print("✅ Đã nạp dữ liệu thành công vào RAM!")
