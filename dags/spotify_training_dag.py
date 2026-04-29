@@ -1,7 +1,6 @@
 from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from kubernetes.client import models as k8s
-from airflow.models import Variable
 from datetime import datetime, timedelta
 
 default_args = {
@@ -10,7 +9,7 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-# Cấu hình Volume chung cho InitContainer và Main Container
+# 1. Cấu hình Ổ cứng tạm (EmptyDir) để InitContainer truyền code cho Main Container
 shared_volume = k8s.V1Volume(
     name="shared-code",
     empty_dir=k8s.V1EmptyDirVolumeSource()
@@ -21,13 +20,25 @@ shared_volume_mount = k8s.V1VolumeMount(
     mount_path="/opt/repo"
 )
 
-# Khai báo InitContainer để kéo code từ GitHub
+# 2. InitContainer: Dịch chuẩn 100% từ manual-test-train sang Python K8s Client
 init_container = k8s.V1Container(
-    name="git-clone-code",
-    image="alpine/git:latest",
+    name="git-pull-only",
+    image="172.31.87.182/spotify-mlops/sentiment-trainer:latest",
+    image_pull_policy="IfNotPresent",
     command=["/bin/sh", "-c"],
+    # Nối các lệnh bằng && để đảm bảo chạy mượt mà
     args=[
-        "git clone https://github.com/davidmoi2135/Spotify-Sentiment-MLOps.git /opt/repo"
+        "echo '🚀 Cloning Source Code from GitHub...' && "
+        "git clone https://davidmoi2135:${GITHUB_TOKEN}@github.com/davidmoi2135/Spotify-Sentiment-MLOps.git /opt/repo && "
+        "echo '✅ Code pulled successfully!'"
+    ],
+    env=[
+        k8s.V1EnvVar(
+            name="GITHUB_TOKEN",
+            value_from=k8s.V1EnvVarSource(
+                secret_key_ref=k8s.V1SecretKeySelector(name="train-secrets", key="GITHUB_TOKEN")
+            )
+        )
     ],
     volume_mounts=[shared_volume_mount]
 )
@@ -45,22 +56,28 @@ with DAG(
         task_id="train_sentiment_model",
         name="sentiment-train-pod",
         namespace="airflow",
-        
-        # Image chính bây giờ chỉ cần Python và các thư viện, không cần code
+
+        # Image chính (Siêu nhẹ, không chứa code, không chứa data)
         image="172.31.87.182/spotify-mlops/sentiment-trainer:latest",
         image_pull_policy="IfNotPresent",
-        
-        # Chạy code từ thư mục mà InitContainer đã mount vào
+
+        # Chạy code từ thư mục mà InitContainer vừa clone về
         working_dir="/opt/repo/model",
         cmds=["python", "train.py"],
-        
+
         init_containers=[init_container],
         volumes=[shared_volume],
         volume_mounts=[shared_volume_mount],
 
+        # 3. Lấy Token trực tiếp từ K8s Secret (thay vì Airflow Variables) cho đồng nhất
         env_vars=[
-            k8s.V1EnvVar(name="DAGSHUB_USERNAME", value="{{ var.value.DAGSHUB_USERNAME }}"),
-            k8s.V1EnvVar(name="DAGSHUB_TOKEN", value="{{ var.value.DAGSHUB_TOKEN }}"),
+            k8s.V1EnvVar(name="DAGSHUB_USERNAME", value="davidmoi2135"),
+            k8s.V1EnvVar(
+                name="DAGSHUB_TOKEN",
+                value_from=k8s.V1EnvVarSource(
+                    secret_key_ref=k8s.V1SecretKeySelector(name="train-secrets", key="DAGSHUB_TOKEN")
+                )
+            )
         ],
 
         get_logs=True,
