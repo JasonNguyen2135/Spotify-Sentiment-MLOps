@@ -36,33 +36,55 @@ jobs:
         with:
           fetch-depth: 0
 
-      # BUILD SERVICES (Chỉ build nếu có thay đổi)
+      # BUILD SERVICES (Với cơ chế tự động thử lại 5 lần nếu lỗi mạng)
       - name: Build Backend
         if: needs.check-changes.outputs.backend == 'true'
-        run: docker build -t 172.31.87.182/spotify-mlops/backend:${{ github.sha }} ./backend
+        run: |
+          for i in {1..5}; do
+            docker build -t 172.31.87.182/spotify-mlops/backend:${{ github.sha }} ./backend && break || {
+              echo "⚠️ Build failed, retrying in 15s... ($i/5)"
+              sleep 15
+            }
+          done
 
       - name: Build Frontend
         if: needs.check-changes.outputs.frontend == 'true'
-        run: docker build -t 172.31.87.182/spotify-mlops/frontend:${{ github.sha }} ./frontend
+        run: |
+          for i in {1..5}; do
+            docker build -t 172.31.87.182/spotify-mlops/frontend:${{ github.sha }} ./frontend && break || {
+              echo "⚠️ Build failed, retrying in 15s... ($i/5)"
+              sleep 15
+            }
+          done
 
       - name: Build Model Service
         if: needs.check-changes.outputs.model == 'true'
-        run: docker build -t 172.31.87.182/spotify-mlops/model-service:${{ github.sha }} ./model
+        run: |
+          for i in {1..5}; do
+            docker build -t 172.31.87.182/spotify-mlops/model-service:${{ github.sha }} ./model && break || {
+              echo "⚠️ Build failed, retrying in 15s... ($i/5)"
+              sleep 15
+            }
+          done
 
       - name: Build Crawler
         if: needs.check-changes.outputs.crawler == 'true'
-        run: docker build -t 172.31.87.182/spotify-mlops/crawler:${{ github.sha }} ./crawler
+        run: |
+          for i in {1..5}; do
+            docker build -t 172.31.87.182/spotify-mlops/crawler:${{ github.sha }} ./crawler && break || {
+              echo "⚠️ Build failed, retrying in 15s... ($i/5)"
+              sleep 15
+            }
+          done
 
-      # UPDATE MANIFEST (Chỉ cập nhật tag cho những gì vừa build)
+      # UPDATE MANIFEST
       - name: Update Manifest and Push
         run: |
           git config --global user.email "ci-bot@example.com"
           git config --global user.name "CI Bot"
           TAG="${{ github.sha }}"
-
           git checkout -b deploy || git checkout deploy
           
-          # Chỉ dùng sed nếu service đó được build
           if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
             sed -i "s|image: 172.31.87.182/spotify-mlops/backend:.*|image: 172.31.87.182/spotify-mlops/backend:$TAG|g" k8s/spotify-app.yaml
           fi
@@ -77,5 +99,5 @@ jobs:
           fi
 
           git add k8s/spotify-app.yaml
-          git commit -m "deploy: update changed images to $TAG [skip ci]" || echo "No changes"
+          git commit -m "deploy: update changed images with retry support [skip ci]" || echo "No changes"
           git push origin deploy --force
