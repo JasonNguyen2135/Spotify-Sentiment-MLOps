@@ -13,6 +13,7 @@ import os
 import io
 from pymongo import MongoClient
 import mlflow
+from mlflow.tracking import MlflowClient
 
 # ====== CONFIG ======
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@postgres:5432/mlops_auth")
@@ -20,15 +21,16 @@ MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
 SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-key")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 
 
 # DagsHub / MLflow Config
 DAGSHUB_USER = os.getenv("DAGSHUB_USERNAME")
 DAGSHUB_PASS = os.getenv("DAGSHUB_PASSWORD")
+TRACKING_URI = f"https://dagshub.com/{DAGSHUB_USER}/Spotify-Sentiment-MLOps.mlflow"
+
 if DAGSHUB_USER:
     os.environ['MLFLOW_TRACKING_USERNAME'] = DAGSHUB_USER
     os.environ['MLFLOW_TRACKING_PASSWORD'] = DAGSHUB_PASS
-    mlflow.set_tracking_uri(f"https://dagshub.com/{DAGSHUB_USER}/Spotify-Sentiment-MLOps.mlflow")
+    mlflow.set_tracking_uri(TRACKING_URI)
 
 # ====== DATABASE SETUP ======
 engine = create_engine(DATABASE_URL)
@@ -43,7 +45,6 @@ class User(Base):
     role = Column(String, default="user")
 
 Base.metadata.create_all(bind=engine)
-
 mongo_client = MongoClient(MONGO_URL)
 mongo_db = mongo_client["spotify_db"]
 reviews_col = mongo_db["raw_reviews"]
@@ -53,8 +54,7 @@ def create_default_admin():
     db = SessionLocal()
     try:
         if not db.query(User).filter(User.username == "admin").first():
-            new_admin = User(username="admin", hashed_password=pwd_context.hash("admin123"), role="admin")
-            db.add(new_admin)
+            db.add(User(username="admin", hashed_password=pwd_context.hash("admin123"), role="admin"))
             db.commit()
     finally: db.close()
 
@@ -62,67 +62,55 @@ create_default_admin()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
 def get_db():
-    db = SessionLocal()
-    try: yield db
-    finally: db.close()
+    db = SessionLocal(); yield db; db.close()
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": datetime.utcnow() + timedelta(days=1)})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None: raise HTTPException(status_code=401)
-    except JWTError: raise HTTPException(status_code=401)
-    user = db.query(User).filter(User.username == username).first()
-    if user is None: raise HTTPException(status_code=401)
-    return user
+        user = db.query(User).filter(User.username == payload.get("sub")).first()
+        if not user: raise HTTPException(status_code=401)
+        return user
+    except: raise HTTPException(status_code=401)
 
 # ====== APP ======
 app = FastAPI(title="Spotify Backend API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-@app.post("/register")
-def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == username).first():
-        raise HTTPException(status_code=400, detail="Username exists")
-    new_user = User(username=username, hashed_password=pwd_context.hash(password), role=role)
-    db.add(new_user)
-    db.commit()
-    return {"message": "Success"}
-
-@app.post("/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
-    token = create_access_token(data={"sub": user.username, "role": user.role})
-    return {"access_token": token, "token_type": "bearer", "role": user.role}
-
 @app.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
     user_count = db.query(func.count(User.id)).scalar()
-    
-    # 1. Lấy Accuracy từ MLflow
     accuracy = "N/A"
-    try:
-        client = mlflow.tracking.MlflowClient()
-        # Tìm version mới nhất của model 'Spotify_Production_Model'
-        latest_versions = client.get_latest_versions("Spotify_Production_Model", stages=["Production"])
-        if latest_versions:
-            run_id = latest_versions[0].run_id
-            run = client.get_run(run_id)
-            acc_val = run.data.metrics.get("accuracy") or run.data.metrics.get("acc")
-            if acc_val:
-                accuracy = f"{acc_val * 100:.1f}%" if acc_val <= 1 else f"{acc_val:.1f}%"
-    except Exception as e:
-        print(f"⚠️ MLflow error: {e}")
+    
+    if DAGSHUB_USER:
+        try:
+            # Ép client sử dụng Tracking URI của DagsHub
+            client = MlflowClient(tracking_uri=TRACKING_URI)
+            
+            # Thử tìm Model với tên chính xác hoặc tìm trong danh sách model
+            model_name = "Spotify_Production_Model"
+            versions = client.get_latest_versions(model_name, stages=["Production"])
+            
+            if versions:
+                run = client.get_run(versions[0].run_id)
+                acc_val = run.data.metrics.get("accuracy") or run.data.metrics.get("acc") or run.data.metrics.get("val_accuracy")
+                if acc_val:
+                    accuracy = f"{acc_val * 100:.1f}%" if acc_val <= 1 else f"{acc_val:.1f}%"
+        except Exception as e:
+            print(f"⚠️ MLflow Error: {e}")
+            # Fallback: Thử lấy metric từ Run gần nhất trong experiment
+            try:
+                exp = mlflow.get_experiment_by_name("default") or mlflow.search_experiments()[0]
+                runs = mlflow.search_runs(experiment_ids=[exp.experiment_id], max_results=1)
+                if not runs.empty:
+                    acc_val = runs.iloc[0].get("metrics.accuracy") or runs.iloc[0].get("metrics.acc")
+                    if acc_val: accuracy = f"{acc_val * 100:.1f}%"
+            except: pass
 
-    # 2. MongoDB count
     try: crawled_count = reviews_col.count_documents({})
     except: crawled_count = 0
     
@@ -134,28 +122,38 @@ def get_stats(db: Session = Depends(get_db)):
         "accuracy": accuracy
     }
 
-# SINGLE PREDICTION API
-@app.post("/predict")
+@app.post("/api/register")
+def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
+    if db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=400, detail="Username exists")
+    db.add(User(username=username, hashed_password=pwd_context.hash(password), role=role))
+    db.commit()
+    return {"message": "Success"}
+
+@app.post("/api/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+    return {"access_token": create_access_token(data={"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
+
+@app.post("/api/predict")
 async def predict_single(review_text: str, current_user: User = Depends(get_current_user)):
     try:
         res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10)
         return res.json()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Model Service error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
 
-# BATCH ANALYZE CSV
-@app.post("/analyze-csv")
+@app.post("/api/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
-    content = await file.read()
-    df = pd.read_csv(io.BytesIO(content))
-    col_name = "text" if "text" in df.columns else ("review" if "review" in df.columns else df.columns[0])
+    content = await file.read(); df = pd.read_csv(io.BytesIO(content))
+    col = "text" if "text" in df.columns else ("review" if "review" in df.columns else df.columns[0])
     results = []
-    for index, row in df.iterrows():
-        text = str(row[col_name])
+    for i, row in df.head(10).iterrows():
         try:
-            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text})
+            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": str(row[col])})
             sentiment = res.json().get("sentiment", "Error")
         except: sentiment = "Conn Error"
-        results.append({"Câu bình luận": text, "Cảm xúc": sentiment})
-        if index >= 9: break 
+        results.append({"Câu bình luận": str(row[col]), "Cảm xúc": sentiment})
     return {"results": results}
