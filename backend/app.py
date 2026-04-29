@@ -110,7 +110,8 @@ def get_stats(db: Session = Depends(get_db)):
         "model_version": "v1.2.0-Production",
         "total_predictions": 14205,
         "dataset_size": f"{crawled_count} reviews",
-        "active_users": user_count
+        "active_users": user_count,
+        "accuracy": "94.5%" # Thông số mới
     }
 
 MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
