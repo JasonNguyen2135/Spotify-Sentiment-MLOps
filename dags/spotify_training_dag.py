@@ -62,8 +62,7 @@ with DAG(
         image_pull_policy="IfNotPresent",
 
         # Chạy code từ thư mục mà InitContainer vừa clone về
-        working_dir="/opt/repo/model",
-        cmds=["python", "train.py"],
+        cmds=["/bin/sh", "-c", "cd /opt/repo/model && python train.py"],
 
         init_containers=[init_container],
         volumes=[shared_volume],
