@@ -93,8 +93,19 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     return user
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # ====== APP ======
 app = FastAPI(title="Spotify Backend API with Auth")
+
+# ====== CẤU HÌNH CORS ======
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
