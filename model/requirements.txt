@@ -28,3 +28,4 @@ mlflow
 dagshub
 pandas
 scikit-learn
+pika
