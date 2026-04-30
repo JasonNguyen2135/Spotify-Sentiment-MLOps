@@ -41,14 +41,14 @@ except Exception as e:
     model = None
 
 # ====== HELPER: BẮN LOG VÀO RABBITMQ ======
+# ====== HELPER: BẮN LOG VÀO RABBITMQ ======
 def publish_to_rabbitmq(log_data):
     try:
-        # Lấy config từ env (best practice)
-        host = os.getenv("RABBITMQ_HOST", "rabbitmq")
-        user = os.getenv("RABBITMQ_USER", "mlops")
-        password = os.getenv("RABBITMQ_PASS", "mlops123")
-
-        credentials = pika.PlainCredentials(user, password)
+        # 1. SỬA TÊN HOST MẶC ĐỊNH THÀNH rabbitmq-service
+        host = os.getenv("RABBITMQ_HOST", "rabbitmq-service")
+        
+        # 2. DÙNG TÀI KHOẢN MẶC ĐỊNH CỦA RABBITMQ (guest/guest)
+        credentials = pika.PlainCredentials('guest', 'guest')
 
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(
@@ -60,8 +60,8 @@ def publish_to_rabbitmq(log_data):
 
         channel = connection.channel()
 
-        # đảm bảo queue tồn tại
-        channel.queue_declare(queue='prediction_logs', durable=True)
+        # 3. ĐỒNG BỘ CẤU HÌNH QUEUE VỚI CONSUMER (XÓA BỎ durable=True)
+        channel.queue_declare(queue='prediction_logs')
 
         # gửi message
         channel.basic_publish(
