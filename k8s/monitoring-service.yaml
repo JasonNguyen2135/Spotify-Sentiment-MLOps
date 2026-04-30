@@ -18,7 +18,7 @@ spec:
         image: phanphan1504/spotify-monitoring:v10
         env:
         - name: RABBITMQ_HOST
-          value: "rabbitmq-service"
+          value: "rabbitmq-service.mlops-sentiment.svc.cluster.local" # Dùng FQDN luôn cho chắc ăn nha!
         - name: EVIDENTLY_URL
-          # Sửa dòng này trỏ vào cổng 8000 của evidently-ui-service
-          value: "http://evidently-service.mlops-sentiment.svc.cluster.local:8085"
+          # CẬP NHẬT CỔNG THÀNH 8000:
+          value: "http://evidently-service.mlops-sentiment.svc.cluster.local:8000"
