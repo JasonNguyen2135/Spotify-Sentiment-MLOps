@@ -1,0 +1,6 @@
+outs:
+- md5: ea8537db0e73746a3f496fc800b1b742
+  size: 489629
+  isexec: true
+  hash: md5
+  path: spotify_reviews.csv
