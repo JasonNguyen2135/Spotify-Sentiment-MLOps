@@ -93,11 +93,14 @@ spec:
 # ==========================================
 # 2. MODEL SERVICE
 # ==========================================
+# 2. MODEL SERVICE
+# ==========================================
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: model-service
+  namespace: mlops-sentiment  # THÊM CÁI NÀY ĐỂ TRÁNH LẠC TRÔI
 spec:
   replicas: 1
   selector:
@@ -108,15 +111,18 @@ spec:
     spec:
       containers:
       - name: model-service
-        image: 172.31.87.182/spotify-mlops/model-service:v1.0.0
+        # NHỚ ĐỔI TAG MỖI LẦN BUILD MỚI (ví dụ v1.0.1)
+        image: 172.31.87.182/spotify-mlops/model-service:944d520a7912fb9d7a695c9ad1c59e25a7a075a4
         imagePullPolicy: IfNotPresent
         env:
           - name: DAGSHUB_USERNAME
             valueFrom: { secretKeyRef: { name: dagshub-secret, key: DAGSHUB_USERNAME } }
           - name: DAGSHUB_PASSWORD
             valueFrom: { secretKeyRef: { name: dagshub-secret, key: DAGSHUB_PASSWORD } }
+          # --- ĐÂY LÀ CHÌA KHÓA VÀNG ---
           - name: RABBITMQ_HOST
-            value: rabbitmq
+            value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
+          # -----------------------------
           - name: RABBITMQ_USER
             value: mlops
           - name: RABBITMQ_PASS
