@@ -1,12 +1,12 @@
 # ==========================================
-# 6. EVIDENTLY AI MONITOR
+# 6. EVIDENTLY AI MONITOR (WORKSPACE UI)
 # ==========================================
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: evidently-service
-  namespace: mlops-sentiment # Bắt buộc phải có nha Trinh
+  namespace: mlops-sentiment
 spec:
   replicas: 1
   selector:
@@ -19,22 +19,23 @@ spec:
     spec:
       containers:
       - name: evidently
-        # THAY BẰNG IMAGE CHUẨN CỦA HÃNG:
-        image: evidently/evidently:latest
-        imagePullPolicy: Always
+        # Dùng image Python gốc để chạy thẳng lệnh evidently ui, đảm bảo khớp version
+        image: python:3.12-slim
+        command: ["/bin/sh", "-c"]
+        args: ["pip install evidently==0.4.33 && evidently ui --host 0.0.0.0 --port 8085 --workspace /app/workspace"]
         ports:
-        - containerPort: 8000 # Lưu ý: Image chuẩn thường chạy cổng 8000
+        - containerPort: 8085
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: evidently-service
-  namespace: mlops-sentiment # Thêm namespace luôn
+  namespace: mlops-sentiment
 spec:
   type: ClusterIP
   selector:
     app: evidently
   ports:
-  - name: api-ui # Image chuẩn gộp chung API và UI
-    port: 8000
-    targetPort: 8000
+  - name: http
+    port: 8085
+    targetPort: 8085
