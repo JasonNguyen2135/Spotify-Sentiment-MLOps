@@ -1,7 +1,4 @@
 [core]
-    remote = storage
+    remote = origin
 ['remote "origin"']
     url = https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps.dvc
-['remote "storage"']
-    url = s3://dvc
-    endpointurl = https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps.s3
