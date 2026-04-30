@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evidently-monitoring
+  namespace: mlops-sentiment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: evidently-monitoring
+  template:
+    metadata:
+      labels:
+        app: evidently-monitoring
+    spec:
+      containers:
+      - name: monitoring
+        image: phanphan1504/spotify-monitoring:v10
+        env:
+        - name: RABBITMQ_HOST
+          value: "rabbitmq-service"
+        - name: EVIDENTLY_URL
+          # Sửa dòng này trỏ vào cổng 8000 của evidently-ui-service
+          value: "http://evidently-service.mlops-sentiment.svc.cluster.local:8085"

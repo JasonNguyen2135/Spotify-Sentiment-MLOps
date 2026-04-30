@@ -2,13 +2,14 @@ from fastapi import FastAPI
 import mlflow.sklearn
 import mlflow.tracking
 import os
-import requests
+import pika
+import json
 
 app = FastAPI(title="Model Prediction Service")
 
 # ====== LOAD ENV ======
 username = os.getenv("DAGSHUB_USERNAME")
-password = os.getenv("DAGSHUB_PASSWORD")  
+password = os.getenv("DAGSHUB_PASSWORD")
 
 if not username or not password:
     raise Exception("❌ Missing DAGSHUB credentials")
@@ -39,6 +40,24 @@ except Exception as e:
     print(f"⚠️ Error loading model metadata: {e}")
     model = None
 
+# ====== HELPER: BẮN LOG VÀO RABBITMQ ======
+def publish_to_rabbitmq(log_data):
+    try:
+        # Cấu hình kết nối tới RabbitMQ đang chạy ở Localhost (Docker)
+        connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        channel = connection.channel()
+        channel.queue_declare(queue='prediction_logs') # Khai báo ống nước
+        
+        # Ném cục JSON vào ống
+        channel.basic_publish(
+            exchange='', 
+            routing_key='prediction_logs', 
+            body=json.dumps(log_data)
+        )
+        connection.close()
+    except Exception as e:
+        print(f"⚠️ Thất bại khi bắn log vào RabbitMQ: {e}")
+
 @app.get("/")
 def read_root(): return {"status": "Model service is up", "metadata": MODEL_METADATA}
 
@@ -48,9 +67,18 @@ def get_metadata(): return MODEL_METADATA
 @app.post("/predict")
 def predict(review: str):
     if model is None: return {"error": "Model not loaded"}
+    
+    # 1. AI làm việc: Dự đoán kết quả
     prediction = model.predict([review])[0]
     sentiment = str(prediction)
-    log_data = {"data": [{"text": review, "prediction": sentiment}]}
-    try: requests.post("http://evidently-service:8085/iterate", json=log_data, timeout=1)
-    except: pass
+    
+    # 2. Đóng gói log (Giống y hệt cấu trúc thằng Consumer bên kia đang hứng)
+    log_data = {
+        "text": review,
+        "prediction": sentiment
+    }
+    
+    # 3. Kẻ nhả dữ liệu (Producer): Bắn thẳng vào RabbitMQ
+    publish_to_rabbitmq(log_data)
+    
     return {"review": review, "sentiment": sentiment}
