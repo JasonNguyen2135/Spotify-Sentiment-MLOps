@@ -19,6 +19,15 @@ spec:
         ports:
         - containerPort: 5672
         - containerPort: 15672
+        env:
+        - name: RABBITMQ_VM_MEMORY_HIGH_WATERMARK
+          value: "0.6"  # Cho phép dùng tới 60% RAM được cấp phát trước khi báo động
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
 ---
 apiVersion: v1
 kind: Service

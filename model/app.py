@@ -43,21 +43,37 @@ except Exception as e:
 # ====== HELPER: BẮN LOG VÀO RABBITMQ ======
 def publish_to_rabbitmq(log_data):
     try:
-        # Cấu hình kết nối tới RabbitMQ đang chạy ở Localhost (Docker)
-        connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        # Lấy config từ env (best practice)
+        host = os.getenv("RABBITMQ_HOST", "rabbitmq")
+        user = os.getenv("RABBITMQ_USER", "mlops")
+        password = os.getenv("RABBITMQ_PASS", "mlops123")
+
+        credentials = pika.PlainCredentials(user, password)
+
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(
+                host=host,
+                port=5672,
+                credentials=credentials
+            )
+        )
+
         channel = connection.channel()
-        channel.queue_declare(queue='prediction_logs') # Khai báo ống nước
-        
-        # Ném cục JSON vào ống
+
+        # đảm bảo queue tồn tại
+        channel.queue_declare(queue='prediction_logs', durable=True)
+
+        # gửi message
         channel.basic_publish(
-            exchange='', 
-            routing_key='prediction_logs', 
+            exchange='',
+            routing_key='prediction_logs',
             body=json.dumps(log_data)
         )
+
         connection.close()
+
     except Exception as e:
         print(f"⚠️ Thất bại khi bắn log vào RabbitMQ: {e}")
-
 @app.get("/")
 def read_root(): return {"status": "Model service is up", "metadata": MODEL_METADATA}
 

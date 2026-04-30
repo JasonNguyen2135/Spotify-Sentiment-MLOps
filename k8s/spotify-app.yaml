@@ -115,6 +115,12 @@ spec:
             valueFrom: { secretKeyRef: { name: dagshub-secret, key: DAGSHUB_USERNAME } }
           - name: DAGSHUB_PASSWORD
             valueFrom: { secretKeyRef: { name: dagshub-secret, key: DAGSHUB_PASSWORD } }
+          - name: RABBITMQ_HOST
+            value: rabbitmq
+          - name: RABBITMQ_USER
+            value: mlops
+          - name: RABBITMQ_PASS
+            value: mlops123
         ports: [{ containerPort: 8000 }]
         resources:
           requests: { cpu: 200m, memory: 512Mi }
