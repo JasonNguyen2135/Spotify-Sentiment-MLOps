@@ -16,7 +16,6 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       model: ${{ steps.filter.outputs.model }}
       crawler: ${{ steps.filter.outputs.crawler }}
-      evidently: ${{ steps.filter.outputs.evidently }}
       monitoring_consumer: ${{ steps.filter.outputs.monitoring_consumer }}
     steps:
       - uses: actions/checkout@v3
@@ -28,7 +27,6 @@ jobs:
             frontend: ['frontend/**']
             model: ['model/**']
             crawler: ['crawler/**']
-            evidently: ['monitoring/evidently/**']
             monitoring_consumer: ['model/monitoring/**']
 
   build-and-gitops:
@@ -118,9 +116,6 @@ jobs:
           fi
           if [ "${{ needs.check-changes.outputs.crawler }}" == "true" ]; then
             sed -i "s|image: registry.ntdevopsregistry.online/mlops/crawler:.*|image: registry.ntdevopsregistry.online/mlops/crawler:$TAG|g" k8s/spotify-app.yaml
-          fi
-          if [ "${{ needs.check-changes.outputs.evidently }}" == "true" ]; then
-            sed -i "s|image: registry.ntdevopsregistry.online/mlops/evidently-service:.*|image: registry.ntdevopsregistry.online/mlops/evidently-service:$TAG|g" k8s/evidently-deployment.yaml
           fi
           if [ "${{ needs.check-changes.outputs.monitoring_consumer }}" == "true" ]; then
             sed -i "s|image: registry.ntdevopsregistry.online/mlops/spotify-monitoring:.*|image: registry.ntdevopsregistry.online/mlops/spotify-monitoring:$TAG|g" k8s/monitoring-service.yaml
