@@ -219,6 +219,7 @@ kind: Service
 metadata:
   name: frontend
 spec:
+  type: NodePort
   selector: { app: frontend }
   ports:
   - port: 8501
