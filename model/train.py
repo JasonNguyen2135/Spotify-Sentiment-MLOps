@@ -17,6 +17,7 @@ DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN")
 REPO_NAME = "Spotify-Sentiment-MLOps"
 
 def train_and_deploy():
+    print("🚀 Bắt đầu quy trình huấn luyện tự động (Triggered by CI)...")
     os.environ['MLFLOW_TRACKING_USERNAME'] = DAGSHUB_USERNAME
     os.environ['MLFLOW_TRACKING_PASSWORD'] = DAGSHUB_TOKEN
 
