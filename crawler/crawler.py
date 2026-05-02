@@ -12,9 +12,15 @@ db = client["spotify_db"]
 collection = db["raw_reviews"]
 
 def crawl_spotify_data():
-    print(f"[{datetime.now()}] 🚀 Bắt đầu cào 500 review mới nhất...")
+    # Tạo tên collection theo ngày chạy: data_ngay_thang_nam
+    current_date = datetime.now().strftime("%d_%m_%Y")
+    collection_name = f"data_{current_date}"
+    collection = db[collection_name]
+    
+    print(f"[{datetime.now()}] 🚀 Bắt đầu cào 1000 review mới nhất vào collection: {collection_name}...")
     try:
-        result, _ = reviews('com.spotify.music', lang='vi', country='vn', sort=Sort.NEWEST, count=500)
+        # Cào 1000 review
+        result, _ = reviews('com.spotify.music', lang='vi', country='vn', sort=Sort.NEWEST, count=1000)
         new_data = []
         for item in result:
             label = "positive" if item['score'] >= 4 else "negative"
@@ -26,12 +32,13 @@ def crawl_spotify_data():
                 "timestamp": item['at']
             })
         if new_data:
-            collection.delete_many({}) 
+            # Không xóa cái cũ nữa, lưu vào collection mới hoàn toàn
             collection.insert_many(new_data)
-            print(f"[{datetime.now()}] ✅ Đã lưu thành công {len(new_data)} reviews!")
+            print(f"[{datetime.now()}] ✅ Đã lưu thành công {len(new_data)} reviews vào {collection_name}!")
     except Exception as e:
         print(f"[{datetime.now()}] ❌ Lỗi Crawler: {e}")
 
+# Chạy vào mỗi thứ 2 hàng tuần
 schedule.every().monday.at("00:00").do(crawl_spotify_data)
 crawl_spotify_data()
 

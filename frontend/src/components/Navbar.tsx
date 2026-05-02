@@ -52,16 +52,15 @@ export default function Navbar() {
                   Monitoring
                 </a>
 
-                <Link 
-                  href="/admin/pipeline"
-                  className={clsx(
-                    "flex items-center gap-1 text-sm font-medium transition-colors",
-                    pathname === "/admin/pipeline" ? "text-red-500" : "text-gray-600 hover:text-red-500"
-                  )}
+                {/* Pipeline mở tab mới trỏ thẳng vào Airflow NodePort */}
+                <a 
+                  href="http://localhost:31190" 
+                  target="_blank"
+                  className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-green-500 transition-colors"
                 >
-                  <Settings className="w-4 h-4" />
+                  <BarChart3 className="w-4 h-4" />
                   Pipeline
-                </Link>
+                </a>
               </div>
             )}
 
