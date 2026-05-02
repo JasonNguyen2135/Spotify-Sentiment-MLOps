@@ -91,36 +91,60 @@ jobs:
             docker push registry.ntdevopsregistry.online/mlops/spotify-monitoring:${{ github.sha }} && break || sleep 15
           done
 
-      # 2. CẬP NHẬT GITOPS (Surgical Precise Update)
+      # 2. CẬP NHẬT GITOPS (Surgical Precise Update with Tag Preservation)
       - name: Update Manifest
         run: |
           git config --global user.email "ci-bot@example.com"
           git config --global user.name "CI Bot"
           TAG="${{ github.sha }}"
 
-          mkdir -p /tmp/k8s-sync
-          cp k8s/*.yaml /tmp/k8s-sync/ || true
+          # Bước A: Lưu lại các file YAML từ nhánh main (chứa cấu hình infra mới nhất)
+          mkdir -p /tmp/k8s-main
+          cp k8s/*.yaml /tmp/k8s-main/
 
+          # Bước B: Sang nhánh deploy để lấy các Tag đang chạy ổn định
           git fetch origin deploy
           git checkout deploy || git checkout -b deploy
-          cp /tmp/k8s-sync/* k8s/ || true
           
-          if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
-            sed -i "s|image: registry.ntdevopsregistry.online/mlops/backend:.*|image: registry.ntdevopsregistry.online/mlops/backend:$TAG|g" k8s/spotify-app.yaml
-          fi
-          if [ "${{ needs.check-changes.outputs.frontend }}" == "true" ]; then
-            sed -i "s|image: registry.ntdevopsregistry.online/mlops/frontend:.*|image: registry.ntdevopsregistry.online/mlops/frontend:$TAG|g" k8s/spotify-app.yaml
-          fi
-          if [ "${{ needs.check-changes.outputs.model }}" == "true" ]; then
-            sed -i "s|image: registry.ntdevopsregistry.online/mlops/model-service:.*|image: registry.ntdevopsregistry.online/mlops/model-service:$TAG|g" k8s/spotify-app.yaml
-          fi
-          if [ "${{ needs.check-changes.outputs.crawler }}" == "true" ]; then
-            sed -i "s|image: registry.ntdevopsregistry.online/mlops/crawler:.*|image: registry.ntdevopsregistry.online/mlops/crawler:$TAG|g" k8s/spotify-app.yaml
-          fi
-          if [ "${{ needs.check-changes.outputs.monitoring_consumer }}" == "true" ]; then
-            sed -i "s|image: registry.ntdevopsregistry.online/mlops/spotify-monitoring:.*|image: registry.ntdevopsregistry.online/mlops/spotify-monitoring:$TAG|g" k8s/monitoring-service.yaml
-          fi
+          # Hàm lấy tag hiện tại từ file trên nhánh deploy
+          get_tag() {
+            local service=$1
+            local file=$2
+            grep -oP "image: registry.ntdevopsregistry.online/mlops/$service:\K.*" "$file" | head -1 || echo "latest"
+          }
+
+          OLD_BACKEND_TAG=$(get_tag "backend" "k8s/spotify-app.yaml")
+          OLD_FRONTEND_TAG=$(get_tag "frontend" "k8s/spotify-app.yaml")
+          OLD_MODEL_TAG=$(get_tag "model-service" "k8s/spotify-app.yaml")
+          OLD_CRAWLER_TAG=$(get_tag "crawler" "k8s/spotify-app.yaml")
+          OLD_MONITORING_TAG=$(get_tag "spotify-monitoring" "k8s/monitoring-service.yaml")
+
+          # Bước C: Ghi đè cấu hình infra từ main vào deploy, nhưng sẽ xử lý Tag sau
+          cp /tmp/k8s-main/* k8s/
+          
+          # Bước D: Cập nhật Tag (Nếu build mới thì dùng TAG, nếu không thì dùng OLD_TAG)
+          update_image() {
+            local service=$1
+            local new_tag=$2
+            local old_tag=$3
+            local file=$4
+            local changed=$5
+            
+            if [ "$changed" == "true" ]; then
+              echo "Updating $service to NEW tag: $new_tag"
+              sed -i "s|image: registry.ntdevopsregistry.online/mlops/$service:.*|image: registry.ntdevopsregistry.online/mlops/$service:$new_tag|g" "$file"
+            else
+              echo "Preserving $service OLD tag: $old_tag"
+              sed -i "s|image: registry.ntdevopsregistry.online/mlops/$service:.*|image: registry.ntdevopsregistry.online/mlops/$service:$old_tag|g" "$file"
+            fi
+          }
+
+          update_image "backend" "$TAG" "$OLD_BACKEND_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.backend }}"
+          update_image "frontend" "$TAG" "$OLD_FRONTEND_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.frontend }}"
+          update_image "model-service" "$TAG" "$OLD_MODEL_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.model }}"
+          update_image "crawler" "$TAG" "$OLD_CRAWLER_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.crawler }}"
+          update_image "spotify-monitoring" "$TAG" "$OLD_MONITORING_TAG" "k8s/monitoring-service.yaml" "${{ needs.check-changes.outputs.monitoring_consumer }}"
 
           git add k8s/
-          git commit -m "deploy: update manifests and trainer image [skip ci]" || echo "No changes"
+          git commit -m "deploy: update manifests with tag preservation [skip ci]" || echo "No changes"
           git push origin HEAD:deploy --force
