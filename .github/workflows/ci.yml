@@ -87,7 +87,7 @@ jobs:
         if: needs.check-changes.outputs.monitoring_consumer == 'true'
         run: |
           for i in {1..5}; do 
-            docker build -t registry.ntdevopsregistry.online/mlops/spotify-monitoring:${{ github.sha }} ./model/monitoring && \
+            docker build -t registry.ntdevopsregistry.online/mlops/spotify-monitoring:${{ github.sha }} -f model/monitoring/Dockerfile ./model && \
             docker push registry.ntdevopsregistry.online/mlops/spotify-monitoring:${{ github.sha }} && break || sleep 15
           done
 
