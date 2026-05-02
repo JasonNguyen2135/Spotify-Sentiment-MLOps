@@ -42,9 +42,9 @@ export default function Navbar() {
 
             {user?.role === 'admin' && (
               <div className="flex gap-6 border-l pl-6 ml-2">
-                {/* Monitoring mở tab mới trỏ thẳng vào Ingress path */}
+                {/* Monitoring mở tab mới trỏ thẳng vào NodePort */}
                 <a 
-                  href="/evidently/" 
+                  href="http://localhost:32230" 
                   target="_blank"
                   className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-red-500 transition-colors"
                 >

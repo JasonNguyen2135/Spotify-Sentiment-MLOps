@@ -32,7 +32,7 @@ metadata:
   name: evidently-service
   namespace: mlops-sentiment
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: evidently
   ports:

@@ -22,7 +22,7 @@ export default function PipelinePage() {
         </div>
         
         <a 
-          href="/airflow" 
+          href="http://localhost:31190" 
           target="_blank" 
           className="bg-white border border-slate-200 px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
         >
