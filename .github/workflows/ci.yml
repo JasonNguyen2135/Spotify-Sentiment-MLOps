@@ -17,6 +17,7 @@ jobs:
       model: ${{ steps.filter.outputs.model }}
       crawler: ${{ steps.filter.outputs.crawler }}
       evidently: ${{ steps.filter.outputs.evidently }}
+      monitoring_consumer: ${{ steps.filter.outputs.monitoring_consumer }}
     steps:
       - uses: actions/checkout@v3
       - uses: dorny/paths-filter@v2
@@ -28,6 +29,7 @@ jobs:
             model: ['model/**']
             crawler: ['crawler/**']
             evidently: ['monitoring/evidently/**']
+            monitoring_consumer: ['model/monitoring/**']
 
   build-and-gitops:
     needs: check-changes
@@ -91,6 +93,14 @@ jobs:
             docker push registry.ntdevopsregistry.online/mlops/evidently-service:${{ github.sha }} && break || sleep 15
           done
 
+      - name: Build and Push Monitoring Consumer
+        if: needs.check-changes.outputs.monitoring_consumer == 'true'
+        run: |
+          for i in {1..5}; do 
+            docker build -t registry.ntdevopsregistry.online/mlops/spotify-monitoring:${{ github.sha }} ./model/monitoring && \
+            docker push registry.ntdevopsregistry.online/mlops/spotify-monitoring:${{ github.sha }} && break || sleep 15
+          done
+
       # 2. CẬP NHẬT GITOPS (Surgical Precise Update)
       - name: Update Manifest
         run: |
@@ -119,6 +129,9 @@ jobs:
           fi
           if [ "${{ needs.check-changes.outputs.evidently }}" == "true" ]; then
             sed -i "s|image: registry.ntdevopsregistry.online/mlops/evidently-service:.*|image: registry.ntdevopsregistry.online/mlops/evidently-service:$TAG|g" k8s/evidently-deployment.yaml
+          fi
+          if [ "${{ needs.check-changes.outputs.monitoring_consumer }}" == "true" ]; then
+            sed -i "s|image: registry.ntdevopsregistry.online/mlops/spotify-monitoring:.*|image: registry.ntdevopsregistry.online/mlops/spotify-monitoring:$TAG|g" k8s/monitoring-service.yaml
           fi
 
           git add k8s/
