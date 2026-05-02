@@ -24,21 +24,19 @@ def train_and_deploy():
     mlflow.set_tracking_uri(dagshub_uri)
     mlflow.set_experiment("Spotify_Sentiment_Analysis")
 
-    # 4. KÉO DỮ LIỆU ĐỘNG (Cách siêu an toàn bằng requests)
-    print("📡 Đang tải dữ liệu trực tiếp từ DagsHub...")
+    # 4. KÉO DỮ LIỆU ĐỘNG (Ưu tiên biến môi trường DATA_SOURCE)
+    data_source = os.getenv("DATA_SOURCE", f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv")
     
-    # URL sạch, không kẹp token vào chuỗi
-    clean_url = f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv"
-    
-    # Dùng requests tải data và truyền Auth cực chuẩn
-    response = requests.get(clean_url, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
-    
-    # Kêu to nếu tải thất bại (sai pass, sai link...)
-    response.raise_for_status() 
-    
-    # Biến nội dung tải được thành file ảo trong RAM cho Pandas đọc
-    df = pd.read_csv(io.StringIO(response.text))
-    print("✅ Đã nạp dữ liệu thành công vào RAM!")
+    if data_source.startswith("http"):
+        print(f"📡 Đang tải dữ liệu từ URL: {data_source}")
+        response = requests.get(data_source, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
+        response.raise_for_status() 
+        df = pd.read_csv(io.StringIO(response.text))
+    else:
+        print(f"📁 Đang đọc dữ liệu từ file local: {data_source}")
+        df = pd.read_csv(data_source)
+        
+    print(f"✅ Đã nạp thành công {len(df)} dòng dữ liệu!")
 
     X = df['text'].fillna('')
     y = df['sentiment']

@@ -71,7 +71,7 @@ with DAG(
         volumes=[shared_volume],
         volume_mounts=[shared_volume_mount],
 
-        # 3. Lấy Token trực tiếp từ K8s Secret (thay vì Airflow Variables) cho đồng nhất
+        # 3. Lấy Token và Data Source (Cho phép ghi đè từ Airflow UI)
         env_vars=[
             k8s.V1EnvVar(name="DAGSHUB_USERNAME", value="davidmoi2135"),
             k8s.V1EnvVar(
@@ -79,6 +79,11 @@ with DAG(
                 value_from=k8s.V1EnvVarSource(
                     secret_key_ref=k8s.V1SecretKeySelector(name="train-secrets", key="DAGSHUB_TOKEN")
                 )
+            ),
+            # Lấy giá trị DATA_SOURCE từ tham số khi trigger DAG (mặc định là None)
+            k8s.V1EnvVar(
+                name="DATA_SOURCE", 
+                value="{{ dag_run.conf.get('data_source', 'https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv') }}"
             )
         ],
 
