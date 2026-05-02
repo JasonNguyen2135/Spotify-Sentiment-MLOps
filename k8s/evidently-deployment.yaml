@@ -36,6 +36,9 @@ spec:
   selector:
     app: evidently
   ports:
-  - name: http
+  - name: monitor-port
+    port: 8000
+    targetPort: 8085
+  - name: ui-port
     port: 8085
     targetPort: 8085
