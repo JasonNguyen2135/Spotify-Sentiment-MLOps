@@ -23,7 +23,7 @@ shared_volume_mount = k8s.V1VolumeMount(
 # 2. InitContainer: Dịch chuẩn 100% từ manual-test-train sang Python K8s Client
 init_container = k8s.V1Container(
     name="git-pull-only",
-    image="172.31.87.182/spotify-mlops/sentiment-trainer:latest",
+    image="registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest",
     image_pull_policy="IfNotPresent",
     command=["/bin/sh", "-c"],
     # Nối các lệnh bằng && để đảm bảo chạy mượt mà
@@ -58,8 +58,11 @@ with DAG(
         namespace="airflow",
 
         # Image chính (Siêu nhẹ, không chứa code, không chứa data)
-        image="172.31.87.182/spotify-mlops/sentiment-trainer:latest",
+        image="registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest",
         image_pull_policy="IfNotPresent",
+
+        # Thêm Secret để pull image từ Harbor
+        image_pull_secrets=[k8s.V1LocalObjectReference("harbor-secret")],
 
         # Chạy code từ thư mục mà InitContainer vừa clone về
         cmds=["/bin/sh", "-c", "cd /opt/repo/model && python train.py"],
