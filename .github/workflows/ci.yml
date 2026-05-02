@@ -38,37 +38,58 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. BUILD SERVICES (Retry 5 times)
-      - name: Build Backend
+      # 1. LOGIN & BUILD SERVICES (Retry 5 times)
+      - name: Login to Harbor
+        run: echo "${{ secrets.HARBOR_PASSWORD }}" | docker login registry.ntdevopsregistry.online -u ${{ secrets.HARBOR_USERNAME }} --password-stdin
+
+      - name: Build and Push Backend
         if: needs.check-changes.outputs.backend == 'true'
         run: |
-          for i in {1..5}; do docker build -t 172.31.87.182/spotify-mlops/backend:${{ github.sha }} ./backend && break || sleep 15; done
+          for i in {1..5}; do 
+            docker build -t registry.ntdevopsregistry.online/mlops/backend:${{ github.sha }} ./backend && \
+            docker push registry.ntdevopsregistry.online/mlops/backend:${{ github.sha }} && break || sleep 15
+          done
 
-      - name: Build Frontend
+      - name: Build and Push Frontend
         if: needs.check-changes.outputs.frontend == 'true'
         run: |
-          for i in {1..5}; do docker build -t 172.31.87.182/spotify-mlops/frontend:${{ github.sha }} ./frontend && break || sleep 15; done
+          for i in {1..5}; do 
+            docker build -t registry.ntdevopsregistry.online/mlops/frontend:${{ github.sha }} ./frontend && \
+            docker push registry.ntdevopsregistry.online/mlops/frontend:${{ github.sha }} && break || sleep 15
+          done
 
-      - name: Build Model Service
+      - name: Build and Push Model Service
         if: needs.check-changes.outputs.model == 'true'
         run: |
-          for i in {1..5}; do docker build -t 172.31.87.182/spotify-mlops/model-service:${{ github.sha }} ./model && break || sleep 15; done
+          for i in {1..5}; do 
+            docker build -t registry.ntdevopsregistry.online/mlops/model-service:${{ github.sha }} ./model && \
+            docker push registry.ntdevopsregistry.online/mlops/model-service:${{ github.sha }} && break || sleep 15
+          done
 
       # BUILD TRAINER IMAGE (Mới thêm)
-      - name: Build Sentiment Trainer
+      - name: Build and Push Sentiment Trainer
         if: needs.check-changes.outputs.model == 'true'
         run: |
-          for i in {1..5}; do docker build -t 172.31.87.182/spotify-mlops/sentiment-trainer:latest -f model/Dockerfile.train ./model && break || sleep 15; done
+          for i in {1..5}; do 
+            docker build -t registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest -f model/Dockerfile.train ./model && \
+            docker push registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest && break || sleep 15
+          done
 
-      - name: Build Crawler
+      - name: Build and Push Crawler
         if: needs.check-changes.outputs.crawler == 'true'
         run: |
-          for i in {1..5}; do docker build -t 172.31.87.182/spotify-mlops/crawler:${{ github.sha }} ./crawler && break || sleep 15; done
+          for i in {1..5}; do 
+            docker build -t registry.ntdevopsregistry.online/mlops/crawler:${{ github.sha }} ./crawler && \
+            docker push registry.ntdevopsregistry.online/mlops/crawler:${{ github.sha }} && break || sleep 15
+          done
 
-      - name: Build Evidently
+      - name: Build and Push Evidently
         if: needs.check-changes.outputs.evidently == 'true'
         run: |
-          for i in {1..5}; do docker build -t 172.31.87.182/spotify-mlops/evidently-service:${{ github.sha }} ./monitoring/evidently && break || sleep 15; done
+          for i in {1..5}; do 
+            docker build -t registry.ntdevopsregistry.online/mlops/evidently-service:${{ github.sha }} ./monitoring/evidently && \
+            docker push registry.ntdevopsregistry.online/mlops/evidently-service:${{ github.sha }} && break || sleep 15
+          done
 
       # 2. CẬP NHẬT GITOPS (Surgical Precise Update)
       - name: Update Manifest
@@ -85,19 +106,19 @@ jobs:
           cp /tmp/k8s-sync/* k8s/ || true
           
           if [ "${{ needs.check-changes.outputs.backend }}" == "true" ]; then
-            sed -i "s|image: 172.31.87.182/spotify-mlops/backend:.*|image: 172.31.87.182/spotify-mlops/backend:$TAG|g" k8s/spotify-app.yaml
+            sed -i "s|image: registry.ntdevopsregistry.online/mlops/backend:.*|image: registry.ntdevopsregistry.online/mlops/backend:$TAG|g" k8s/spotify-app.yaml
           fi
           if [ "${{ needs.check-changes.outputs.frontend }}" == "true" ]; then
-            sed -i "s|image: 172.31.87.182/spotify-mlops/frontend:.*|image: 172.31.87.182/spotify-mlops/frontend:$TAG|g" k8s/spotify-app.yaml
+            sed -i "s|image: registry.ntdevopsregistry.online/mlops/frontend:.*|image: registry.ntdevopsregistry.online/mlops/frontend:$TAG|g" k8s/spotify-app.yaml
           fi
           if [ "${{ needs.check-changes.outputs.model }}" == "true" ]; then
-            sed -i "s|image: 172.31.87.182/spotify-mlops/model-service:.*|image: 172.31.87.182/spotify-mlops/model-service:$TAG|g" k8s/spotify-app.yaml
+            sed -i "s|image: registry.ntdevopsregistry.online/mlops/model-service:.*|image: registry.ntdevopsregistry.online/mlops/model-service:$TAG|g" k8s/spotify-app.yaml
           fi
           if [ "${{ needs.check-changes.outputs.crawler }}" == "true" ]; then
-            sed -i "s|image: 172.31.87.182/spotify-mlops/crawler:.*|image: 172.31.87.182/spotify-mlops/crawler:$TAG|g" k8s/spotify-app.yaml
+            sed -i "s|image: registry.ntdevopsregistry.online/mlops/crawler:.*|image: registry.ntdevopsregistry.online/mlops/crawler:$TAG|g" k8s/spotify-app.yaml
           fi
           if [ "${{ needs.check-changes.outputs.evidently }}" == "true" ]; then
-            sed -i "s|image: 172.31.87.182/spotify-mlops/evidently-service:.*|image: 172.31.87.182/spotify-mlops/evidently-service:$TAG|g" k8s/evidently-deployment.yaml
+            sed -i "s|image: registry.ntdevopsregistry.online/mlops/evidently-service:.*|image: registry.ntdevopsregistry.online/mlops/evidently-service:$TAG|g" k8s/evidently-deployment.yaml
           fi
 
           git add k8s/

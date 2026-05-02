@@ -30,6 +30,8 @@ spec:
     metadata:
       labels: { app: mongodb }
     spec:
+      imagePullSecrets:
+      - name: harbor-secret
       containers:
       - name: mongodb
         image: mongo:latest
@@ -55,6 +57,8 @@ spec:
     metadata:
       labels: { app: postgres }
     spec:
+      imagePullSecrets:
+      - name: harbor-secret
       containers:
       - name: postgres
         image: postgres:15
@@ -109,10 +113,12 @@ spec:
     metadata:
       labels: { app: model-service }
     spec:
+      imagePullSecrets:
+      - name: harbor-secret
       containers:
       - name: model-service
         # NHỚ ĐỔI TAG MỖI LẦN BUILD MỚI (ví dụ v1.0.1)
-        image: 172.31.87.182/spotify-mlops/model-service:944d520a7912fb9d7a695c9ad1c59e25a7a075a4
+        image: registry.ntdevopsregistry.online/mlops/model-service:944d520a7912fb9d7a695c9ad1c59e25a7a075a4
         imagePullPolicy: IfNotPresent
         env:
           - name: DAGSHUB_USERNAME
@@ -156,9 +162,11 @@ spec:
     metadata:
       labels: { app: backend }
     spec:
+      imagePullSecrets:
+      - name: harbor-secret
       containers:
       - name: backend
-        image: 172.31.87.182/spotify-mlops/backend:v1.0.0
+        image: registry.ntdevopsregistry.online/mlops/backend:v1.0.0
         imagePullPolicy: IfNotPresent
         ports: [{ containerPort: 8000 }]
         env:
@@ -202,9 +210,11 @@ spec:
     metadata:
       labels: { app: frontend }
     spec:
+      imagePullSecrets:
+      - name: harbor-secret
       containers:
       - name: frontend
-        image: 172.31.87.182/spotify-mlops/frontend:v1.0.0
+        image: registry.ntdevopsregistry.online/mlops/frontend:v1.0.0
         imagePullPolicy: IfNotPresent
         ports: [{ containerPort: 3000 }]
         env:
@@ -241,9 +251,11 @@ spec:
     metadata:
       labels: { app: crawler }
     spec:
+      imagePullSecrets:
+      - name: harbor-secret
       containers:
       - name: crawler
-        image: 172.31.87.182/spotify-mlops/crawler:v1.0.0
+        image: registry.ntdevopsregistry.online/mlops/crawler:v1.0.0
         imagePullPolicy: IfNotPresent
         env:
         - name: MONGO_URL

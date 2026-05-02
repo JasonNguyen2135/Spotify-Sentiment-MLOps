@@ -13,9 +13,11 @@ spec:
       labels:
         app: evidently-monitoring
     spec:
+      imagePullSecrets:
+      - name: harbor-secret
       containers:
       - name: monitoring
-        image: phanphan1504/spotify-monitoring:v10
+        image: registry.ntdevopsregistry.online/mlops/spotify-monitoring:v10
         env:
         - name: RABBITMQ_HOST
           value: "rabbitmq-service.mlops-sentiment.svc.cluster.local" # Dùng FQDN luôn cho chắc ăn nha!

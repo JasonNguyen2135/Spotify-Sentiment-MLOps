@@ -4,9 +4,11 @@ metadata:
   name: manual-train-test
   namespace: airflow
 spec:
+  imagePullSecrets:
+  - name: harbor-secret
   initContainers:
   - name: git-pull-only
-    image: 172.31.87.182/spotify-mlops/sentiment-trainer:latest
+    image: registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest
     imagePullPolicy: IfNotPresent
     command: ["/bin/sh", "-c"]
     args:
@@ -24,7 +26,7 @@ spec:
 
   containers:
   - name: train-container
-    image: 172.31.87.182/spotify-mlops/sentiment-trainer:latest
+    image: registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest
     imagePullPolicy: IfNotPresent
     workingDir: /opt/repo/model
     command: ["python", "train.py"]
