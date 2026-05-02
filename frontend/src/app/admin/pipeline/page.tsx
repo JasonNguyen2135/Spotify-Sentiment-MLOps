@@ -1,14 +1,44 @@
 'use client';
 import { useAuth } from '@/context/AuthContext';
 import { redirect } from 'next/navigation';
-import { Settings, Play, ExternalLink, Clock } from 'lucide-react';
+import { Settings, Play, ExternalLink, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import axios from 'axios';
 
 export default function PipelinePage() {
   const { user, loading } = useAuth();
+  const [triggering, setTriggering] = useState(false);
+  const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
 
   if (!loading && user?.role !== 'admin') {
     redirect('/');
   }
+
+  const handleTriggerPipeline = async () => {
+    setTriggering(true);
+    setStatus(null);
+    try {
+      // Gọi trực tiếp tới Airflow NodePort
+      // Lưu ý: admin:admin là auth mặc định. Trình duyệt có thể hỏi login nếu chưa login Airflow.
+      const auth = btoa('admin:admin'); 
+      await axios.post(
+        'http://localhost:31190/api/v1/dags/spotify_sentiment_train_k3s_native/dagRuns',
+        {},
+        {
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      setStatus({ type: 'success', msg: 'Kích hoạt Pipeline thành công!' });
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: 'error', msg: 'Không thể kết nối tới Airflow. Hãy đảm bảo bạn đã đăng nhập Airflow ở tab bên cạnh.' });
+    } finally {
+      setTriggering(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto animate-in fade-in duration-500">
@@ -30,6 +60,15 @@ export default function PipelinePage() {
         </a>
       </div>
 
+      {status && (
+        <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top ${
+          status.type === 'success' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'
+        }`}>
+          {status.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span className="font-medium">{status.msg}</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex items-center gap-2 text-slate-400 mb-2 uppercase text-[10px] font-black tracking-widest">
@@ -43,7 +82,7 @@ export default function PipelinePage() {
           <div className="flex items-center gap-2 text-slate-400 mb-2 uppercase text-[10px] font-black tracking-widest">
             <Play className="w-3 h-3" /> DAG ID
           </div>
-          <p className="text-lg font-bold text-slate-800 italic">spotify_training_dag</p>
+          <p className="text-lg font-bold text-slate-800 italic">spotify_sentiment_train_k3s_native</p>
         </div>
       </div>
 
@@ -54,8 +93,18 @@ export default function PipelinePage() {
             Bạn có thể kích hoạt quy trình cào dữ liệu mới, tiền xử lý và đào tạo lại mô hình 
             ngay lập tức bằng cách nhấn vào nút bên dưới. Dữ liệu sẽ được lấy từ MongoDB.
          </p>
-         <button className="bg-spotify text-white px-10 py-4 rounded-2xl font-black text-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-3 shadow-lg shadow-spotify/20">
-            <Play className="w-6 h-6 fill-current" /> TRIGGER PIPELINE NOW
+         <button 
+          onClick={handleTriggerPipeline}
+          disabled={triggering}
+          className="bg-spotify text-white px-10 py-4 rounded-2xl font-black text-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-3 shadow-lg shadow-spotify/20 disabled:opacity-50 disabled:scale-100"
+         >
+            {triggering ? (
+              <>Đang kích hoạt...</>
+            ) : (
+              <>
+                <Play className="w-6 h-6 fill-current" /> TRIGGER PIPELINE NOW
+              </>
+            )}
          </button>
       </div>
     </div>

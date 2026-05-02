@@ -149,9 +149,11 @@ jobs:
           git commit -m "deploy: update manifests with tag preservation [skip ci]" || echo "No changes"
           git push origin HEAD:deploy --force
 
-      # 3. TRIGGER AIRFLOW (Chỉ chạy sau khi build & push thành công)
+      # 3. TRIGGER AIRFLOW (Chỉ chạy nếu build thành công VÀ commit message có chữ [train])
       - name: Trigger Airflow DAG
-        if: needs.check-changes.outputs.model == 'true'
+        if: |
+          needs.check-changes.outputs.model == 'true' && 
+          contains(github.event.head_commit.message, '[train]')
         run: |
           echo "⏳ Chờ 30s để Registry cập nhật image mới..."
           sleep 30
