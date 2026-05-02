@@ -1,7 +1,12 @@
 name: Manual Trigger Airflow Training
 
 on:
-  workflow_dispatch: # Cho phép nhấn nút "Run workflow" trên giao diện GitHub
+  workflow_dispatch:
+    inputs:
+      data_source:
+        description: 'Đường dẫn file CSV dữ liệu mới (DagsHub URL hoặc Local Path)'
+        required: false
+        default: 'https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv'
 
 jobs:
   trigger-airflow:
@@ -9,8 +14,8 @@ jobs:
     steps:
       - name: Trigger Airflow DAG
         run: |
-          echo "🚀 Kích hoạt Airflow Training Pipeline thủ công..."
+          echo "🚀 Kích hoạt Airflow Training Pipeline thủ công với data_source: ${{ github.event.inputs.data_source }}"
           curl -X POST "http://localhost:31190/api/v1/dags/spotify_sentiment_train_k3s_native/dagRuns" \
           -H "Content-Type: application/json" \
           --user "admin:admin" \
-          -d '{"conf": {}}'
+          -d "{\"conf\": {\"data_source\": \"${{ github.event.inputs.data_source }}\"}}"

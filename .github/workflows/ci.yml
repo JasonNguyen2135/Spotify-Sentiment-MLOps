@@ -17,6 +17,7 @@ jobs:
       model: ${{ steps.filter.outputs.model }}
       crawler: ${{ steps.filter.outputs.crawler }}
       monitoring_consumer: ${{ steps.filter.outputs.monitoring_consumer }}
+      train_code: ${{ steps.filter.outputs.train_code }}
     steps:
       - uses: actions/checkout@v3
       - uses: dorny/paths-filter@v2
@@ -28,6 +29,7 @@ jobs:
             model: ['model/**']
             crawler: ['crawler/**']
             monitoring_consumer: ['model/monitoring/**']
+            train_code: ['model/train.py']
 
   build-and-gitops:
     needs: check-changes
@@ -149,16 +151,14 @@ jobs:
           git commit -m "deploy: update manifests with tag preservation [skip ci]" || echo "No changes"
           git push origin HEAD:deploy --force
 
-      # 3. TRIGGER AIRFLOW (Chỉ chạy nếu build thành công VÀ commit message có chữ [train])
-      - name: Trigger Airflow DAG
+      # 3. TRIGGER AIRFLOW (Tự động chạy NẾU thay đổi code train.py)
+      - name: Trigger Airflow DAG (Auto)
         if: |
-          needs.check-changes.outputs.model == 'true' && 
-          contains(github.event.head_commit.message, '[train]')
+          needs.check-changes.outputs.train_code == 'true'
         run: |
           echo "⏳ Chờ 30s để Registry cập nhật image mới..."
           sleep 30
-          echo "🚀 Kích hoạt Airflow Training Pipeline..."
-          # NHỚ KIỂM TRA LẠI PORT VÀ AUTH CỦA AIRFLOW
+          echo "🚀 Kích hoạt Airflow Training do thay đổi code train.py..."
           curl -X POST "http://localhost:31190/api/v1/dags/spotify_sentiment_train_k3s_native/dagRuns" \
           -H "Content-Type: application/json" \
           --user "admin:admin" \
