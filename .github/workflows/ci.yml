@@ -159,7 +159,7 @@ jobs:
           echo "⏳ Chờ 30s để Registry cập nhật image mới..."
           sleep 30
           echo "🚀 Kích hoạt Airflow Training do thay đổi code train.py..."
-          curl -X POST "http://localhost:31190/api/v1/dags/spotify_sentiment_train_k3s_native/dagRuns" \
+          curl -X POST "http://localhost:31190/api/v1/dags/spotify_sentiment_train_k3s_native/dagRuns/" \
           -H "Content-Type: application/json" \
           --user "admin:admin" \
           -d '{"conf": {}}'

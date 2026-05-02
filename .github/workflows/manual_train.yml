@@ -15,7 +15,7 @@ jobs:
       - name: Trigger Airflow DAG
         run: |
           echo "🚀 Kích hoạt Airflow Training Pipeline thủ công với data_source: ${{ github.event.inputs.data_source }}"
-          curl -X POST "http://localhost:31190/api/v1/dags/spotify_sentiment_train_k3s_native/dagRuns" \
+          curl -X POST "http://localhost:31190/api/v1/dags/spotify_sentiment_train_k3s_native/dagRuns/" \
           -H "Content-Type: application/json" \
           --user "admin:admin" \
           -d "{\"conf\": {\"data_source\": \"${{ github.event.inputs.data_source }}\"}}"
