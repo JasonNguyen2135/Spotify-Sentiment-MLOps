@@ -30,7 +30,21 @@ bucket = []
 report_counter = 1
 
 # Nạp sẵn tập Tiêu chuẩn (Reference)
-ref_df = pd.read_csv("dataset/reference_data.csv")
+REF_FILE_PATH = "reference_data.csv"
+DAGSHUB_CSV_URL = "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/reference_data.csv"
+
+if not os.path.exists(REF_FILE_PATH):
+    print(f"📥 Đang tải tập Reference từ DagsHub: {DAGSHUB_CSV_URL}")
+    try:
+        import requests
+        response = requests.get(DAGSHUB_CSV_URL)
+        with open(REF_FILE_PATH, 'wb') as f:
+            f.write(response.content)
+        print("✅ Đã tải file thành công!")
+    except Exception as e:
+        print(f"❌ Lỗi khi tải file: {e}")
+
+ref_df = pd.read_csv(REF_FILE_PATH)
 # 2. TRICK MLOPS: Mượn tạm nhãn thật làm "Dự đoán chuẩn" cho tập Reference
 ref_df['prediction'] = ref_df['sentiment']
 ref_df = ref_df[['text', 'prediction']]
