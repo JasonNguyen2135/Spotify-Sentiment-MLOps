@@ -69,6 +69,15 @@ def train_and_deploy():
             name=model_name, version=latest_version, stage="Production", archive_existing_versions=True
         )
         print(f"✨ Model v{latest_version} is now in [Production]")
+        
+    print("⏳ Đang chờ 60 giây để bạn kiểm tra log...")
+    import time
+    time.sleep(60)
 
 if __name__ == "__main__":
-    train_and_deploy()
+    try:
+        train_and_deploy()
+    except Exception as e:
+        print(f"❌ LỖI NGHIÊM TRỌNG: {e}")
+        import time
+        time.sleep(60)
