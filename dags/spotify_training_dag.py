@@ -73,11 +73,31 @@ with DAG(
 
         # 3. Lấy Token và Data Source (Cho phép ghi đè từ Airflow UI)
         env_vars=[
+            k8s.V1EnvVar(name="MLFLOW_TRACKING_URI", value="http://47.129.38.134:5000"),
             k8s.V1EnvVar(name="DAGSHUB_USERNAME", value="davidmoi2135"),
             k8s.V1EnvVar(
                 name="DAGSHUB_TOKEN",
                 value_from=k8s.V1EnvVarSource(
                     secret_key_ref=k8s.V1SecretKeySelector(name="train-secrets", key="DAGSHUB_TOKEN")
+                )
+            ),
+            # Thêm AWS Credentials để upload model lên S3
+            k8s.V1EnvVar(
+                name="AWS_ACCESS_KEY_ID",
+                value_from=k8s.V1EnvVarSource(
+                    secret_key_ref=k8s.V1SecretKeySelector(name="aws-creds", key="AWS_ACCESS_KEY_ID")
+                )
+            ),
+            k8s.V1EnvVar(
+                name="AWS_SECRET_ACCESS_KEY",
+                value_from=k8s.V1EnvVarSource(
+                    secret_key_ref=k8s.V1SecretKeySelector(name="aws-creds", key="AWS_SECRET_ACCESS_KEY")
+                )
+            ),
+            k8s.V1EnvVar(
+                name="AWS_DEFAULT_REGION",
+                value_from=k8s.V1EnvVarSource(
+                    secret_key_ref=k8s.V1SecretKeySelector(name="aws-creds", key="AWS_DEFAULT_REGION")
                 )
             ),
             # Lấy giá trị DATA_SOURCE từ tham số khi trigger DAG (mặc định là None)

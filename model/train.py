@@ -12,18 +12,12 @@ import requests  # Thêm dòng này
 import io        # Thêm dòng này
 
 # 1. Nạp biến môi trường
-DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME")
-DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN")
-REPO_NAME = "Spotify-Sentiment-MLOps"
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://47.129.38.134:5000")
 
 def train_and_deploy():
-    print("🚀 Bắt đầu quy trình huấn luyện tự động (Triggered by CI)...")
-    os.environ['MLFLOW_TRACKING_USERNAME'] = DAGSHUB_USERNAME
-    os.environ['MLFLOW_TRACKING_PASSWORD'] = DAGSHUB_TOKEN
-
-    dagshub_uri = f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}.mlflow"
-    mlflow.set_tracking_uri(dagshub_uri)
-    mlflow.set_experiment("Spotify_Sentiment_Analysis")
+    # Cấu hình MLflow tự dựng trên AWS
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment("Spotify_Sentiment_AWS")
 
     # 4. KÉO DỮ LIỆU ĐỘNG (Ưu tiên biến môi trường DATA_SOURCE)
     data_source = os.getenv("DATA_SOURCE", f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv")

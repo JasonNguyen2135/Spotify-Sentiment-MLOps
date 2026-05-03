@@ -8,21 +8,12 @@ import json
 app = FastAPI(title="Model Prediction Service")
 
 # ====== LOAD ENV ======
-username = os.getenv("DAGSHUB_USERNAME")
-password = os.getenv("DAGSHUB_PASSWORD")
-
-if not username or not password:
-    raise Exception("❌ Missing DAGSHUB credentials")
-
-os.environ['MLFLOW_TRACKING_USERNAME'] = username
-os.environ['MLFLOW_TRACKING_PASSWORD'] = password
-
-TRACKING_URI = f"https://dagshub.com/{username}/Spotify-Sentiment-MLOps.mlflow"
+TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://47.129.38.134:5000")
 mlflow.set_tracking_uri(TRACKING_URI)
 
 MODEL_METADATA = {"version": "Production", "accuracy": "N/A", "run_id": "unknown"}
 
-print("⏳ Đang kéo model và metadata từ DagsHub...")
+print(f"⏳ Đang kéo model và metadata từ MLflow Server tại {TRACKING_URI}...")
 try:
     model_name = "Spotify_Production_Model"
     model = mlflow.sklearn.load_model(f"models:/{model_name}/Production")
