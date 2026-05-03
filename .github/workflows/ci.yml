@@ -14,7 +14,6 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
-      model_service: ${{ steps.filter.outputs.model_service }}
       crawler: ${{ steps.filter.outputs.crawler }}
       monitoring_consumer: ${{ steps.filter.outputs.monitoring_consumer }}
       trainer_logic: ${{ steps.filter.outputs.trainer_logic }}
@@ -26,7 +25,6 @@ jobs:
           filters: |
             backend: ['backend/**']
             frontend: ['frontend/**']
-            model_service: ['model/app.py', 'model/Dockerfile']
             crawler: ['crawler/**']
             monitoring_consumer: ['model/monitoring/**']
             trainer_logic: ['model/train.py', 'model/Dockerfile.train']
@@ -58,14 +56,6 @@ jobs:
           for i in {1..5}; do 
             docker build -t registry.ntdevopsregistry.online/mlops/frontend:${{ github.sha }} ./frontend && \
             docker push registry.ntdevopsregistry.online/mlops/frontend:${{ github.sha }} && break || sleep 15
-          done
-
-      - name: Build and Push Model Service
-        if: needs.check-changes.outputs.model_service == 'true'
-        run: |
-          for i in {1..5}; do 
-            docker build -t registry.ntdevopsregistry.online/mlops/model-service:${{ github.sha }} ./model && \
-            docker push registry.ntdevopsregistry.online/mlops/model-service:${{ github.sha }} && break || sleep 15
           done
 
       # BUILD TRAINER IMAGE
@@ -162,9 +152,12 @@ jobs:
 
           update_image "backend" "$TAG" "$OLD_BACKEND_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.backend }}"
           update_image "frontend" "$TAG" "$OLD_FRONTEND_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.frontend }}"
-          update_image "model-service" "$TAG" "$OLD_MODEL_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.model_service }}"
           update_image "crawler" "$TAG" "$OLD_CRAWLER_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.crawler }}"
           update_image "spotify-monitoring" "$TAG" "$OLD_MONITORING_TAG" "k8s/monitoring-service.yaml" "${{ needs.check-changes.outputs.monitoring_consumer }}"
+
+          # LƯU Ý: Không cập nhật model-service ở đây, vì model-service giờ deploy bằng tay
+          # Giữ lại OLD_MODEL_TAG cho model-service
+          sed -i "s|image: registry.ntdevopsregistry.online/mlops/model-service:.*|image: registry.ntdevopsregistry.online/mlops/model-service:$OLD_MODEL_TAG|g" k8s/spotify-app.yaml
 
           git add k8s/
           git commit -m "deploy: update manifests with tag preservation [skip ci]" || echo "No changes"
