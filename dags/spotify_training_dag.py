@@ -24,7 +24,7 @@ shared_volume_mount = k8s.V1VolumeMount(
 init_container = k8s.V1Container(
     name="git-pull-only",
     image="registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest",
-    image_pull_policy="IfNotPresent",
+    image_pull_policy="Always",
     command=["/bin/sh", "-c"],
     # Nối các lệnh bằng && để đảm bảo chạy mượt mà
     args=[
@@ -59,7 +59,7 @@ with DAG(
 
         # Image chính (Siêu nhẹ, không chứa code, không chứa data)
         image="registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest",
-        image_pull_policy="IfNotPresent",
+        image_pull_policy="Always",
 
         # Thêm Secret để pull image từ Harbor
         image_pull_secrets=[k8s.V1LocalObjectReference("harbor-secret")],
