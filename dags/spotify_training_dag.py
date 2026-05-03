@@ -65,7 +65,7 @@ with DAG(
         image_pull_secrets=[k8s.V1LocalObjectReference("harbor-secret")],
 
         # Chạy code từ thư mục mà InitContainer vừa clone về
-        cmds=["/bin/sh", "-c", "cd /opt/repo/model && python train.py"],
+        cmds=["python", "/opt/repo/model/train.py"],
 
         init_containers=[init_container],
         volumes=[shared_volume],
