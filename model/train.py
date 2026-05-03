@@ -13,6 +13,9 @@ import io        # Thêm dòng này
 
 # 1. Nạp biến môi trường
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://47.129.38.134:5000")
+DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME", "davidmoi2135")
+DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN")
+REPO_NAME = "Spotify-Sentiment-MLOps"
 
 def train_and_deploy():
     # Cấu hình MLflow tự dựng trên AWS
