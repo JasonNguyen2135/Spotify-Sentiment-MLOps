@@ -5,42 +5,45 @@ from datetime import datetime
 from pymongo import MongoClient
 from google_play_scraper import Sort, reviews
 
-# ====== KẾT NỐI MONGODB ======
+# Database Connection
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 client = MongoClient(MONGO_URL)
 db = client["spotify_db"]
-collection = db["raw_reviews"]
 
-def crawl_spotify_data():
-    # Tạo tên collection theo ngày chạy: data_ngay_thang_nam
-    current_date = datetime.now().strftime("%d_%m_%Y")
-    collection_name = f"data_{current_date}"
+def collect_reviews():
+    # Define collection name based on execution date
+    timestamp = datetime.now().strftime("%d_%m_%Y")
+    collection_name = f"data_{timestamp}"
     collection = db[collection_name]
     
-    print(f"[{datetime.now()}] 🚀 Bắt đầu cào 1000 review mới nhất vào collection: {collection_name}...")
+    print(f"Beginning collection of latest reviews into: {collection_name}")
     try:
-        # Cào 1000 review
+        # Fetch data from source
         result, _ = reviews('com.spotify.music', lang='vi', country='vn', sort=Sort.NEWEST, count=1000)
-        new_data = []
+        batch = []
         for item in result:
-            label = "positive" if item['score'] >= 4 else "negative"
-            new_data.append({
+            sentiment_label = "positive" if item['score'] >= 4 else "negative"
+            batch.append({
                 "review_id": str(item['reviewId']),
                 "text": str(item['content']),
-                "sentiment": str(label),
+                "sentiment": str(sentiment_label),
                 "rating": int(item['score']),
                 "timestamp": item['at']
             })
-        if new_data:
-            # Không xóa cái cũ nữa, lưu vào collection mới hoàn toàn
-            collection.insert_many(new_data)
-            print(f"[{datetime.now()}] ✅ Đã lưu thành công {len(new_data)} reviews vào {collection_name}!")
+        
+        if batch:
+            # Store batch in database
+            collection.insert_many(batch)
+            print(f"Stored {len(batch)} entries in {collection_name}")
+            
     except Exception as e:
-        print(f"[{datetime.now()}] ❌ Lỗi Crawler: {e}")
+        print(f"Data collection failed: {e}")
 
-# Chạy vào mỗi thứ 2 hàng tuần
-schedule.every().monday.at("00:00").do(crawl_spotify_data)
-crawl_spotify_data()
+# Scheduled execution for weekly updates
+schedule.every().monday.at("00:00").do(collect_reviews)
+
+# Initial execution on startup
+collect_reviews()
 
 while True:
     schedule.run_pending()

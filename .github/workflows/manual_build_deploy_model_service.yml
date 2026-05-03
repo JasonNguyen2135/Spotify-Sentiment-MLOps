@@ -1,7 +1,7 @@
 name: Manual Build and Deploy Model Service
 
 on:
-  workflow_dispatch: # Cho phép nhấn nút trên giao diện GitHub
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -27,22 +27,17 @@ jobs:
       - name: Update Manifest (GitOps)
         run: |
           git config --global user.email "ci-bot@example.com"
-          git config --global user.name "CI Bot"
+          git config --global user.name "CI Bot Registry"
           TAG="${{ github.sha }}"
 
-          # Lưu file YAML hiện tại của model-service từ main
           mkdir -p /tmp/k8s-main
           cp k8s/spotify-app.yaml /tmp/k8s-main/
 
-          # Chuyển sang nhánh deploy
           git fetch origin deploy
           git checkout deploy || git checkout -b deploy
           
-          # Cập nhật cấu hình infra từ main vào deploy cho file spotify-app.yaml
           cp /tmp/k8s-main/spotify-app.yaml k8s/
           
-          # Chỉ cập nhật TAG cho model-service, các service khác trong cùng file giữ nguyên tag cũ trên deploy
-          # (Dùng lại hàm get_tag và logic cũ để an toàn)
           get_tag() {
             grep -oP "image: registry.ntdevopsregistry.online/mlops/$1:\K.*" "k8s/spotify-app.yaml" | head -1 || echo "latest"
           }
@@ -51,14 +46,21 @@ jobs:
           OLD_FRONTEND_TAG=$(get_tag "frontend")
           OLD_CRAWLER_TAG=$(get_tag "crawler")
           
-          # Ghi đè tag mới cho model-service
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/model-service:.*|image: registry.ntdevopsregistry.online/mlops/model-service:$TAG|g" k8s/spotify-app.yaml
           
-          # Trả lại tag cũ cho các service khác để không bị deploy nhầm
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/backend:.*|image: registry.ntdevopsregistry.online/mlops/backend:$OLD_BACKEND_TAG|g" k8s/spotify-app.yaml
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/frontend:.*|image: registry.ntdevopsregistry.online/mlops/frontend:$OLD_FRONTEND_TAG|g" k8s/spotify-app.yaml
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/crawler:.*|image: registry.ntdevopsregistry.online/mlops/crawler:$OLD_CRAWLER_TAG|g" k8s/spotify-app.yaml
 
           git add k8s/spotify-app.yaml
-          git commit -m "deploy: manual update model-service to tag $TAG [skip ci]" || echo "No changes"
+          git commit -m "deploy: manual model service image update to $TAG [skip ci]" || echo "No changes"
           git push origin HEAD:deploy --force
+
+      - name: Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_MESSAGE: "Manual Model Service Build/Deploy: ${{ job.status }}"
+          SLACK_TITLE: "Application Update Status"

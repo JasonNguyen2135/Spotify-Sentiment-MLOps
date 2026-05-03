@@ -8,41 +8,44 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score
-import requests  # Thêm dòng này
-import io        # Thêm dòng này
+import requests
+import io
+import time
 
-# 1. Nạp biến môi trường
+# System Configuration
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://47.129.38.134:5000")
 DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME", "davidmoi2135")
 DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN")
 REPO_NAME = "Spotify-Sentiment-MLOps"
 
 def train_and_deploy():
-    # Cấu hình MLflow tự dựng trên AWS
+    print("Initializing model training process")
+    
+    # Setup MLflow Tracking
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment("Spotify_Sentiment_AWS")
 
-    # 4. KÉO DỮ LIỆU ĐỘNG (Ưu tiên biến môi trường DATA_SOURCE)
+    # Handle data acquisition
     data_source = os.getenv("DATA_SOURCE", f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv")
     
     if data_source.startswith("http"):
-        print(f"📡 Đang tải dữ liệu từ URL: {data_source}")
+        print(f"Fetching data from remote source: {data_source}")
         response = requests.get(data_source, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
         response.raise_for_status() 
         df = pd.read_csv(io.StringIO(response.text))
     else:
-        print(f"📁 Đang đọc dữ liệu từ file local: {data_source}")
+        print(f"Loading data from local path: {data_source}")
         df = pd.read_csv(data_source)
         
-    print(f"✅ Đã nạp thành công {len(df)} dòng dữ liệu!")
+    print(f"Successfully loaded {len(df)} records")
 
     X = df['text'].fillna('')
     y = df['sentiment']
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    with mlflow.start_run() as run:
-        print("🚀 Đang huấn luyện mô hình...")
+    with mlflow.start_run():
+        print("Executing training pipeline")
         pipeline = Pipeline([
             ('tfidf', TfidfVectorizer(max_features=5000)),
             ('clf', LogisticRegression(max_iter=1000))
@@ -51,7 +54,7 @@ def train_and_deploy():
         pipeline.fit(X_train, y_train)
         predictions = pipeline.predict(X_test)
         acc = accuracy_score(y_test, predictions)
-        print(f"✅ Accuracy: {acc:.4f}")
+        print(f"Final model accuracy: {acc:.4f}")
 
         mlflow.log_param("model_type", "Logistic Regression")
         mlflow.log_metric("accuracy", acc)
@@ -63,7 +66,7 @@ def train_and_deploy():
             registered_model_name=model_name
         )
 
-    # 7. Gán nhãn Production
+    # Update model registry
     client = MlflowClient()
     versions = client.get_latest_versions(model_name, stages=["None"])
     if versions:
@@ -71,16 +74,14 @@ def train_and_deploy():
         client.transition_model_version_stage(
             name=model_name, version=latest_version, stage="Production", archive_existing_versions=True
         )
-        print(f"✨ Model v{latest_version} is now in [Production]")
+        print(f"Version {latest_version} has been transitioned to Production stage")
         
-    print("⏳ Đang chờ 60 giây để bạn kiểm tra log...")
-    import time
+    print("Training job completed. Maintaining session for log collection.")
     time.sleep(60)
 
 if __name__ == "__main__":
     try:
         train_and_deploy()
     except Exception as e:
-        print(f"❌ LỖI NGHIÊM TRỌNG: {e}")
-        import time
+        print(f"Process failed with error: {e}")
         time.sleep(60)

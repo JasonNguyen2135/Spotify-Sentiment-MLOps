@@ -1,7 +1,7 @@
 name: Manual Deploy Production Model
 
 on:
-  workflow_dispatch: # Cho phép nhấn nút trên giao diện GitHub
+  workflow_dispatch:
 
 jobs:
   deploy-model:
@@ -9,15 +9,19 @@ jobs:
     steps:
       - name: Refresh Model Service
         run: |
-          echo "🔄 Đang ra lệnh cho model-service kéo model Production mới nhất từ MLflow (EC2)..."
-          
-          # Lệnh này sẽ khởi động lại Pod của model-service. 
-          # Khi khởi động lại, code app.py sẽ tự chạy lệnh mlflow.sklearn.load_model()
-          # và lấy đúng bản model bạn vừa gắn nhãn Production trên EC2.
-          
+          echo "Initiating model service refresh for latest production version..."
           kubectl rollout restart deployment model-service -n mlops-sentiment
           
-          echo "⏳ Chờ Pod mới khởi động..."
+          echo "Verifying new pod status..."
           kubectl rollout status deployment model-service -n mlops-sentiment
           
-          echo "✅ Model mới đã được triển khai thành công!"
+          echo "Model deployment refresh sequence completed"
+
+      - name: Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_MESSAGE: "Manual Production Model Refresh: ${{ job.status }}"
+          SLACK_TITLE: "Deployment Status"

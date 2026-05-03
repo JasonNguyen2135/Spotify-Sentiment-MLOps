@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       data_source:
-        description: 'Đường dẫn file CSV dữ liệu mới (DagsHub URL hoặc Local Path)'
+        description: 'Dataset CSV source URL (DagsHub) or local path'
         required: false
         default: 'https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv'
 
@@ -14,18 +14,27 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: 📦 Bơm file DAG trực tiếp vào cụm K8s (Deploy)
+      - name: Deploy DAG file to K8s
         run: |
-          echo "🔍 Đang dò tìm tọa độ Pod Scheduler và Dag-Processor..."
+          echo "Finding Scheduler and Dag-Processor pods..."
           SCHEDULER_POD=$(kubectl get pods -n airflow -l component=scheduler -o jsonpath='{.items[0].metadata.name}')
           PROCESSOR_POD=$(kubectl get pods -n airflow -l component=dag-processor -o jsonpath='{.items[0].metadata.name}')
           
-          echo "🚀 Bắt đầu bơm file spotify_training_dag.py vào hệ thống Airflow..."
+          echo "Copying DAG file to Airflow..."
           kubectl cp dags/spotify_training_dag.py airflow/$SCHEDULER_POD:/opt/airflow/dags/ -c scheduler
           kubectl cp dags/spotify_training_dag.py airflow/$PROCESSOR_POD:/opt/airflow/dags/ -c dag-processor
           sleep 5
 
-      - name: Trigger Airflow DAG
+      - name: Execute Airflow Trigger
         run: |
-          echo "🚀 Kích hoạt Airflow Training Pipeline thủ công với data_source: ${{ github.event.inputs.data_source }}"
+          echo "Triggering training pipeline with source: ${{ github.event.inputs.data_source }}"
           kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k3s_native -c "{\"data_source\": \"${{ github.event.inputs.data_source }}\"}"
+
+      - name: Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_MESSAGE: "Manual Training Trigger: ${{ job.status }}"
+          SLACK_TITLE: "Training Request Status"
