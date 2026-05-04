@@ -69,13 +69,30 @@ def train_and_deploy():
 
     # Update model registry
     client = MlflowClient()
+    
+    # 1. Get current Production model accuracy
+    current_prod_acc = 0.0
+    try:
+        prod_versions = client.get_latest_versions(model_name, stages=["Production"])
+        if prod_versions:
+            run_id = prod_versions[0].run_id
+            run = client.get_run(run_id)
+            current_prod_acc = run.data.metrics.get("accuracy", 0.0)
+            print(f"Current Production accuracy: {current_prod_acc:.4f}")
+    except Exception as e:
+        print(f"Could not retrieve current Production accuracy: {e}")
+
+    # 2. Compare and promote if better
     versions = client.get_latest_versions(model_name, stages=["None"])
     if versions:
         latest_version = versions[0].version
-        client.transition_model_version_stage(
-            name=model_name, version=latest_version, stage="Production", archive_existing_versions=True
-        )
-        print(f"Version {latest_version} has been transitioned to Production stage")
+        if acc > current_prod_acc:
+            client.transition_model_version_stage(
+                name=model_name, version=latest_version, stage="Production", archive_existing_versions=True
+            )
+            print(f"✅ Success: Version {latest_version} (Acc: {acc:.4f}) is better than Production (Acc: {current_prod_acc:.4f}). Transitioned to Production.")
+        else:
+            print(f"⚠️ Skip: Version {latest_version} (Acc: {acc:.4f}) is NOT better than Production (Acc: {current_prod_acc:.4f}). Kept in Staging.")
         
     print("Training job completed. Maintaining session for log collection.")
     time.sleep(60)
