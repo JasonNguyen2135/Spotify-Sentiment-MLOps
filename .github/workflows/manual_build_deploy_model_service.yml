@@ -36,35 +36,40 @@ jobs:
           TAG="${{ github.sha }}"
           MODEL_TARGET="${{ github.event.inputs.model_target }}"
 
+          # 1. Save the new manifest structure from main
           mkdir -p /tmp/k8s-main
           cp k8s/spotify-app.yaml /tmp/k8s-main/
 
+          # 2. Switch to deploy branch
           git fetch origin deploy
           git checkout deploy || git checkout -b deploy
           
-          cp /tmp/k8s-main/spotify-app.yaml k8s/
-          
+          # 3. EXTRACT current running tags from deploy branch BEFORE overwriting
           get_tag() {
-            grep -oP "image: registry.ntdevopsregistry.online/mlops/$1:\K.*" "k8s/spotify-app.yaml" | head -1 || echo "latest"
+            grep -oP "image: registry.ntdevopsregistry.online/mlops/$1:\K[^\s#]*" "k8s/spotify-app.yaml" | head -1 || echo "latest"
           }
           
           OLD_BACKEND_TAG=$(get_tag "backend")
           OLD_FRONTEND_TAG=$(get_tag "frontend")
           OLD_CRAWLER_TAG=$(get_tag "crawler")
+
+          echo "Preserving tags: Backend=$OLD_BACKEND_TAG, Frontend=$OLD_FRONTEND_TAG, Crawler=$OLD_CRAWLER_TAG"
           
-          # Update Image Tag
+          # 4. Sync manifest structure from main
+          cp /tmp/k8s-main/spotify-app.yaml k8s/
+          
+          # 5. Apply updates
+          # Update Model Service Image Tag
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/model-service:.*|image: registry.ntdevopsregistry.online/mlops/model-service:$TAG|g" k8s/spotify-app.yaml
           
           # Update MODEL_TARGET env var
-          # We search for the line following MODEL_TARGET and replace its value
-          # Note: This assumes the key 'MODEL_TARGET' exists or we need to add it logic
           if grep -q "name: MODEL_TARGET" k8s/spotify-app.yaml; then
             sed -i "/name: MODEL_TARGET/{n;s/value: .*/value: \"$MODEL_TARGET\"/}" k8s/spotify-app.yaml
           else
-            # If not found, insert it after AWS_DEFAULT_REGION block for convenience
             sed -i "/name: AWS_DEFAULT_REGION/{n;n;a\          - name: MODEL_TARGET\n            value: \"$MODEL_TARGET\"" k8s/spotify-app.yaml
           fi
 
+          # 6. Restore other service tags to what was running on deploy branch
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/backend:.*|image: registry.ntdevopsregistry.online/mlops/backend:$OLD_BACKEND_TAG|g" k8s/spotify-app.yaml
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/frontend:.*|image: registry.ntdevopsregistry.online/mlops/frontend:$OLD_FRONTEND_TAG|g" k8s/spotify-app.yaml
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/crawler:.*|image: registry.ntdevopsregistry.online/mlops/crawler:$OLD_CRAWLER_TAG|g" k8s/spotify-app.yaml
