@@ -64,9 +64,13 @@ jobs:
           
           # Update MODEL_TARGET env var
           if grep -q "name: MODEL_TARGET" k8s/spotify-app.yaml; then
-            sed -i "/name: MODEL_TARGET/{n;s/value: .*/value: \"$MODEL_TARGET\"/}" k8s/spotify-app.yaml
+            # If exists, update the value in the next line
+            sed -i "/name: MODEL_TARGET/,/value: .*/ s/value: .*/value: \"$MODEL_TARGET\"/" k8s/spotify-app.yaml
           else
-            sed -i "/name: AWS_DEFAULT_REGION/{n;n;a\          - name: MODEL_TARGET\n            value: \"$MODEL_TARGET\"" k8s/spotify-app.yaml
+            # If not exists, append it after the AWS_DEFAULT_REGION block
+            # This is safer: find the line with AWS_DEFAULT_REGION, find the next 'value:' line, and append after it
+            sed -i "/name: AWS_DEFAULT_REGION/,/value: .*/ { /value: .*/ a\          - name: MODEL_TARGET\n            value: \"$MODEL_TARGET\"
+            }" k8s/spotify-app.yaml
           fi
 
           # 6. Restore other service tags to what was running on deploy branch
