@@ -1,6 +1,6 @@
 # custom-values.yaml
 
-# 1. Dùng KubernetesExecutor để gọi K3s đẻ Pod tự động
+# 1. Dùng KubernetesExecutor để gọi K8s (Docker Desktop) đẻ Pod tự động
 executor: "KubernetesExecutor"
 
 # 2. Tắt các thành phần nặng không cần thiết

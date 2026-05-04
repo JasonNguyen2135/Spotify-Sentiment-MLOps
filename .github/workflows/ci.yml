@@ -100,7 +100,7 @@ jobs:
         if: needs.check-changes.outputs.trainer_logic == 'true'
         run: |
           echo "Triggering DAG run..."
-          kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k3s_native -c "{\"commit_sha\": \"${{ github.sha }}\", \"message\": \"Auto-triggered by CI logic change\"}"
+          kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k8s_native -c "{\"commit_sha\": \"${{ github.sha }}\", \"message\": \"Auto-triggered by CI logic change\"}"
           echo "MLOps training flow started successfully"
 
       # 3. CẬP NHẬT GITOPS (Surgical Precise Update with Tag Preservation)

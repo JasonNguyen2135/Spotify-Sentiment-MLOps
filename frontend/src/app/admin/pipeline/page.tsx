@@ -22,7 +22,7 @@ export default function PipelinePage() {
       // Lưu ý: admin:admin là auth mặc định. Trình duyệt có thể hỏi login nếu chưa login Airflow.
       const auth = btoa('admin:admin'); 
       await axios.post(
-        'http://localhost:31190/api/v1/dags/spotify_sentiment_train_k3s_native/dagRuns',
+        'http://localhost:31190/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns',
         {},
         {
           headers: {
@@ -82,7 +82,7 @@ export default function PipelinePage() {
           <div className="flex items-center gap-2 text-slate-400 mb-2 uppercase text-[10px] font-black tracking-widest">
             <Play className="w-3 h-3" /> DAG ID
           </div>
-          <p className="text-lg font-bold text-slate-800 italic">spotify_sentiment_train_k3s_native</p>
+          <p className="text-lg font-bold text-slate-800 italic">spotify_sentiment_train_k8s_native</p>
         </div>
       </div>
 

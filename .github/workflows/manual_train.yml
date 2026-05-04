@@ -28,7 +28,7 @@ jobs:
       - name: Execute Airflow Trigger
         run: |
           echo "Triggering training pipeline with source: ${{ github.event.inputs.data_source }}"
-          kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k3s_native -c "{\"data_source\": \"${{ github.event.inputs.data_source }}\"}"
+          kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k8s_native -c "{\"data_source\": \"${{ github.event.inputs.data_source }}\"}"
 
       - name: Slack Notification
         if: always()

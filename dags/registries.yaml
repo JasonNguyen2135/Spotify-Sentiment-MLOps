@@ -1,5 +1,5 @@
-sudo mkdir -p /etc/rancher/k3s
-sudo tee /etc/rancher/k3s/registries.yaml > /dev/null <<EOF
+sudo mkdir -p /etc/containerd
+sudo tee /etc/containerd/config.toml > /dev/null <<EOF
 mirrors:
   "172.31.87.182":
     endpoint:
