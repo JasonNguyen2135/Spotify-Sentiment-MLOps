@@ -9,27 +9,44 @@ app = FastAPI(title="Sentiment Analysis Service")
 
 # Configuration
 TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://47.129.38.134:5000")
+MODEL_TARGET = os.getenv("MODEL_TARGET", "Production") # Can be "Production", "Staging", or a version number like "5"
 mlflow.set_tracking_uri(TRACKING_URI)
 
-MODEL_METADATA = {"version": "stable", "accuracy": "N/A", "run_id": "none"}
+MODEL_METADATA = {"version": "unknown", "accuracy": "N/A", "run_id": "none", "target": MODEL_TARGET}
 
 print(f"Connecting to MLflow server at {TRACKING_URI}")
 try:
     model_name = "Spotify_Production_Model"
-    model = mlflow.sklearn.load_model(f"models:/{model_name}/Production")
+    
+    # Check if MODEL_TARGET is a numeric version or a stage name
+    if MODEL_TARGET.isdigit():
+        model_uri = f"models:/{model_name}/{MODEL_TARGET}"
+    else:
+        model_uri = f"models:/{model_name}/{MODEL_TARGET}"
+        
+    print(f"Loading model from: {model_uri}")
+    model = mlflow.sklearn.load_model(model_uri)
+    
     client = mlflow.tracking.MlflowClient()
-    latest_versions = client.get_latest_versions(model_name, stages=["Production"])
-    if latest_versions:
-        run_id = latest_versions[0].run_id
+    
+    # Get metadata for the specific target
+    if MODEL_TARGET.isdigit():
+        mv = client.get_model_version(model_name, MODEL_TARGET)
+    else:
+        latest_versions = client.get_latest_versions(model_name, stages=[MODEL_TARGET])
+        mv = latest_versions[0] if latest_versions else None
+        
+    if mv:
+        run_id = mv.run_id
         run = client.get_run(run_id)
         acc = run.data.metrics.get("accuracy") or run.data.metrics.get("acc")
         MODEL_METADATA["accuracy"] = f"{acc*100:.1f}%" if acc and acc <= 1 else f"{acc:.1f}%" if acc else "N/A"
         MODEL_METADATA["dataset_size"] = run.data.params.get("dataset_size", "N/A")
         MODEL_METADATA["run_id"] = run_id
-        MODEL_METADATA["version"] = latest_versions[0].version
+        MODEL_METADATA["version"] = mv.version
     print(f"Model successfully loaded. Current accuracy: {MODEL_METADATA['accuracy']}")
 except Exception as e:
-    print(f"Warning: Could not load production model: {e}")
+    print(f"Warning: Could not load target model ({MODEL_TARGET}): {e}")
     model = None
 
 def publish_to_queue(log_data):
