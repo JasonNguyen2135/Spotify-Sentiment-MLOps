@@ -2,6 +2,11 @@ name: Manual Build and Deploy Model Service
 
 on:
   workflow_dispatch:
+    inputs:
+      model_target:
+        description: 'Model version (e.g., 5) or stage (Production, Staging)'
+        required: true
+        default: 'Production'
 
 permissions:
   contents: write
@@ -29,6 +34,7 @@ jobs:
           git config --global user.email "ci-bot@example.com"
           git config --global user.name "CI Bot Registry"
           TAG="${{ github.sha }}"
+          MODEL_TARGET="${{ github.event.inputs.model_target }}"
 
           mkdir -p /tmp/k8s-main
           cp k8s/spotify-app.yaml /tmp/k8s-main/
@@ -46,14 +52,25 @@ jobs:
           OLD_FRONTEND_TAG=$(get_tag "frontend")
           OLD_CRAWLER_TAG=$(get_tag "crawler")
           
+          # Update Image Tag
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/model-service:.*|image: registry.ntdevopsregistry.online/mlops/model-service:$TAG|g" k8s/spotify-app.yaml
           
+          # Update MODEL_TARGET env var
+          # We search for the line following MODEL_TARGET and replace its value
+          # Note: This assumes the key 'MODEL_TARGET' exists or we need to add it logic
+          if grep -q "name: MODEL_TARGET" k8s/spotify-app.yaml; then
+            sed -i "/name: MODEL_TARGET/{n;s/value: .*/value: \"$MODEL_TARGET\"/}" k8s/spotify-app.yaml
+          else
+            # If not found, insert it after AWS_DEFAULT_REGION block for convenience
+            sed -i "/name: AWS_DEFAULT_REGION/{n;n;a\          - name: MODEL_TARGET\n            value: \"$MODEL_TARGET\"" k8s/spotify-app.yaml
+          fi
+
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/backend:.*|image: registry.ntdevopsregistry.online/mlops/backend:$OLD_BACKEND_TAG|g" k8s/spotify-app.yaml
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/frontend:.*|image: registry.ntdevopsregistry.online/mlops/frontend:$OLD_FRONTEND_TAG|g" k8s/spotify-app.yaml
           sed -i "s|image: registry.ntdevopsregistry.online/mlops/crawler:.*|image: registry.ntdevopsregistry.online/mlops/crawler:$OLD_CRAWLER_TAG|g" k8s/spotify-app.yaml
 
           git add k8s/spotify-app.yaml
-          git commit -m "deploy: manual model service image update to $TAG [skip ci]" || echo "No changes"
+          git commit -m "deploy: manual model service image update to $TAG and target $MODEL_TARGET [skip ci]" || echo "No changes"
           git push origin HEAD:deploy --force
 
       - name: Slack Notification
