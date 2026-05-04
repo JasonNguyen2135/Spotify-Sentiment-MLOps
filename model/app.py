@@ -24,6 +24,7 @@ try:
         run = client.get_run(run_id)
         acc = run.data.metrics.get("accuracy") or run.data.metrics.get("acc")
         MODEL_METADATA["accuracy"] = f"{acc*100:.1f}%" if acc and acc <= 1 else f"{acc:.1f}%" if acc else "N/A"
+        MODEL_METADATA["dataset_size"] = run.data.params.get("dataset_size", "N/A")
         MODEL_METADATA["run_id"] = run_id
         MODEL_METADATA["version"] = latest_versions[0].version
     print(f"Model successfully loaded. Current accuracy: {MODEL_METADATA['accuracy']}")

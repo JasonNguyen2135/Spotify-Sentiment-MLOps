@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Activity, Users, Database, Zap, Loader2, Send, CheckCircle2, ShieldAlert, Target, Waves } from 'lucide-react';
+import { Activity, Users, Database, Zap, Loader2, Send, CheckCircle2, ShieldAlert, Target } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { clsx } from 'clsx';
 
@@ -59,15 +59,6 @@ export default function Home() {
     );
   }
 
-  const getDriftColor = (score: string) => {
-    const val = parseFloat(score);
-    if (val > 25) return { text: 'text-red-500', bg: 'bg-red-50' };
-    if (val > 10) return { text: 'text-yellow-500', bg: 'bg-yellow-50' };
-    return { text: 'text-green-500', bg: 'bg-green-50' };
-  };
-
-  const driftStyle = stats ? getDriftColor(stats.drift_score) : { text: '', bg: '' };
-
   return (
     <div className="animate-in fade-in duration-700">
       <div className="mb-10 text-center md:text-left">
@@ -83,10 +74,9 @@ export default function Home() {
             <ShieldAlert className="text-red-500 w-5 h-5" />
             <h2 className="text-xl font-bold text-gray-800 uppercase tracking-wider">Hệ thống (Chỉ Admin)</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {[
               { name: 'Accuracy', value: stats.accuracy, icon: Target, color: 'text-red-500', bg: 'bg-red-50' },
-              { name: 'Data Drift', value: stats.drift_score, icon: Waves, color: driftStyle.text, bg: driftStyle.bg },
               { name: 'Version', value: stats.model_version, icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-50' },
               { name: 'Predictions', value: stats.total_predictions.toLocaleString(), icon: Activity, color: 'text-blue-500', bg: 'bg-blue-50' },
               { name: 'Dataset', value: stats.dataset_size, icon: Database, color: 'text-green-500', bg: 'bg-green-50' },

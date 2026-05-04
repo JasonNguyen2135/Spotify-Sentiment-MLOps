@@ -77,15 +77,17 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 @app.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
     user_count = db.query(func.count(User.id)).scalar()
-    
+
     accuracy = "N/A"
     model_version = "v1.2.0-Prod"
+    dataset_size = None
     try:
         meta_res = requests.get(f"{MODEL_API_URL}/metadata", timeout=2)
         if meta_res.status_code == 200:
             meta = meta_res.json()
             accuracy = meta.get("accuracy", "N/A")
             model_version = f"v{meta.get('version', '1.2.0')}-Prod"
+            dataset_size = meta.get("dataset_size")
     except: pass
 
     drift_score = "0%"
@@ -102,18 +104,24 @@ def get_stats(db: Session = Depends(get_db)):
 
     try: total_preds = preds_log_col.count_documents({})
     except: total_preds = 0
-    try: crawled_count = reviews_col.count_documents({})
-    except: crawled_count = 0
-    
+
+    if dataset_size is None or dataset_size == "N/A":
+        try: 
+            crawled_count = reviews_col.count_documents({})
+            dataset_size = f"{crawled_count} reviews"
+        except: 
+            dataset_size = "0 reviews"
+    else:
+        dataset_size = f"{dataset_size} reviews"
+
     return {
         "model_version": model_version,
         "total_predictions": total_preds,
-        "dataset_size": f"{crawled_count} reviews",
+        "dataset_size": dataset_size,
         "active_users": user_count,
         "accuracy": accuracy,
         "drift_score": drift_score
     }
-
 @app.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first():

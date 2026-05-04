@@ -57,6 +57,7 @@ def train_and_deploy():
         print(f"Final model accuracy: {acc:.4f}")
 
         mlflow.log_param("model_type", "Logistic Regression")
+        mlflow.log_param("dataset_size", len(df))
         mlflow.log_metric("accuracy", acc)
 
         model_name = "Spotify_Production_Model"
