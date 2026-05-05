@@ -27,7 +27,7 @@ def train_and_deploy():
 
     # Handle data acquisition
     data_source = os.getenv("DATA_SOURCE", f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv")
-    
+    print("Set up data source")
     if data_source.startswith("https"):
         print(f"Fetching data from remote source: {data_source}")
         response = requests.get(data_source, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
