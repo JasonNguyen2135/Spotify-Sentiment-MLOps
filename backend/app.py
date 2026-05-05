@@ -74,7 +74,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 app = FastAPI(title="Spotify Backend API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-@app.get("/stats")
+from fastapi import APIRouter
+api_router = APIRouter()
+
+@api_router.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
     user_count = db.query(func.count(User.id)).scalar()
 
@@ -122,7 +125,8 @@ def get_stats(db: Session = Depends(get_db)):
         "accuracy": accuracy,
         "drift_score": drift_score
     }
-@app.post("/register")
+
+@api_router.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first():
         raise HTTPException(status_code=400, detail="Username exists")
@@ -130,14 +134,14 @@ def register(username: str, password: str, role: str = "user", db: Session = Dep
     db.commit()
     return {"message": "Success"}
 
-@app.post("/login")
+@api_router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
     if not user or not pwd_context.verify(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
     return {"access_token": create_access_token(data={"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
 
-@app.post("/predict")
+@api_router.post("/predict")
 async def predict_single(review_text: str, current_user: User = Depends(get_current_user)):
     try:
         res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10)
@@ -150,7 +154,7 @@ async def predict_single(review_text: str, current_user: User = Depends(get_curr
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
 
-@app.post("/analyze-csv")
+@api_router.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     col = "text" if "text" in df.columns else ("review" if "review" in df.columns else df.columns[0])
@@ -165,3 +169,7 @@ async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends
         log_entries.append({"text": text, "sentiment": sentiment, "user": current_user.username, "timestamp": datetime.utcnow()})
     if log_entries: preds_log_col.insert_many(log_entries)
     return {"results": results}
+
+# Include router at root and with /api prefix
+app.include_router(api_router)
+app.include_router(api_router, prefix="/api")
