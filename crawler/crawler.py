@@ -1,49 +1,80 @@
 import schedule
 import time
 import os
+import requests
 from datetime import datetime
 from pymongo import MongoClient
+from sqlalchemy import create_engine, text
 from google_play_scraper import Sort, reviews
 
-# Database Connection
+# Configuration
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
-client = MongoClient(MONGO_URL)
-db = client["spotify_db"]
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@postgres:5432/mlops_auth")
+MODEL_API_URL = os.getenv("MODEL_API_URL", "http://backend:8000/api") # Redirect through backend proxy
 
-def collect_reviews():
-    # Define collection name based on execution date
-    timestamp = datetime.now().strftime("%d_%m_%Y")
-    collection_name = f"data_{timestamp}"
-    collection = db[collection_name]
+# Database Connections
+pg_engine = create_engine(DATABASE_URL)
+mongo_client = MongoClient(MONGO_URL)
+mongo_db = mongo_client["sentiment_db"]
+preds_log_col = mongo_db["predictions_log"]
+
+def process_all_sources():
+    print(f"[{datetime.now()}] Starting dynamic ingestion cycle...")
     
-    print(f"Beginning collection of latest reviews into: {collection_name}")
     try:
-        # Fetch data from source
-        result, _ = reviews('com.spotify.music', lang='vi', country='vn', sort=Sort.NEWEST, count=1000)
+        with pg_engine.connect() as conn:
+            result = conn.execute(text("SELECT id, app_id, project_id, platform FROM data_sources WHERE status = 'active'"))
+            sources = result.fetchall()
+            
+        for source_id, app_id, project_id, platform in sources:
+            print(f"Processing App: {app_id} (Project: {project_id})")
+            sync_source(app_id, project_id, platform)
+            
+    except Exception as e:
+        print(f"Cycle failed: {e}")
+
+def sync_source(app_id, project_id, platform, limit=500):
+    try:
+        if platform == 'Google Play':
+            result, _ = reviews(app_id, lang='en', country='us', sort=Sort.NEWEST, count=limit)
+        else:
+            print(f"Platform {platform} not supported yet for auto-crawl.")
+            return
+
         batch = []
         for item in result:
-            sentiment_label = "positive" if item['score'] >= 4 else "negative"
+            text_content = str(item['content'])
+            
+            # Use Backend/Model for prediction
+            try:
+                res = requests.post(f"{MODEL_API_URL}/predict", params={"review_text": text_content, "project_id": project_id}, timeout=10)
+                sentiment = res.json().get("sentiment", "neutral")
+            except:
+                sentiment = "neutral"
+                
             batch.append({
-                "review_id": str(item['reviewId']),
-                "text": str(item['content']),
-                "sentiment": str(sentiment_label),
-                "rating": int(item['score']),
-                "timestamp": item['at']
+                "text": text_content,
+                "sentiment": sentiment,
+                "source": f"auto_crawl_{platform}",
+                "project_id": project_id,
+                "user": "system_crawler",
+                "timestamp": item['at'] or datetime.utcnow()
             })
         
         if batch:
-            # Store batch in database
-            collection.insert_many(batch)
-            print(f"Stored {len(batch)} entries in {collection_name}")
+            # Avoid duplicates by checking text + timestamp? 
+            # Simplified for now: just insert
+            preds_log_col.insert_many(batch)
+            print(f"Synced {len(batch)} new records for {app_id}")
             
     except Exception as e:
-        print(f"Data collection failed: {e}")
+        print(f"Sync failed for {app_id}: {e}")
 
-# Scheduled execution for weekly updates
-schedule.every().monday.at("00:00").do(collect_reviews)
+# Scheduled execution for daily updates
+schedule.every().day.at("00:00").do(process_all_sources)
 
 # Initial execution on startup
-collect_reviews()
+process_all_sources()
 
 while True:
     schedule.run_pending()

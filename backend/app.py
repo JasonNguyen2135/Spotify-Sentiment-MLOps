@@ -637,6 +637,55 @@ def add_connector(platform: str, app_id: str, project_id: int, schedule: str = "
     db.commit()
     return {"message": "Connector added successfully"}
 
+from google_play_scraper import Sort, reviews as fetch_reviews
+
+@api_router.post("/connectors/sync/{connector_id}")
+async def sync_connector(connector_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    source = db.query(DataSource).filter(DataSource.id == connector_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    
+    # Verify ownership
+    verify_project_owner(source.project_id, current_user.id, db)
+
+    try:
+        if source.platform == 'Google Play':
+            # Fetch last 100 reviews for quick sync
+            result, _ = fetch_reviews(source.app_id, lang='en', country='us', sort=Sort.NEWEST, count=100)
+            
+            batch = []
+            for item in result:
+                text_content = str(item['content'])
+                
+                # Predict sentiment
+                try:
+                    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_content}, timeout=5)
+                    sentiment = res.json().get("sentiment", "neutral")
+                except:
+                    sentiment = "neutral"
+
+                batch.append({
+                    "text": text_content,
+                    "sentiment": sentiment,
+                    "source": f"manual_sync_{source.platform}",
+                    "project_id": source.project_id,
+                    "user": "system_sync",
+                    "timestamp": item['at'] or datetime.utcnow()
+                })
+            
+            if batch:
+                preds_log_col.insert_many(batch)
+            
+            return {"status": "success", "synced_count": len(batch)}
+        else:
+            return {"status": "error", "message": f"Platform {source.platform} not supported for sync"}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.delete("/connectors/{connector_id}")
 def delete_connector(connector_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":

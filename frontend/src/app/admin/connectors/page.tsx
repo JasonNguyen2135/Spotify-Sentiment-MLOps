@@ -43,6 +43,23 @@ export default function ConnectorsPage() {
     setTimeout(() => setStatus(null), 3000);
   };
 
+  const [syncing, setSyncing] = useState<number | null>(null);
+
+  const handleSync = async (connectorId: number) => {
+    setSyncing(connectorId);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`/api/connectors/sync/${connectorId}`, null, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setStatus({ type: 'success', msg: `Successfully synced ${res.data.synced_count} records!` });
+    } catch (err: any) {
+      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Sync failed' });
+    } finally {
+      setSyncing(null);
+    }
+  };
+
   const fetchData = useCallback(async () => {
     if (!activeProject) return;
     try {
@@ -234,7 +251,6 @@ export default function ConnectorsPage() {
               <div className="p-4">
                 {sources.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {sources.map((s) => (
                       <div key={s.id} className="flex items-center justify-between p-5 bg-slate-50 rounded-[2rem] border border-slate-100 group hover:border-brand/30 transition-all">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
@@ -245,14 +261,23 @@ export default function ConnectorsPage() {
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.platform}</p>
                           </div>
                         </div>
-                        <button 
-                          onClick={() => handleDelete('connectors', s.id)}
-                          className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => handleSync(s.id)}
+                            disabled={syncing === s.id}
+                            className="p-2 text-brand hover:bg-brand/5 rounded-xl transition-all"
+                            title="Sync Now"
+                          >
+                            {syncing === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                          </button>
+                          <button 
+                            onClick={() => handleDelete('connectors', s.id)}
+                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    ))}
                   </div>
                 ) : (
                   <div className="py-20 text-center text-slate-400 font-medium italic">No applications registered for this project yet.</div>
