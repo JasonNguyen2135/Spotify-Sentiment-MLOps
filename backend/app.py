@@ -634,30 +634,25 @@ async def collect_webhook(project_id: int, data: dict, db: Session = Depends(get
 # NEW: Connectors & Alerts Management
 @api_router.get("/connectors")
 def get_connectors(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Feature now available to regular users for their own projects
     query = db.query(DataSource)
-    if project_id: query = query.filter(DataSource.project_id == project_id)
+    if project_id:
+        verify_project_owner(project_id, current_user.id, db)
+        query = query.filter(DataSource.project_id == project_id)
     return query.all()
 
 @api_router.post("/connectors")
 def add_connector(platform: str, app_id: str, project_id: int, schedule: str = "daily", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
     verify_project_owner(project_id, current_user.id, db)
 
     # Enforce one app per project rule: Delete old app data if exists
     existing = db.query(DataSource).filter(DataSource.project_id == project_id).first()
     if existing:
-        # 1. Wipe data from MongoDB for this project
         preds_log_col.delete_many({"project_id": project_id})
         reviews_col.delete_many({"project_id": project_id})
-        # 2. Delete the old connector
         db.delete(existing)
         db.commit()
 
-    # Add new connector
     new_source = DataSource(platform=platform, app_id=app_id, schedule=schedule, project_id=project_id)
     db.add(new_source)
     db.commit()
@@ -667,15 +662,12 @@ from google_play_scraper import Sort, reviews as fetch_reviews
 
 @api_router.post("/connectors/sync/{connector_id}")
 async def sync_connector(connector_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
     source = db.query(DataSource).filter(DataSource.id == connector_id).first()
     if not source:
         raise HTTPException(status_code=404, detail="Connector not found")
     
-    # Verify ownership
     verify_project_owner(source.project_id, current_user.id, db)
+    # ... rest of sync logic
 
     try:
         if source.platform == 'Google Play':
@@ -714,24 +706,25 @@ async def sync_connector(connector_id: int, db: Session = Depends(get_db), curre
 
 @api_router.delete("/connectors/{connector_id}")
 def delete_connector(connector_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    db.query(DataSource).filter(DataSource.id == connector_id).delete()
+    source = db.query(DataSource).filter(DataSource.id == connector_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    verify_project_owner(source.project_id, current_user.id, db)
+    db.delete(source)
     db.commit()
     return {"message": "Connector removed"}
 
 @api_router.get("/alerts")
 def get_alert_rules(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
     query = db.query(AlertRule)
-    if project_id: query = query.filter(AlertRule.project_id == project_id)
+    if project_id:
+        verify_project_owner(project_id, current_user.id, db)
+        query = query.filter(AlertRule.project_id == project_id)
     return query.all()
 
 @api_router.post("/alerts")
 def add_alert_rule(name: str, threshold: int, channel: str, destination: str, project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    verify_project_owner(project_id, current_user.id, db)
     new_rule = AlertRule(name=name, threshold=threshold, channel=channel, destination=destination, project_id=project_id)
     db.add(new_rule)
     db.commit()
@@ -739,9 +732,11 @@ def add_alert_rule(name: str, threshold: int, channel: str, destination: str, pr
 
 @api_router.delete("/alerts/{rule_id}")
 def delete_alert_rule(rule_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    db.query(AlertRule).filter(AlertRule.id == rule_id).delete()
+    rule = db.query(AlertRule).filter(AlertRule.id == rule_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    verify_project_owner(rule.project_id, current_user.id, db)
+    db.delete(rule)
     db.commit()
     return {"message": "Alert rule removed"}
 

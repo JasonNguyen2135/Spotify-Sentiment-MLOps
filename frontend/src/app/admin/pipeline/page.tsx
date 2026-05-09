@@ -158,6 +158,13 @@ export default function PipelinePage() {
             <ExternalLink className="w-4 h-4" /> Airflow UI
           </a>
           <a 
+            href="http://localhost:31247" 
+            target="_blank" 
+            className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
+          >
+            <ShieldCheck className="w-4 h-4" /> Evidently AI
+          </a>
+          <a 
             href="http://18.140.71.49:5000" 
             target="_blank" 
             className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"

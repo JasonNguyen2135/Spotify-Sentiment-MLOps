@@ -70,7 +70,7 @@ export default function Navbar() {
               </Link>
             ))}
 
-            {user?.role === 'admin' && activeProject && (
+            {activeProject && (
               <div className="flex gap-4 border-l pl-4">
                 <Link 
                   href="/admin/connectors"
@@ -83,16 +83,18 @@ export default function Navbar() {
                   Alerts
                 </Link>
 
-                <Link 
-                  href="/admin/pipeline"
-                  className={clsx(
-                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                    pathname === '/admin/pipeline' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                  )}
-                >
-                  <Settings className="w-4 h-4" />
-                  Control
-                </Link>
+                {user?.role === 'admin' && (
+                  <Link 
+                    href="/admin/pipeline"
+                    className={clsx(
+                      "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                      pathname === '/admin/pipeline' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                    )}
+                  >
+                    <Settings className="w-4 h-4" />
+                    Control
+                  </Link>
+                )}
               </div>
             )}
 
