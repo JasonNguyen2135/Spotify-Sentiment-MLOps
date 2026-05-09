@@ -498,6 +498,45 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, curr
         "results": results[:100] # Return only first 100 for UI performance
     }
 
+# NEW: Universal Webhook Collector
+@app.post("/api/collect/{project_id}")
+async def collect_webhook(project_id: int, data: dict, db: Session = Depends(get_db)):
+    # 1. Validate project
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    text = data.get("text")
+    source = data.get("source", "webhook_integration")
+    
+    if not text:
+        raise HTTPException(status_code=400, detail="Missing 'text' field in JSON payload")
+
+    # 2. Predict sentiment
+    try:
+        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text}, timeout=5)
+        sentiment = res.json().get("sentiment", "neutral")
+    except:
+        sentiment = "neutral"
+
+    # 3. Log to MongoDB
+    entry = {
+        "text": text,
+        "sentiment": sentiment,
+        "source": source,
+        "project_id": project_id,
+        "user": "system_webhook",
+        "timestamp": datetime.utcnow()
+    }
+    preds_log_col.insert_one(entry)
+
+    return {
+        "status": "success",
+        "project": project.name,
+        "sentiment": sentiment,
+        "timestamp": entry["timestamp"].isoformat()
+    }
+
 # NEW: Connectors & Alerts Management
 @api_router.get("/connectors")
 def get_connectors(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
