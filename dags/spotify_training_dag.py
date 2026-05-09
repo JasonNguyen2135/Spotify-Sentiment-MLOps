@@ -70,7 +70,7 @@ with DAG(
 
         # Environment configuration
         env_vars=[
-            k8s.V1EnvVar(name="MLFLOW_TRACKING_URI", value="http://47.129.38.134:5000"),
+            k8s.V1EnvVar(name="MLFLOW_TRACKING_URI", value="http://18.140.71.49:5000"),
             k8s.V1EnvVar(name="DAGSHUB_USERNAME", value="davidmoi2135"),
             k8s.V1EnvVar(
                 name="DAGSHUB_TOKEN",

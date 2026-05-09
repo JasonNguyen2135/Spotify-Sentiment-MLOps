@@ -13,7 +13,7 @@ import io
 import time
 
 # System Configuration
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://47.129.38.134:5000")
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://18.140.71.49:5000")
 DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME", "davidmoi2135")
 DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN")
 REPO_NAME = "Spotify-Sentiment-MLOps"

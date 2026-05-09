@@ -8,7 +8,7 @@ import json
 app = FastAPI(title="Sentiment Analysis Service")
 
 # Configuration
-TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://47.129.38.134:5000")
+TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://18.140.71.49:5000")
 MODEL_TARGET = os.getenv("MODEL_TARGET", "Production") # Can be "Production", "Staging", or a version number like "5"
 mlflow.set_tracking_uri(TRACKING_URI)
 

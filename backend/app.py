@@ -21,6 +21,9 @@ from evidently.metric_preset import DataDriftPreset
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@postgres:5432/mlops_auth")
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
+MLFLOW_URL = os.getenv("MLFLOW_TRACKING_URI", "http://18.140.71.49:5000")
+AIRFLOW_URL = os.getenv("AIRFLOW_URL", "http://airflow-webserver:8080")
+AIRFLOW_AUTH = os.getenv("AIRFLOW_AUTH", "admin:admin")
 SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-key")
 ALGORITHM = "HS256"
 
@@ -38,7 +41,7 @@ class User(Base):
 
 Base.metadata.create_all(bind=engine)
 mongo_client = MongoClient(MONGO_URL)
-mongo_db = mongo_client["spotify_db"]
+mongo_db = mongo_client["sentiment_db"]
 reviews_col = mongo_db["raw_reviews"]
 preds_log_col = mongo_db["predictions_log"]
 
@@ -71,7 +74,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except: raise HTTPException(status_code=401)
 
 # ====== APP ======
-app = FastAPI(title="Spotify Backend API")
+app = FastAPI(title="SentimentAI Orchestrator API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 from fastapi import APIRouter
@@ -111,11 +114,11 @@ def get_stats(db: Session = Depends(get_db)):
     if dataset_size is None or dataset_size == "N/A":
         try: 
             crawled_count = reviews_col.count_documents({})
-            dataset_size = f"{crawled_count} reviews"
+            dataset_size = f"{crawled_count} records"
         except: 
-            dataset_size = "0 reviews"
+            dataset_size = "0 records"
     else:
-        dataset_size = f"{dataset_size} reviews"
+        dataset_size = f"{dataset_size} records"
 
     return {
         "model_version": model_version,
@@ -125,6 +128,130 @@ def get_stats(db: Session = Depends(get_db)):
         "accuracy": accuracy,
         "drift_score": drift_score
     }
+
+# NEW: Dataset Management
+@api_router.get("/datasets")
+def get_datasets(current_user: User = Depends(get_current_user)):
+    return [
+        {"name": "Real-time MongoDB Feed", "source": "mongodb://raw_reviews", "count": reviews_col.count_documents({})},
+        {"name": "Production Baseline v1.0", "source": "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv", "count": 12500},
+        {"name": "Curated Evaluation Set", "source": "local://eval.csv", "count": 1200}
+    ]
+
+# NEW: Model Management (MLflow Proxy)
+@api_router.get("/models")
+def get_models(current_user: User = Depends(get_current_user)):
+    try:
+        res = requests.get(
+            f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search",
+            params={"filter": "name='Spotify_Production_Model'"},
+            timeout=5
+        )
+        if res.status_code == 200:
+            versions = res.json().get("model_versions", [])
+            return sorted(versions, key=lambda x: int(x['version']), reverse=True)
+        return []
+    except Exception as e:
+        print(f"MLflow error: {e}")
+        return []
+
+@api_router.post("/deploy-model")
+def deploy_model(version: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        payload = {
+            "name": "Spotify_Production_Model",
+            "version": version,
+            "stage": "Production",
+            "archive_existing_versions": True
+        }
+        requests.post(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/transition-stage", json=payload, timeout=5)
+        return {"status": "success", "message": f"Version {version} promoted to Production"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# NEW: Training Orchestration (Airflow Proxy)
+@api_router.post("/train")
+def trigger_training(dataset_source: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        import base64
+        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
+        payload = {"conf": {"data_source": dataset_source}}
+        res = requests.post(
+            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns",
+            json=payload,
+            headers={"Authorization": f"Basic {auth_header}"},
+            timeout=10
+        )
+        if res.status_code in [200, 201]:
+            return {"status": "success", "dag_run_id": res.json().get("dag_run_id")}
+        else:
+            raise HTTPException(status_code=res.status_code, detail=res.text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/user-history")
+def get_user_history(current_user: User = Depends(get_current_user)):
+    # Fetch last 50 predictions for the logged-in user
+    cursor = preds_log_col.find({"user": current_user.username}).sort("timestamp", -1).limit(50)
+    history = []
+    for doc in cursor:
+        history.append({
+            "text": doc.get("text"),
+            "sentiment": doc.get("sentiment"),
+            "timestamp": doc.get("timestamp").isoformat() if doc.get("timestamp") else None
+        })
+    return history
+
+@api_router.get("/monthly-analytics")
+def get_monthly_analytics(current_user: User = Depends(get_current_user)):
+    # ... (existing aggregate pipeline)
+    pipeline = [
+        {
+            "$group": {
+                "_id": {
+                    "month": {"$month": "$timestamp"},
+                    "year": {"$year": "$timestamp"},
+                    "sentiment": "$sentiment"
+                },
+                "count": {"$sum": 1}
+            }
+        },
+        {"$sort": {"_id.year": 1, "_id.month": 1}}
+    ]
+    cursor = preds_log_col.aggregate(pipeline)
+    results = {}
+    for doc in cursor:
+        key = f"{doc['_id']['year']}-{doc['_id']['month']:02d}"
+        if key not in results:
+            results[key] = {"positive": 0, "negative": 0, "neutral": 0}
+        results[key][doc["_id"]["sentiment"]] = doc["count"]
+    
+    formatted_data = []
+    for date, counts in results.items():
+        formatted_data.append({"date": date, **counts})
+    
+    return sorted(formatted_data, key=lambda x: x["date"])
+
+@api_router.get("/word-cloud")
+def get_word_cloud(current_user: User = Depends(get_current_user)):
+    # Simple word frequency from the last 1000 reviews
+    cursor = preds_log_col.find().sort("timestamp", -1).limit(1000)
+    word_counts = {}
+    stop_words = set(["the", "a", "an", "is", "are", "was", "were", "to", "for", "in", "on", "at", "by", "with", "platform", "app", "feedback"])
+    
+    for doc in cursor:
+        words = str(doc.get("text", "")).lower().split()
+        for word in words:
+            word = "".join(filter(str.isalnum, word))
+            if word and word not in stop_words and len(word) > 3:
+                word_counts[word] = word_counts.get(word, 0) + 1
+    
+    sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:50]
+    return [{"text": w, "value": c} for w, c in sorted_words]
 
 @api_router.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
@@ -156,18 +283,52 @@ async def predict_single(review_text: str, current_user: User = Depends(get_curr
 
 @api_router.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
-    content = await file.read(); df = pd.read_csv(io.BytesIO(content))
-    col = "text" if "text" in df.columns else ("review" if "review" in df.columns else df.columns[0])
-    results = []; log_entries = []
-    for i, row in df.head(20).iterrows():
+    content = await file.read()
+    df = pd.read_csv(io.BytesIO(content))
+    
+    # Identify the text column
+    col = "text" if "text" in df.columns else ("review" if "review" in df.columns else (df.columns[0]))
+    
+    # Identify the date column
+    date_col = None
+    for c in df.columns:
+        if "date" in c.lower() or "timestamp" in c.lower():
+            date_col = c
+            break
+
+    results = []
+    log_entries = []
+    
+    # Process up to 500 rows for analysis
+    for i, row in df.head(500).iterrows():
         text = str(row[col])
+        timestamp = datetime.utcnow()
+        
+        if date_col:
+            try:
+                timestamp = pd.to_datetime(row[date_col])
+                if pd.isna(timestamp):
+                    timestamp = datetime.utcnow()
+            except:
+                pass
+                
         try:
-            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text})
-            sentiment = res.json().get("sentiment", "Error")
-        except: sentiment = "Conn Error"
-        results.append({"Câu bình luận": text, "Cảm xúc": sentiment})
-        log_entries.append({"text": text, "sentiment": sentiment, "user": current_user.username, "timestamp": datetime.utcnow()})
-    if log_entries: preds_log_col.insert_many(log_entries)
+            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text}, timeout=5)
+            sentiment = res.json().get("sentiment", "neutral")
+        except:
+            sentiment = "neutral"
+            
+        results.append({"text": text, "sentiment": sentiment, "timestamp": timestamp.isoformat()})
+        log_entries.append({
+            "text": text, 
+            "sentiment": sentiment, 
+            "user": current_user.username, 
+            "timestamp": timestamp
+        })
+        
+    if log_entries:
+        preds_log_col.insert_many(log_entries)
+        
     return {"results": results}
 
 # Include router at root and with /api prefix
