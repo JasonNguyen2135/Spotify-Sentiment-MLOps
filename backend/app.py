@@ -134,9 +134,9 @@ def get_stats(db: Session = Depends(get_db)):
 @api_router.get("/datasets")
 def get_datasets(current_user: User = Depends(get_current_user)):
     return [
-        {"name": "Real-time MongoDB Feed", "source": "mongodb://raw_reviews", "count": reviews_col.count_documents({})},
-        {"name": "Production Baseline v1.0", "source": "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv", "count": 12500},
-        {"name": "Curated Evaluation Set", "source": "local://eval.csv", "count": 1200}
+        {"name": "Real-time Feedback Stream", "source": "mongodb://predictions_log", "count": preds_log_col.count_documents({})},
+        {"name": "Enterprise Baseline v1.0", "source": "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv", "count": 12500},
+        {"name": "Evaluation Gold Standard", "source": "local://eval.csv", "count": 1200}
     ]
 
 # NEW: Model Management (MLflow Proxy)
@@ -173,6 +173,55 @@ def deploy_model(version: str, current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # NEW: Training Orchestration (Airflow Proxy)
+@api_router.get("/airflow/runs")
+def get_airflow_runs(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        import base64
+        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
+        res = requests.get(
+            f"{AIRFLOW_URL}/api/v1/dags/sentiment_analysis_training/dagRuns?limit=10&order_by=-execution_date",
+            headers={"Authorization": f"Basic {auth_header}"},
+            timeout=5
+        )
+        if res.status_code == 200:
+            return res.json().get("dag_runs", [])
+        return []
+    except Exception as e:
+        print(f"Airflow error: {e}")
+        return []
+
+@api_router.get("/airflow/logs/{dag_run_id}")
+def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        import base64
+        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
+        # Task ID is hardcoded based on the DAG definition
+        task_id = "model_training_pipeline"
+        # 1. Get task instances to find the try_number
+        ti_res = requests.get(
+            f"{AIRFLOW_URL}/api/v1/dags/sentiment_analysis_training/dagRuns/{dag_run_id}/taskInstances/{task_id}",
+            headers={"Authorization": f"Basic {auth_header}"},
+            timeout=5
+        )
+        if ti_res.status_code != 200:
+            return {"logs": "Task instance not found or still queued..."}
+        
+        try_number = ti_res.json().get("try_number", 1)
+        
+        # 2. Fetch logs
+        log_res = requests.get(
+            f"{AIRFLOW_URL}/api/v1/dags/sentiment_analysis_training/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
+            headers={"Authorization": f"Basic {auth_header}"},
+            timeout=10
+        )
+        return {"logs": log_res.text}
+    except Exception as e:
+        return {"logs": f"Error fetching logs: {str(e)}"}
+
 @api_router.post("/train")
 def trigger_training(dataset_source: str, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
