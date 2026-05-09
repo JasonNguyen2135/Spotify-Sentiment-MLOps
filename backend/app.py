@@ -44,6 +44,7 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
     description = Column(String)
+    owner_id = Column(Integer, index=True) # Added for user isolation
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class DataSource(Base):
@@ -69,8 +70,20 @@ Base.metadata.create_all(bind=engine)
 def migrate_db():
     db = SessionLocal()
     try:
+        # Ensure default admin exists first
+        admin = db.query(User).filter(User.username == "admin").first()
+        if not admin:
+            admin = User(username="admin", hashed_password=pwd_context.hash("admin123"), role="admin")
+            db.add(admin)
+            db.commit()
+            db.refresh(admin)
+
         if not db.query(Project).first():
-            default_project = Project(name="Default Workspace", description="Automatically created workspace for existing data.")
+            default_project = Project(
+                name="Default Workspace", 
+                description="Automatically created workspace for existing data.",
+                owner_id=admin.id
+            )
             db.add(default_project)
             db.commit()
             db.refresh(default_project)
@@ -86,6 +99,10 @@ def migrate_db():
                 reviews_col.update_many({"project_id": {"$exists": False}}, {"$set": {"project_id": default_project.id}})
             except Exception as e:
                 print(f"MongoDB Migration error: {e}")
+        else:
+            # Fix existing projects with no owner (if any)
+            db.query(Project).filter(Project.owner_id == None).update({Project.owner_id: admin.id})
+            db.commit()
     finally:
         db.close()
 
@@ -133,12 +150,21 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 from fastapi import APIRouter
 api_router = APIRouter()
 
+def verify_project_owner(project_id: int, user_id: int, db: Session):
+    project = db.query(Project).filter(Project.id == project_id, Project.owner_id == user_id).first()
+    if not project:
+        raise HTTPException(status_code=403, detail="Access denied to this project")
+    return project
+
 @api_router.get("/stats")
-def get_stats(project_id: int = None, db: Session = Depends(get_db)):
+def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     user_count = db.query(func.count(User.id)).scalar()
     
     if project_id is None:
         return {"model_version": "N/A", "total_predictions": 0, "dataset_size": "0 records", "active_users": user_count, "accuracy": "N/A", "drift_score": "0%"}
+
+    # Verify ownership
+    verify_project_owner(project_id, current_user.id, db)
 
     query = {"project_id": project_id}
     accuracy = "N/A"
@@ -204,21 +230,25 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 # NEW: Project Management
 @api_router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(Project).all()
+    # Only return projects owned by the current user
+    return db.query(Project).filter(Project.owner_id == current_user.id).all()
 
 @api_router.post("/projects")
 def create_project(name: str, description: str = "", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if db.query(Project).filter(Project.name == name).first():
-        raise HTTPException(status_code=400, detail="Project name exists")
-    project = Project(name=name, description=description)
+    if db.query(Project).filter(Project.name == name, Project.owner_id == current_user.id).first():
+        raise HTTPException(status_code=400, detail="Project name exists for this user")
+    project = Project(name=name, description=description, owner_id=current_user.id)
     db.add(project)
     db.commit()
+    db.refresh(project)
     return project
 
 # NEW: Dataset Management
 @api_router.get("/datasets")
-def get_datasets(project_id: int = None, current_user: User = Depends(get_current_user)):
-    query = {"project_id": project_id} if project_id else {}
+def get_datasets(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if project_id is None: return []
+    verify_project_owner(project_id, current_user.id, db)
+    query = {"project_id": project_id}
     return [
         {"name": "Project Live Stream", "source": f"mongodb://{project_id}", "count": preds_log_col.count_documents(query)},
         {"name": "Enterprise Baseline v1.0", "source": "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv", "count": 12500}
@@ -226,10 +256,12 @@ def get_datasets(project_id: int = None, current_user: User = Depends(get_curren
 
 # NEW: Model Management (MLflow Proxy)
 @api_router.get("/models")
-def get_models(project_id: int = None, current_user: User = Depends(get_current_user)):
+def get_models(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if project_id is None: return []
+    verify_project_owner(project_id, current_user.id, db)
     try:
         # Use project name or ID to filter models in MLflow
-        model_name = f"Sentiment_Analysis_Model_{project_id}" if project_id else "Sentiment_Analysis_Model"
+        model_name = f"Sentiment_Analysis_Model_{project_id}"
         res = requests.get(
             f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search",
             params={"filter": f"name='{model_name}'"},
@@ -244,11 +276,13 @@ def get_models(project_id: int = None, current_user: User = Depends(get_current_
         return []
 
 @api_router.post("/deploy-model")
-def deploy_model(version: str, project_id: int = None, current_user: User = Depends(get_current_user)):
+def deploy_model(version: str, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if project_id is None: raise HTTPException(status_code=400, detail="project_id required")
+    verify_project_owner(project_id, current_user.id, db)
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        model_name = f"Sentiment_Analysis_Model_{project_id}" if project_id else "Sentiment_Analysis_Model"
+        model_name = f"Sentiment_Analysis_Model_{project_id}"
         payload = {
             "name": model_name,
             "version": version,
@@ -337,8 +371,9 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/user-history")
-def get_user_history(project_id: int = None, current_user: User = Depends(get_current_user)):
+def get_user_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: return []
+    verify_project_owner(project_id, current_user.id, db)
     query = {"user": current_user.username, "project_id": project_id}
     
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(50)
@@ -352,8 +387,9 @@ def get_user_history(project_id: int = None, current_user: User = Depends(get_cu
     return history
 
 @api_router.get("/monthly-analytics")
-def get_monthly_analytics(project_id: int = None, current_user: User = Depends(get_current_user)):
+def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: return []
+    verify_project_owner(project_id, current_user.id, db)
     match_query = {"project_id": project_id}
     
     pipeline = [
@@ -387,8 +423,9 @@ def get_monthly_analytics(project_id: int = None, current_user: User = Depends(g
     return sorted(formatted_data, key=lambda x: x["date"])
 
 @api_router.get("/comparison")
-def get_comparison(project_id: int = None, current_user: User = Depends(get_current_user)):
+def get_comparison(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: return None
+    verify_project_owner(project_id, current_user.id, db)
     now = datetime.utcnow()
     this_month_start = datetime(now.year, now.month, 1)
     last_month_end = this_month_start - timedelta(days=1)
@@ -421,8 +458,9 @@ def get_comparison(project_id: int = None, current_user: User = Depends(get_curr
     }
 
 @api_router.get("/word-cloud")
-def get_word_cloud(sentiment: str = None, project_id: int = None, current_user: User = Depends(get_current_user)):
+def get_word_cloud(sentiment: str = None, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: return []
+    verify_project_owner(project_id, current_user.id, db)
     query = {"project_id": project_id}
     if sentiment: query["sentiment"] = sentiment
     
@@ -441,7 +479,9 @@ def get_word_cloud(sentiment: str = None, project_id: int = None, current_user: 
     return [{"text": w, "value": c} for w, c in sorted_words]
 
 @api_router.post("/correction")
-def submit_correction(prediction_id: str = None, text: str = None, corrected_sentiment: str = None, project_id: int = None, current_user: User = Depends(get_current_user)):
+def submit_correction(prediction_id: str = None, text: str = None, corrected_sentiment: str = None, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if project_id is None: raise HTTPException(status_code=400, detail="project_id required")
+    verify_project_owner(project_id, current_user.id, db)
     # Store user feedback for future retraining
     entry = {
         "text": text,
@@ -455,7 +495,9 @@ def submit_correction(prediction_id: str = None, text: str = None, corrected_sen
     return {"status": "success", "message": "Feedback recorded. Thank you!"}
 
 @api_router.post("/predict")
-async def predict_single(review_text: str, project_id: int = None, current_user: User = Depends(get_current_user)):
+async def predict_single(review_text: str, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if project_id is None: raise HTTPException(status_code=400, detail="project_id required")
+    verify_project_owner(project_id, current_user.id, db)
     try:
         res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10)
         result = res.json()
@@ -469,7 +511,9 @@ async def predict_single(review_text: str, project_id: int = None, current_user:
         raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
 
 @api_router.post("/analyze-csv")
-async def analyze_csv(file: UploadFile = File(...), project_id: int = None, current_user: User = Depends(get_current_user)):
+async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if project_id is None: raise HTTPException(status_code=400, detail="project_id required")
+    verify_project_owner(project_id, current_user.id, db)
     content = await file.read()
     df = pd.read_csv(io.BytesIO(content))
     
