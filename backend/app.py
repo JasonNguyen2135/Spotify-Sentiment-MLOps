@@ -644,10 +644,24 @@ def get_connectors(project_id: int = None, db: Session = Depends(get_db), curren
 def add_connector(platform: str, app_id: str, project_id: int, schedule: str = "daily", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
+    
+    verify_project_owner(project_id, current_user.id, db)
+
+    # Enforce one app per project rule: Delete old app data if exists
+    existing = db.query(DataSource).filter(DataSource.project_id == project_id).first()
+    if existing:
+        # 1. Wipe data from MongoDB for this project
+        preds_log_col.delete_many({"project_id": project_id})
+        reviews_col.delete_many({"project_id": project_id})
+        # 2. Delete the old connector
+        db.delete(existing)
+        db.commit()
+
+    # Add new connector
     new_source = DataSource(platform=platform, app_id=app_id, schedule=schedule, project_id=project_id)
     db.add(new_source)
     db.commit()
-    return {"message": "Connector added successfully"}
+    return {"message": "Connector updated. Project data has been reset for the new application."}
 
 from google_play_scraper import Sort, reviews as fetch_reviews
 

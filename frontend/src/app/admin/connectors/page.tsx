@@ -94,6 +94,13 @@ export default function ConnectorsPage() {
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeProject) return;
+
+    // Enforce 1 app per project: Show confirmation if already tracking
+    if (sources.length > 0) {
+      const confirmChange = window.confirm("Important: Each project can only track one application at a time. Registering a new app will PERMANENTLY DELETE all current history and reports for this project. Continue?");
+      if (!confirmChange) return;
+    }
+
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
@@ -102,10 +109,10 @@ export default function ConnectorsPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setNewAppId('');
-      setStatus({ type: 'success', msg: 'Connector added! Data will be fetched periodically.' });
+      setStatus({ type: 'success', msg: 'Application updated! Current workspace data has been reset.' });
       fetchData();
     } catch (err: any) {
-      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Failed to add connector' });
+      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Failed to update connector' });
     } finally {
       setSubmitting(false);
     }
