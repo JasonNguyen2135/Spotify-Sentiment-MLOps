@@ -4,7 +4,7 @@ services:
   # --- 3. MONGODB ---
   mongodb:
     image: mongo:latest
-    container_name: spotify_mongo
+    container_name: sentiment_mongo
     ports:
       - "27017:27017"
     volumes:
@@ -13,7 +13,7 @@ services:
   # --- 4. LABEL STUDIO ---
   label-studio:
     image: heartexlabs/label-studio:latest
-    container_name: spotify_label_studio
+    container_name: sentiment_label_studio
     ports:
       - "8086:8080"
     volumes:
@@ -21,7 +21,7 @@ services:
   # 2. Service chứa Model (Chỉ có nhiệm vụ duy nhất là Predict)
   model-service:
     build: ./model
-    container_name: spotify_model_api
+    container_name: sentiment_model_api
     ports:
       - "8001:8000" # Expose ra 8001 để tránh trùng Backend
     env_file: 
@@ -31,7 +31,7 @@ services:
   # 3. Backend (Điều phối viên)
   backend:
     build: ./backend
-    container_name: spotify_backend
+    container_name: sentiment_backend
     ports:
       - "8000:8000"
     depends_on:
@@ -46,9 +46,9 @@ services:
   # 4. Frontend (Giao diện)
   frontend:
     build: ./frontend
-    container_name: spotify_frontend
+    container_name: sentiment_frontend
     ports:
-      - "8501:8501" # Nếu dùng Streamlit
+      - "3000:3000"
     depends_on:
       - backend
     environment:
@@ -58,7 +58,7 @@ services:
   # 5. Crawler (Cào data tự động)
   crawler:
     build: ./crawler
-    container_name: spotify_crawler
+    container_name: sentiment_crawler
     depends_on:
       - mongodb
     environment:

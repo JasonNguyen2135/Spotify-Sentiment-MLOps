@@ -23,7 +23,7 @@ def train_and_deploy():
     
     # Setup MLflow Tracking
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment("Spotify_Sentiment_AWS")
+    mlflow.set_experiment("Sentiment_Analysis_Platform")
     print("Set up data source")
     # Handle data acquisition
     data_source = os.getenv("DATA_SOURCE", f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv")

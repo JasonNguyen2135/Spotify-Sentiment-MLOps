@@ -33,7 +33,7 @@ export default function RegisterPage() {
         <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-2">Account Created!</h1>
         <p className="text-gray-500 mb-6">You can now sign in with your credentials.</p>
-        <Link href="/login" className="bg-spotify text-white px-8 py-3 rounded-xl font-bold hover:bg-opacity-90 transition-all block text-center">
+        <Link href="/login" className="bg-brand text-white px-8 py-3 rounded-xl font-bold hover:bg-opacity-90 transition-all block text-center">
           Go to Login
         </Link>
       </div>
@@ -44,7 +44,7 @@ export default function RegisterPage() {
     <div className="max-w-md mx-auto mt-16 bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Create Account</h1>
-        <p className="text-gray-500">Join the Spotify MLOps community</p>
+        <p className="text-gray-500">Join the SentimentAI MLOps community</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -56,7 +56,7 @@ export default function RegisterPage() {
               type="text" 
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-spotify"
+              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand"
               placeholder="Pick a username"
               required
             />
@@ -71,7 +71,7 @@ export default function RegisterPage() {
               type="password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-spotify"
+              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand"
               placeholder="Create a strong password"
               required
             />
@@ -83,13 +83,13 @@ export default function RegisterPage() {
         <button 
           type="submit"
           disabled={loading}
-          className="w-full bg-spotify text-white py-3 rounded-xl font-bold hover:bg-opacity-90 transition-all flex items-center justify-center gap-2"
+          className="w-full bg-brand text-white py-3 rounded-xl font-bold hover:bg-opacity-90 transition-all flex items-center justify-center gap-2"
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Create Account"}
         </button>
 
         <p className="text-center text-sm text-gray-500">
-          Already have an account? <Link href="/login" className="text-spotify font-bold hover:underline">Sign In</Link>
+          Already have an account? <Link href="/login" className="text-brand font-bold hover:underline">Sign In</Link>
         </p>
       </form>
     </div>

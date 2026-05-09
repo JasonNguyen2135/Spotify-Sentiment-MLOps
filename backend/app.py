@@ -44,6 +44,7 @@ mongo_client = MongoClient(MONGO_URL)
 mongo_db = mongo_client["sentiment_db"]
 reviews_col = mongo_db["raw_reviews"]
 preds_log_col = mongo_db["predictions_log"]
+feedback_col = mongo_db["human_feedback"]
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def create_default_admin():
@@ -144,7 +145,7 @@ def get_models(current_user: User = Depends(get_current_user)):
     try:
         res = requests.get(
             f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search",
-            params={"filter": "name='Spotify_Production_Model'"},
+            params={"filter": "name='Sentiment_Analysis_Model'"},
             timeout=5
         )
         if res.status_code == 200:
@@ -161,7 +162,7 @@ def deploy_model(version: str, current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
         payload = {
-            "name": "Spotify_Production_Model",
+            "name": "Sentiment_Analysis_Model",
             "version": version,
             "stage": "Production",
             "archive_existing_versions": True
@@ -181,7 +182,7 @@ def trigger_training(dataset_source: str, current_user: User = Depends(get_curre
         auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
         payload = {"conf": {"data_source": dataset_source}}
         res = requests.post(
-            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns",
+            f"{AIRFLOW_URL}/api/v1/dags/sentiment_analysis_training/dagRuns",
             json=payload,
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=10
@@ -208,7 +209,6 @@ def get_user_history(current_user: User = Depends(get_current_user)):
 
 @api_router.get("/monthly-analytics")
 def get_monthly_analytics(current_user: User = Depends(get_current_user)):
-    # ... (existing aggregate pipeline)
     pipeline = [
         {
             "$group": {
@@ -225,10 +225,12 @@ def get_monthly_analytics(current_user: User = Depends(get_current_user)):
     cursor = preds_log_col.aggregate(pipeline)
     results = {}
     for doc in cursor:
+        if not doc['_id'].get('year') or not doc['_id'].get('month'): continue
         key = f"{doc['_id']['year']}-{doc['_id']['month']:02d}"
         if key not in results:
             results[key] = {"positive": 0, "negative": 0, "neutral": 0}
-        results[key][doc["_id"]["sentiment"]] = doc["count"]
+        sentiment = doc['_id'].get('sentiment', 'neutral')
+        results[key][sentiment] = doc["count"]
     
     formatted_data = []
     for date, counts in results.items():
@@ -236,12 +238,47 @@ def get_monthly_analytics(current_user: User = Depends(get_current_user)):
     
     return sorted(formatted_data, key=lambda x: x["date"])
 
+@api_router.get("/comparison")
+def get_comparison(current_user: User = Depends(get_current_user)):
+    # Calculate delta between this month and last month
+    now = datetime.utcnow()
+    this_month_start = datetime(now.year, now.month, 1)
+    last_month_end = this_month_start - timedelta(days=1)
+    last_month_start = datetime(last_month_end.year, last_month_end.month, 1)
+
+    def get_counts(start, end):
+        pipeline = [
+            {"$match": {"timestamp": {"$gte": start, "$lte": end}}},
+            {"$group": {"_id": "$sentiment", "count": {"$sum": 1}}}
+        ]
+        cursor = preds_log_col.aggregate(pipeline)
+        res = {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
+        for doc in cursor:
+            if doc['_id'] in res:
+                res[doc['_id']] = doc['count']
+                res['total'] += doc['count']
+        return res
+
+    current = get_counts(this_month_start, now)
+    previous = get_counts(last_month_start, last_month_end)
+
+    return {
+        "current": current,
+        "previous": previous,
+        "delta_positive": current['positive'] - previous['positive'],
+        "delta_negative": current['negative'] - previous['negative'],
+        "total_growth": ((current['total'] - previous['total']) / previous['total'] * 100) if previous['total'] > 0 else 0
+    }
+
 @api_router.get("/word-cloud")
-def get_word_cloud(current_user: User = Depends(get_current_user)):
-    # Simple word frequency from the last 1000 reviews
-    cursor = preds_log_col.find().sort("timestamp", -1).limit(1000)
+def get_word_cloud(sentiment: str = None, current_user: User = Depends(get_current_user)):
+    query = {}
+    if sentiment:
+        query["sentiment"] = sentiment
+    
+    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(2000)
     word_counts = {}
-    stop_words = set(["the", "a", "an", "is", "are", "was", "were", "to", "for", "in", "on", "at", "by", "with", "platform", "app", "feedback"])
+    stop_words = set(["the", "a", "an", "is", "are", "was", "were", "to", "for", "in", "on", "at", "by", "with", "platform", "app", "feedback", "spotify", "music"])
     
     for doc in cursor:
         words = str(doc.get("text", "")).lower().split()
@@ -252,6 +289,19 @@ def get_word_cloud(current_user: User = Depends(get_current_user)):
     
     sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:50]
     return [{"text": w, "value": c} for w, c in sorted_words]
+
+@api_router.post("/correction")
+def submit_correction(prediction_id: str = None, text: str = None, corrected_sentiment: str = None, current_user: User = Depends(get_current_user)):
+    # Store user feedback for future retraining
+    entry = {
+        "text": text,
+        "corrected_sentiment": corrected_sentiment,
+        "user": current_user.username,
+        "timestamp": datetime.utcnow(),
+        "original_id": prediction_id
+    }
+    feedback_col.insert_one(entry)
+    return {"status": "success", "message": "Feedback recorded. Thank you!"}
 
 @api_router.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
@@ -287,20 +337,17 @@ async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends
     df = pd.read_csv(io.BytesIO(content))
     
     # Identify the text column
-    col = "text" if "text" in df.columns else ("review" if "review" in df.columns else (df.columns[0]))
+    col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
     
     # Identify the date column
-    date_col = None
-    for c in df.columns:
-        if "date" in c.lower() or "timestamp" in c.lower():
-            date_col = c
-            break
+    date_col = next((c for c in df.columns if any(k in c.lower() for k in ["date", "timestamp", "time"])), None)
 
     results = []
     log_entries = []
+    summary = {"positive": 0, "negative": 0, "neutral": 0}
     
-    # Process up to 500 rows for analysis
-    for i, row in df.head(500).iterrows():
+    # Process up to 1000 rows for analysis
+    for i, row in df.head(1000).iterrows():
         text = str(row[col])
         timestamp = datetime.utcnow()
         
@@ -309,8 +356,7 @@ async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends
                 timestamp = pd.to_datetime(row[date_col])
                 if pd.isna(timestamp):
                     timestamp = datetime.utcnow()
-            except:
-                pass
+            except: pass
                 
         try:
             res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text}, timeout=5)
@@ -318,6 +364,7 @@ async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends
         except:
             sentiment = "neutral"
             
+        summary[sentiment] += 1
         results.append({"text": text, "sentiment": sentiment, "timestamp": timestamp.isoformat()})
         log_entries.append({
             "text": text, 
@@ -329,7 +376,11 @@ async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends
     if log_entries:
         preds_log_col.insert_many(log_entries)
         
-    return {"results": results}
+    return {
+        "summary": summary,
+        "total_processed": len(results),
+        "results": results[:100] # Return only first 100 for UI performance
+    }
 
 # Include router at root and with /api prefix
 app.include_router(api_router)

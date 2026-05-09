@@ -191,7 +191,7 @@ export default function PipelinePage() {
               INITIATE TRAINING RUN
             </button>
             <p className="text-center text-[10px] text-slate-400 mt-4 font-bold uppercase tracking-widest">
-              Triggers Airflow DAG: <span className="text-slate-600">sentiment_train_k8s</span>
+              Triggers Airflow DAG: <span className="text-slate-600">sentiment_analysis_training</span>
             </p>
           </div>
         </section>

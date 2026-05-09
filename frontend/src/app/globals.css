@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --spotify-green: #1DB954;
-  --spotify-black: #191414;
+  --brand-green: #1DB954;
+  --brand-black: #191414;
 }
 
 body {

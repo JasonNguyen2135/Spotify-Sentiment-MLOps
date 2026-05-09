@@ -4,8 +4,8 @@ import Navbar from '@/components/Navbar'
 import { AuthProvider } from '@/context/AuthContext'
 
 export const metadata: Metadata = {
-  title: 'Spotify Sentiment MLOps',
-  description: 'Analyze spotify reviews with AI',
+  title: 'User Sentiment Analysis Platform',
+  description: 'Enterprise-grade sentiment analysis for user feedback',
 }
 
 export default function RootLayout({

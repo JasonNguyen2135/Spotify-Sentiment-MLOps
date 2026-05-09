@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Music, LayoutDashboard, BarChart3, Settings, ShieldCheck, LogOut, User } from 'lucide-react';
+import { Activity, LayoutDashboard, BarChart3, Settings, ShieldCheck, LogOut, User, History, ArrowLeftRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '@/context/AuthContext';
 
@@ -11,7 +11,9 @@ export default function Navbar() {
 
   const navItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Analyze CSV', href: '/analyze', icon: BarChart3 },
+    { name: 'Analysis', href: '/analyze', icon: BarChart3 },
+    { name: 'Compare', href: '/compare', icon: ArrowLeftRight },
+    { name: 'History', href: '/history', icon: History },
   ];
 
   if (pathname === '/login' || pathname === '/register') return null;
@@ -21,8 +23,8 @@ export default function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center gap-2">
-            <Music className="text-spotify w-8 h-8" />
-            <span className="font-bold text-xl tracking-tight text-gray-900">Spotify MLOps</span>
+            <Activity className="text-brand w-8 h-8" />
+            <span className="font-bold text-xl tracking-tight text-gray-900">SentimentAI</span>
           </div>
           
           <div className="flex gap-6 items-center">
@@ -32,7 +34,7 @@ export default function Navbar() {
                 href={item.href}
                 className={clsx(
                   "flex items-center gap-1 text-sm font-medium transition-colors",
-                  pathname === item.href ? "text-spotify" : "text-gray-600 hover:text-spotify"
+                  pathname === item.href ? "text-brand" : "text-gray-600 hover:text-brand"
                 )}
               >
                 <item.icon className="w-4 h-4" />
@@ -80,7 +82,7 @@ export default function Navbar() {
                   </button>
                 </div>
               ) : (
-                <Link href="/login" className="text-sm font-bold text-spotify hover:underline">
+                <Link href="/login" className="text-sm font-bold text-brand hover:underline">
                   Sign In
                 </Link>
               )}

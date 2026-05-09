@@ -9,7 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        spotify: '#1DB954',
+        brand: '#1DB954',
       },
     },
   },

@@ -16,7 +16,7 @@ MODEL_METADATA = {"version": "unknown", "accuracy": "N/A", "run_id": "none", "ta
 
 print(f"Connecting to MLflow server at {TRACKING_URI}")
 try:
-    model_name = "Spotify_Production_Model"
+    model_name = "Sentiment_Analysis_Model"
     
     # Check if MODEL_TARGET is a numeric version or a stage name
     if MODEL_TARGET.isdigit():
