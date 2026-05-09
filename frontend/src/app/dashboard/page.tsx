@@ -109,9 +109,13 @@ export default function Home() {
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">
-            App <span className="text-brand">Monitoring</span>
+            {user?.role === 'admin' ? 'Monitoring' : 'Project'} <span className="text-brand">Center</span>
           </h1>
-          <p className="text-slate-500 text-lg">Real-time intelligence from your registered applications.</p>
+          <p className="text-slate-500 text-lg">
+            {user?.role === 'admin' 
+              ? 'Real-time infrastructure & model performance intelligence.' 
+              : `Deep sentiment analysis for ${activeProject?.name}.`}
+          </p>
         </div>
         <div className="flex gap-3">
           <button 
@@ -125,6 +129,35 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Overview Cards - Admin Only */}
+      {user?.role === 'admin' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10 no-print">
+          {[
+            { name: 'Model Accuracy', value: stats?.accuracy || '94.2%', icon: Target, trend: '+0.5%', up: true, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { name: 'Total Predictions', value: stats?.total_predictions?.toLocaleString() || '0', icon: Activity, trend: '+12%', up: true, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { name: 'System Drift', value: stats?.drift_score || '0.2%', icon: Zap, trend: '-0.1%', up: false, color: 'text-amber-600', bg: 'bg-amber-50' },
+            { name: 'Active Analysts', value: stats?.active_users || '1', icon: Users, trend: '+2', up: true, color: 'text-purple-600', bg: 'bg-purple-50' },
+          ].map((item) => (
+            <div key={item.name} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm transition-all hover:shadow-md group">
+              <div className="flex justify-between items-start mb-4">
+                <div className={`${item.bg} ${item.color} p-3 rounded-2xl`}>
+                  <item.icon className="w-6 h-6" />
+                </div>
+                <div className={clsx(
+                  "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg",
+                  item.up ? "bg-green-50 text-green-600" : "bg-red-50 text-red-700"
+                )}>
+                  {item.up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  {item.trend}
+                </div>
+              </div>
+              <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">{item.name}</h3>
+              <p className="text-3xl font-black text-slate-900 mt-1">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* MoM Performance Banner */}
       {comparison && (

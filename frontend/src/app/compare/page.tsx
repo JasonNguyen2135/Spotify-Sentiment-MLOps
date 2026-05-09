@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 
 export default function ComparePage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { activeProject } = useProject();
   const router = useRouter();
   const [file1, setFile1] = useState<File | null>(null);
@@ -26,18 +26,14 @@ export default function ComparePage() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
 
-  useEffect(() => {
-    if (!authLoading && !activeProject) {
-      router.push('/');
-    }
-  }, [activeProject, authLoading, router]);
-
   const handleUpload = async () => {
-    if (!file1 || !file2 || !activeProject) return;
+    if (!file1 || !file2) return;
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const params = { project_id: activeProject.id };
+      const params: any = {};
+      if (activeProject) params.project_id = activeProject.id;
+
       const formData1 = new FormData();
       formData1.append('file', file1);
       const formData2 = new FormData();

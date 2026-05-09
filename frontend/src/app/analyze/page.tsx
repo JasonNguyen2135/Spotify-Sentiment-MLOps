@@ -24,10 +24,6 @@ export default function AnalyzePage() {
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!activeProject) router.push('/');
-  }, [activeProject, router]);
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
@@ -36,7 +32,7 @@ export default function AnalyzePage() {
   };
 
   const handleUpload = async () => {
-    if (!file || !activeProject) return;
+    if (!file) return;
     setAnalyzing(true);
     setResults(null);
     setError(null);
@@ -46,8 +42,12 @@ export default function AnalyzePage() {
 
     try {
       const token = localStorage.getItem('token');
+      // project_id is optional for global tools
+      const params: any = {};
+      if (activeProject) params.project_id = activeProject.id;
+
       const response = await axios.post('/api/analyze-csv', formData, {
-        params: { project_id: activeProject.id },
+        params,
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'

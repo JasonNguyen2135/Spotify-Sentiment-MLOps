@@ -524,24 +524,31 @@ def submit_correction(prediction_id: str = None, text: str = None, corrected_sen
 
 @api_router.post("/predict")
 async def predict_single(review_text: str, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if project_id is None: raise HTTPException(status_code=400, detail="project_id required")
-    verify_project_owner(project_id, current_user.id, db)
+    # If project_id is provided, verify ownership and log it
+    if project_id is not None:
+        verify_project_owner(project_id, current_user.id, db)
+    
     try:
         res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10)
         result = res.json()
-        preds_log_col.insert_one({
-            "text": review_text, "sentiment": result.get("sentiment"),
-            "user": current_user.username, "timestamp": datetime.utcnow(),
-            "project_id": project_id
-        })
+        
+        # Only log to DB if project context exists
+        if project_id is not None:
+            preds_log_col.insert_one({
+                "text": review_text, "sentiment": result.get("sentiment"),
+                "user": current_user.username, "timestamp": datetime.utcnow(),
+                "project_id": project_id
+            })
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
 
 @api_router.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if project_id is None: raise HTTPException(status_code=400, detail="project_id required")
-    verify_project_owner(project_id, current_user.id, db)
+    # Ownership check only if saving to a project
+    if project_id is not None:
+        verify_project_owner(project_id, current_user.id, db)
+        
     content = await file.read()
     df = pd.read_csv(io.BytesIO(content))
     
@@ -575,15 +582,17 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
             
         summary[sentiment] += 1
         results.append({"text": text, "sentiment": sentiment, "timestamp": timestamp.isoformat()})
-        log_entries.append({
-            "text": text, 
-            "sentiment": sentiment, 
-            "user": current_user.username, 
-            "timestamp": timestamp,
-            "project_id": project_id
-        })
         
-    if log_entries:
+        if project_id is not None:
+            log_entries.append({
+                "text": text, 
+                "sentiment": sentiment, 
+                "user": current_user.username, 
+                "timestamp": timestamp,
+                "project_id": project_id
+            })
+        
+    if log_entries and project_id is not None:
         preds_log_col.insert_many(log_entries)
         
     return {
