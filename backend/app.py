@@ -173,16 +173,22 @@ def verify_project_owner(project_id: int, user_id: int, db: Session):
     return project
 
 @api_router.get("/stats")
-def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_stats(project_id: int = None, monitor_only: bool = True, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     user_count = db.query(func.count(User.id)).scalar()
     
     if project_id is None:
         return {"model_version": "N/A", "total_predictions": 0, "dataset_size": "0 records", "active_users": user_count, "accuracy": "N/A", "drift_score": "0%"}
 
-    # Verify ownership
     verify_project_owner(project_id, current_user.id, db)
 
     query = {"project_id": project_id}
+    if monitor_only:
+        # Filter for data from crawlers, webhooks, or manual syncs (excluding bulk csv)
+        query["source"] = {"$in": ["auto_crawl_Google Play", "manual_sync_Google Play", "webhook_integration", "system_webhook"]}
+
+    accuracy = "N/A"
+    model_version = "v1.2.0-Prod"
+    # ... rest of get_stats
     accuracy = "N/A"
     model_version = "v1.2.0-Prod"
     dataset_size = None
@@ -403,10 +409,12 @@ def get_user_history(project_id: int = None, db: Session = Depends(get_db), curr
     return history
 
 @api_router.get("/monthly-analytics")
-def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_monthly_analytics(project_id: int = None, monitor_only: bool = True, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: return []
     verify_project_owner(project_id, current_user.id, db)
     match_query = {"project_id": project_id}
+    if monitor_only:
+        match_query["source"] = {"$in": ["auto_crawl_Google Play", "manual_sync_Google Play", "webhook_integration", "system_webhook"]}
     
     pipeline = [
         {"$match": match_query},
@@ -439,7 +447,7 @@ def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db),
     return sorted(formatted_data, key=lambda x: x["date"])
 
 @api_router.get("/comparison")
-def get_comparison(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_comparison(project_id: int = None, monitor_only: bool = True, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: return None
     verify_project_owner(project_id, current_user.id, db)
     now = datetime.utcnow()
@@ -449,6 +457,8 @@ def get_comparison(project_id: int = None, db: Session = Depends(get_db), curren
 
     def get_counts(start, end):
         match_query = {"timestamp": {"$gte": start, "$lte": end}, "project_id": project_id}
+        if monitor_only:
+            match_query["source"] = {"$in": ["auto_crawl_Google Play", "manual_sync_Google Play", "webhook_integration", "system_webhook"]}
         
         pipeline = [
             {"$match": match_query},
@@ -474,11 +484,13 @@ def get_comparison(project_id: int = None, db: Session = Depends(get_db), curren
     }
 
 @api_router.get("/word-cloud")
-def get_word_cloud(sentiment: str = None, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_word_cloud(sentiment: str = None, project_id: int = None, monitor_only: bool = True, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: return []
     verify_project_owner(project_id, current_user.id, db)
     query = {"project_id": project_id}
     if sentiment: query["sentiment"] = sentiment
+    if monitor_only:
+        query["source"] = {"$in": ["auto_crawl_Google Play", "manual_sync_Google Play", "webhook_integration", "system_webhook"]}
     
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(2000)
     word_counts = {}

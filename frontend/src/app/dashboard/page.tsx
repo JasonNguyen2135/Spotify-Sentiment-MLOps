@@ -109,9 +109,9 @@ export default function Home() {
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">
-            Intelligence<span className="text-brand">Center</span>
+            App <span className="text-brand">Monitoring</span>
           </h1>
-          <p className="text-slate-500 text-lg">Real-time user sentiment analysis & behavioral insights.</p>
+          <p className="text-slate-500 text-lg">Real-time intelligence from your registered applications.</p>
         </div>
         <div className="flex gap-3">
           <button 
@@ -121,7 +121,7 @@ export default function Home() {
             <Download className="w-4 h-4" /> Export Report
           </button>
           <div className="bg-slate-900 px-5 py-2.5 rounded-xl font-bold text-sm text-white flex items-center gap-2 shadow-lg shadow-slate-200">
-            <Calendar className="w-4 h-4" /> Last 30 Days
+            <Activity className="w-4 h-4 text-emerald-400" /> Live Feed
           </div>
         </div>
       </div>
