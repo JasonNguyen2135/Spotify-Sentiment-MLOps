@@ -90,12 +90,29 @@ export default function AnalyzePage() {
 
   return (
     <div className="max-w-6xl mx-auto animate-in fade-in duration-700 pb-20">
-      <div className="mb-10">
-        <h1 className="text-4xl font-black text-slate-900 flex items-center gap-3">
-          <UploadCloud className="text-brand w-10 h-10" />
-          Bulk <span className="text-brand">Analysis</span>
-        </h1>
-        <p className="text-slate-500 mt-2 text-lg">Upload your datasets for massive-scale sentiment intelligence.</p>
+      {/* Print-only Header */}
+      <div className="hidden print:block mb-10 border-b-2 border-slate-900 pb-6">
+        <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900">Bulk Sentiment Analysis Report</h1>
+        <p className="text-sm font-bold text-slate-500 mt-1">Project: {activeProject?.name} • Generated: {new Date().toLocaleString()}</p>
+      </div>
+
+      <div className="mb-10 flex justify-between items-end print:hidden">
+        <div>
+          <h1 className="text-4xl font-black text-slate-900 flex items-center gap-3">
+            <UploadCloud className="text-brand w-10 h-10" />
+            Bulk <span className="text-brand">Analysis</span>
+          </h1>
+          <p className="text-slate-500 mt-2 text-lg">Upload your datasets for massive-scale sentiment intelligence.</p>
+        </div>
+        
+        {results && (
+          <button 
+            onClick={() => window.print()}
+            className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg no-print"
+          >
+            <Download className="w-4 h-4" /> Print Report
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
@@ -206,12 +223,14 @@ export default function AnalyzePage() {
               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <div className="flex justify-between items-center mb-8">
                   <h2 className="text-xl font-bold text-slate-800">Sentiment Distribution</h2>
-                  <button 
-                    onClick={handleExportCSV}
-                    className="flex items-center gap-2 text-xs font-black text-brand uppercase tracking-widest hover:bg-brand/5 px-4 py-2 rounded-xl transition-all"
-                  >
-                    <Download className="w-4 h-4" /> Export Report
-                  </button>
+                  <div className="flex gap-2 no-print">
+                    <button 
+                      onClick={handleExportCSV}
+                      className="flex items-center gap-2 text-xs font-black text-brand uppercase tracking-widest hover:bg-brand/5 px-4 py-2 rounded-xl transition-all"
+                    >
+                      <Download className="w-4 h-4" /> Download CSV
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="h-64 w-full">

@@ -36,3 +36,38 @@ body {
   transform: translateY(-4px);
   box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1), 0 8px 8px -5px rgba(0, 0, 0, 0.04);
 }
+
+/* Print Optimization */
+@media print {
+  nav, .print\:hidden, button, .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  main {
+    margin-top: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .bg-slate-900 {
+    background-color: #0f172a !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .rounded-\[2\.5rem\], .rounded-\[3rem\], .rounded-3xl {
+    border-radius: 1rem !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  canvas, svg {
+    max-width: 100% !important;
+  }
+}
