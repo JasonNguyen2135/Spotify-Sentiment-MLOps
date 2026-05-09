@@ -34,6 +34,7 @@ export default function ConnectorsPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
+  const [syncing, setSyncing] = useState<number | null>(null);
 
   const webhookUrl = activeProject ? `${window.location.protocol}//${window.location.host}/api/collect/${activeProject.id}` : '';
 
@@ -42,8 +43,6 @@ export default function ConnectorsPage() {
     setStatus({ type: 'success', msg: 'Copied to clipboard!' });
     setTimeout(() => setStatus(null), 3000);
   };
-
-  const [syncing, setSyncing] = useState<number | null>(null);
 
   const handleSync = async (connectorId: number) => {
     setSyncing(connectorId);
@@ -251,6 +250,7 @@ export default function ConnectorsPage() {
               <div className="p-4">
                 {sources.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {sources.map((s) => (
                       <div key={s.id} className="flex items-center justify-between p-5 bg-slate-50 rounded-[2rem] border border-slate-100 group hover:border-brand/30 transition-all">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
@@ -278,6 +278,7 @@ export default function ConnectorsPage() {
                           </button>
                         </div>
                       </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="py-20 text-center text-slate-400 font-medium italic">No applications registered for this project yet.</div>
