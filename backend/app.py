@@ -80,6 +80,12 @@ def migrate_db():
             db.execute(text("ALTER TABLE data_sources ADD COLUMN project_id INTEGER"))
             db.commit()
         except: db.rollback()
+
+        # Drop old unique constraint on app_id to allow same app in multiple projects
+        try:
+            db.execute(text("ALTER TABLE data_sources DROP CONSTRAINT IF EXISTS data_sources_app_id_key"))
+            db.commit()
+        except: db.rollback()
         
         try:
             db.execute(text("ALTER TABLE alert_rules ADD COLUMN project_id INTEGER"))
