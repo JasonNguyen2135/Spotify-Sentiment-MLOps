@@ -186,6 +186,21 @@ def get_stats(project_id: int = None, db: Session = Depends(get_db)):
         "drift_score": drift_score
     }
 
+@api_router.post("/register")
+def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
+    if db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=400, detail="Username exists")
+    db.add(User(username=username, hashed_password=pwd_context.hash(password), role=role))
+    db.commit()
+    return {"message": "Success"}
+
+@api_router.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+    return {"access_token": create_access_token(data={"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
+
 # NEW: Project Management
 @api_router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
