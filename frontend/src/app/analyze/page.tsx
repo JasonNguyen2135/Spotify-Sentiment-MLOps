@@ -94,7 +94,7 @@ export default function AnalyzePage() {
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
             <div className={clsx(
-              "border-2 border-dashed rounded-3xl p-10 flex flex-col items-center justify-center text-center transition-all",
+              "relative border-2 border-dashed rounded-3xl p-10 flex flex-col items-center justify-center text-center transition-all",
               file ? "border-brand bg-brand/5" : "border-slate-200 hover:border-brand/50 bg-slate-50"
             )}>
               <div className={clsx(
