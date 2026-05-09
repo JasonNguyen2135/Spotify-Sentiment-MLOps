@@ -75,10 +75,17 @@ def migrate_db():
             db.commit()
             db.refresh(default_project)
             
-            # Link existing sources and rules to this project
+            # Link existing SQL records
             db.query(DataSource).update({DataSource.project_id: default_project.id})
             db.query(AlertRule).update({AlertRule.project_id: default_project.id})
             db.commit()
+
+            # Link existing MongoDB records
+            try:
+                preds_log_col.update_many({"project_id": {"$exists": False}}, {"$set": {"project_id": default_project.id}})
+                reviews_col.update_many({"project_id": {"$exists": False}}, {"$set": {"project_id": default_project.id}})
+            except Exception as e:
+                print(f"MongoDB Migration error: {e}")
     finally:
         db.close()
 
@@ -130,10 +137,10 @@ api_router = APIRouter()
 def get_stats(project_id: int = None, db: Session = Depends(get_db)):
     user_count = db.query(func.count(User.id)).scalar()
     
-    query = {}
-    if project_id:
-        query["project_id"] = project_id
+    if project_id is None:
+        return {"model_version": "N/A", "total_predictions": 0, "dataset_size": "0 records", "active_users": user_count, "accuracy": "N/A", "drift_score": "0%"}
 
+    query = {"project_id": project_id}
     accuracy = "N/A"
     model_version = "v1.2.0-Prod"
     dataset_size = None
@@ -316,8 +323,8 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
 
 @api_router.get("/user-history")
 def get_user_history(project_id: int = None, current_user: User = Depends(get_current_user)):
-    query = {"user": current_user.username}
-    if project_id: query["project_id"] = project_id
+    if project_id is None: return []
+    query = {"user": current_user.username, "project_id": project_id}
     
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(50)
     history = []
@@ -331,8 +338,8 @@ def get_user_history(project_id: int = None, current_user: User = Depends(get_cu
 
 @api_router.get("/monthly-analytics")
 def get_monthly_analytics(project_id: int = None, current_user: User = Depends(get_current_user)):
-    match_query = {}
-    if project_id: match_query["project_id"] = project_id
+    if project_id is None: return []
+    match_query = {"project_id": project_id}
     
     pipeline = [
         {"$match": match_query},
@@ -366,14 +373,14 @@ def get_monthly_analytics(project_id: int = None, current_user: User = Depends(g
 
 @api_router.get("/comparison")
 def get_comparison(project_id: int = None, current_user: User = Depends(get_current_user)):
+    if project_id is None: return None
     now = datetime.utcnow()
     this_month_start = datetime(now.year, now.month, 1)
     last_month_end = this_month_start - timedelta(days=1)
     last_month_start = datetime(last_month_end.year, last_month_end.month, 1)
 
     def get_counts(start, end):
-        match_query = {"timestamp": {"$gte": start, "$lte": end}}
-        if project_id: match_query["project_id"] = project_id
+        match_query = {"timestamp": {"$gte": start, "$lte": end}, "project_id": project_id}
         
         pipeline = [
             {"$match": match_query},
@@ -400,9 +407,9 @@ def get_comparison(project_id: int = None, current_user: User = Depends(get_curr
 
 @api_router.get("/word-cloud")
 def get_word_cloud(sentiment: str = None, project_id: int = None, current_user: User = Depends(get_current_user)):
-    query = {}
+    if project_id is None: return []
+    query = {"project_id": project_id}
     if sentiment: query["sentiment"] = sentiment
-    if project_id: query["project_id"] = project_id
     
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(2000)
     word_counts = {}
