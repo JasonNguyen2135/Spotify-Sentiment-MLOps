@@ -7,6 +7,8 @@ import {
   ArrowRight, ShieldCheck, Zap
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useProject } from '@/context/ProjectContext';
+import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -15,10 +17,16 @@ import {
 
 export default function AnalyzePage() {
   const { user } = useAuth();
+  const { activeProject } = useProject();
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeProject) router.push('/');
+  }, [activeProject, router]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -28,7 +36,7 @@ export default function AnalyzePage() {
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (!file || !activeProject) return;
     setAnalyzing(true);
     setResults(null);
     setError(null);
@@ -39,6 +47,7 @@ export default function AnalyzePage() {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.post('/api/analyze-csv', formData, {
+        params: { project_id: activeProject.id },
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'

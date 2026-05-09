@@ -7,6 +7,9 @@ import {
   BarChart3, PieChart as PieChartIcon, 
   ArrowLeftRight, Download, Trash2
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { useProject } from '@/context/ProjectContext';
+import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 import { 
   ResponsiveContainer, BarChart, Bar, 
@@ -15,24 +18,34 @@ import {
 } from 'recharts';
 
 export default function ComparePage() {
+  const { user, loading: authLoading } = useAuth();
+  const { activeProject } = useProject();
+  const router = useRouter();
   const [file1, setFile1] = useState<File | null>(null);
   const [file2, setFile2] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
 
+  useEffect(() => {
+    if (!authLoading && !activeProject) {
+      router.push('/');
+    }
+  }, [activeProject, authLoading, router]);
+
   const handleUpload = async () => {
-    if (!file1 || !file2) return;
+    if (!file1 || !file2 || !activeProject) return;
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
+      const params = { project_id: activeProject.id };
       const formData1 = new FormData();
       formData1.append('file', file1);
       const formData2 = new FormData();
       formData2.append('file', file2);
 
       const [res1, res2] = await Promise.all([
-        axios.post('/api/analyze-csv', formData1, { headers: { 'Authorization': `Bearer ${token}` } }),
-        axios.post('/api/analyze-csv', formData2, { headers: { 'Authorization': `Bearer ${token}` } })
+        axios.post('/api/analyze-csv', formData1, { params, headers: { 'Authorization': `Bearer ${token}` } }),
+        axios.post('/api/analyze-csv', formData2, { params, headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       const process = (data: any[]) => {

@@ -1,6 +1,7 @@
 'use client';
 import { useAuth } from '@/context/AuthContext';
-import { redirect } from 'next/navigation';
+import { useProject } from '@/context/ProjectContext';
+import { redirect, useRouter } from 'next/navigation';
 import { 
   Settings, Play, ExternalLink, Clock, CheckCircle2, 
   AlertCircle, Database, Cpu, Layers, Zap, 
@@ -13,6 +14,8 @@ import { clsx } from 'clsx';
 
 export default function PipelinePage() {
   const { user, loading: authLoading } = useAuth();
+  const { activeProject } = useProject();
+  const router = useRouter();
   const [datasets, setDatasets] = useState<any[]>([]);
   const [models, setModels] = useState<any[]>([]);
   const [runs, setRuns] = useState<any[]>([]);
@@ -27,13 +30,15 @@ export default function PipelinePage() {
   const [fetchingLogs, setFetchingLogs] = useState(false);
 
   const fetchData = useCallback(async () => {
+    if (!activeProject) return;
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
+      const params = { project_id: activeProject.id };
       
       const [datasetsRes, modelsRes, runsRes] = await Promise.all([
-        axios.get('/api/datasets', { headers }),
-        axios.get('/api/models', { headers }),
+        axios.get('/api/datasets', { headers, params }),
+        axios.get('/api/models', { headers, params }),
         axios.get('/api/airflow/runs', { headers })
       ]);
       
@@ -49,28 +54,33 @@ export default function PipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedDataset]);
+  }, [activeProject, selectedDataset]);
 
   useEffect(() => {
     if (!authLoading && user?.role !== 'admin') {
       redirect('/');
     }
+    if (!authLoading && !activeProject) {
+      router.push('/');
+      return;
+    }
     
-    if (user?.role === 'admin') {
+    if (user?.role === 'admin' && activeProject) {
       fetchData();
       const interval = setInterval(fetchData, 10000); // Poll every 10s
       return () => clearInterval(interval);
     }
-  }, [user, authLoading, fetchData]);
+  }, [user, authLoading, fetchData, activeProject, router]);
 
   const handleTrain = async () => {
+    if (!activeProject) return;
     setTriggering(true);
     setStatus(null);
     try {
       const token = localStorage.getItem('token');
       const source = customDataset || selectedDataset;
       await axios.post('/api/train', null, {
-        params: { dataset_source: source },
+        params: { dataset_source: source, project_id: activeProject.id },
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setStatus({ type: 'success', msg: 'Training pipeline triggered successfully!' });
@@ -100,12 +110,13 @@ export default function PipelinePage() {
   };
 
   const handleDeploy = async (version: string) => {
+    if (!activeProject) return;
     setDeploying(version);
     setStatus(null);
     try {
       const token = localStorage.getItem('token');
       await axios.post('/api/deploy-model', null, {
-        params: { version },
+        params: { version, project_id: activeProject.id },
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setStatus({ type: 'success', msg: `Model version ${version} deployed to Production!` });

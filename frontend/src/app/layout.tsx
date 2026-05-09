@@ -2,6 +2,7 @@ import './globals.css'
 import type { Metadata } from 'next'
 import Navbar from '@/components/Navbar'
 import { AuthProvider } from '@/context/AuthContext'
+import { ProjectProvider } from '@/context/ProjectContext'
 
 export const metadata: Metadata = {
   title: 'User Sentiment Analysis Platform',
@@ -17,10 +18,12 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <AuthProvider>
-          <Navbar />
-          <main className="container mx-auto mt-8 px-4">
-            {children}
-          </main>
+          <ProjectProvider>
+            <Navbar />
+            <main className="container mx-auto mt-8 px-4">
+              {children}
+            </main>
+          </ProjectProvider>
         </AuthProvider>
       </body>
     </html>

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import Column, Integer, String, create_engine, func
+from sqlalchemy import Column, Integer, String, create_engine, func, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from jose import JWTError, jwt
@@ -39,23 +39,52 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(String, default="user")
 
+class Project(Base):
+    __tablename__ = "projects"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    description = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class DataSource(Base):
     __tablename__ = "data_sources"
     id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, index=True)
     platform = Column(String)
-    app_id = Column(String, unique=True)
+    app_id = Column(String) # Removed unique constraint to allow same app in different projects
     schedule = Column(String, default="daily") # daily, weekly, monthly
     status = Column(String, default="active")
 
 class AlertRule(Base):
     __tablename__ = "alert_rules"
     id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, index=True)
     name = Column(String)
     threshold = Column(Integer) # e.g. 25 for 25%
     channel = Column(String) # Telegram, Email, Slack
     destination = Column(String) # Chat ID or Email
 
 Base.metadata.create_all(bind=engine)
+
+def migrate_db():
+    db = SessionLocal()
+    try:
+        if not db.query(Project).first():
+            default_project = Project(name="Default Workspace", description="Automatically created workspace for existing data.")
+            db.add(default_project)
+            db.commit()
+            db.refresh(default_project)
+            
+            # Link existing sources and rules to this project
+            db.query(DataSource).update({DataSource.project_id: default_project.id})
+            db.query(AlertRule).update({AlertRule.project_id: default_project.id})
+            db.commit()
+    finally:
+        db.close()
+
+migrate_db()
+
+# ... (rest of setup)
 mongo_client = MongoClient(MONGO_URL)
 mongo_db = mongo_client["sentiment_db"]
 reviews_col = mongo_db["raw_reviews"]
@@ -98,8 +127,12 @@ from fastapi import APIRouter
 api_router = APIRouter()
 
 @api_router.get("/stats")
-def get_stats(db: Session = Depends(get_db)):
+def get_stats(project_id: int = None, db: Session = Depends(get_db)):
     user_count = db.query(func.count(User.id)).scalar()
+    
+    query = {}
+    if project_id:
+        query["project_id"] = project_id
 
     accuracy = "N/A"
     model_version = "v1.2.0-Prod"
@@ -115,8 +148,8 @@ def get_stats(db: Session = Depends(get_db)):
 
     drift_score = "0%"
     try:
-        ref_data = pd.DataFrame(list(reviews_col.find().limit(100)))
-        curr_data = pd.DataFrame(list(preds_log_col.find().limit(100)))
+        ref_data = pd.DataFrame(list(reviews_col.find(query).limit(100)))
+        curr_data = pd.DataFrame(list(preds_log_col.find(query).limit(100)))
         if not ref_data.empty and not curr_data.empty:
             drift_report = Report(metrics=[DataDriftPreset()])
             drift_report.run(reference_data=ref_data[['text']], current_data=curr_data[['text']])
@@ -125,12 +158,12 @@ def get_stats(db: Session = Depends(get_db)):
             drift_score = f"{share * 100:.1f}%"
     except: pass
 
-    try: total_preds = preds_log_col.count_documents({})
+    try: total_preds = preds_log_col.count_documents(query)
     except: total_preds = 0
 
     if dataset_size is None or dataset_size == "N/A":
         try: 
-            crawled_count = reviews_col.count_documents({})
+            crawled_count = reviews_col.count_documents(query)
             dataset_size = f"{crawled_count} records"
         except: 
             dataset_size = "0 records"
@@ -146,22 +179,38 @@ def get_stats(db: Session = Depends(get_db)):
         "drift_score": drift_score
     }
 
+# NEW: Project Management
+@api_router.get("/projects")
+def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(Project).all()
+
+@api_router.post("/projects")
+def create_project(name: str, description: str = "", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if db.query(Project).filter(Project.name == name).first():
+        raise HTTPException(status_code=400, detail="Project name exists")
+    project = Project(name=name, description=description)
+    db.add(project)
+    db.commit()
+    return project
+
 # NEW: Dataset Management
 @api_router.get("/datasets")
-def get_datasets(current_user: User = Depends(get_current_user)):
+def get_datasets(project_id: int = None, current_user: User = Depends(get_current_user)):
+    query = {"project_id": project_id} if project_id else {}
     return [
-        {"name": "Real-time Feedback Stream", "source": "mongodb://predictions_log", "count": preds_log_col.count_documents({})},
-        {"name": "Enterprise Baseline v1.0", "source": "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv", "count": 12500},
-        {"name": "Evaluation Gold Standard", "source": "local://eval.csv", "count": 1200}
+        {"name": "Project Live Stream", "source": f"mongodb://{project_id}", "count": preds_log_col.count_documents(query)},
+        {"name": "Enterprise Baseline v1.0", "source": "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv", "count": 12500}
     ]
 
 # NEW: Model Management (MLflow Proxy)
 @api_router.get("/models")
-def get_models(current_user: User = Depends(get_current_user)):
+def get_models(project_id: int = None, current_user: User = Depends(get_current_user)):
     try:
+        # Use project name or ID to filter models in MLflow
+        model_name = f"Sentiment_Analysis_Model_{project_id}" if project_id else "Sentiment_Analysis_Model"
         res = requests.get(
             f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search",
-            params={"filter": "name='Sentiment_Analysis_Model'"},
+            params={"filter": f"name='{model_name}'"},
             timeout=5
         )
         if res.status_code == 200:
@@ -173,12 +222,13 @@ def get_models(current_user: User = Depends(get_current_user)):
         return []
 
 @api_router.post("/deploy-model")
-def deploy_model(version: str, current_user: User = Depends(get_current_user)):
+def deploy_model(version: str, project_id: int = None, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
+        model_name = f"Sentiment_Analysis_Model_{project_id}" if project_id else "Sentiment_Analysis_Model"
         payload = {
-            "name": "Sentiment_Analysis_Model",
+            "name": model_name,
             "version": version,
             "stage": "Production",
             "archive_existing_versions": True
@@ -239,13 +289,18 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         return {"logs": f"Error fetching logs: {str(e)}"}
 
 @api_router.post("/train")
-def trigger_training(dataset_source: str, current_user: User = Depends(get_current_user)):
+def trigger_training(dataset_source: str, project_id: int = None, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
         import base64
         auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
-        payload = {"conf": {"data_source": dataset_source}}
+        payload = {
+            "conf": {
+                "data_source": dataset_source,
+                "project_id": project_id
+            }
+        }
         res = requests.post(
             f"{AIRFLOW_URL}/api/v1/dags/sentiment_analysis_training/dagRuns",
             json=payload,
@@ -260,9 +315,11 @@ def trigger_training(dataset_source: str, current_user: User = Depends(get_curre
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/user-history")
-def get_user_history(current_user: User = Depends(get_current_user)):
-    # Fetch last 50 predictions for the logged-in user
-    cursor = preds_log_col.find({"user": current_user.username}).sort("timestamp", -1).limit(50)
+def get_user_history(project_id: int = None, current_user: User = Depends(get_current_user)):
+    query = {"user": current_user.username}
+    if project_id: query["project_id"] = project_id
+    
+    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(50)
     history = []
     for doc in cursor:
         history.append({
@@ -273,8 +330,12 @@ def get_user_history(current_user: User = Depends(get_current_user)):
     return history
 
 @api_router.get("/monthly-analytics")
-def get_monthly_analytics(current_user: User = Depends(get_current_user)):
+def get_monthly_analytics(project_id: int = None, current_user: User = Depends(get_current_user)):
+    match_query = {}
+    if project_id: match_query["project_id"] = project_id
+    
     pipeline = [
+        {"$match": match_query},
         {
             "$group": {
                 "_id": {
@@ -304,16 +365,18 @@ def get_monthly_analytics(current_user: User = Depends(get_current_user)):
     return sorted(formatted_data, key=lambda x: x["date"])
 
 @api_router.get("/comparison")
-def get_comparison(current_user: User = Depends(get_current_user)):
-    # Calculate delta between this month and last month
+def get_comparison(project_id: int = None, current_user: User = Depends(get_current_user)):
     now = datetime.utcnow()
     this_month_start = datetime(now.year, now.month, 1)
     last_month_end = this_month_start - timedelta(days=1)
     last_month_start = datetime(last_month_end.year, last_month_end.month, 1)
 
     def get_counts(start, end):
+        match_query = {"timestamp": {"$gte": start, "$lte": end}}
+        if project_id: match_query["project_id"] = project_id
+        
         pipeline = [
-            {"$match": {"timestamp": {"$gte": start, "$lte": end}}},
+            {"$match": match_query},
             {"$group": {"_id": "$sentiment", "count": {"$sum": 1}}}
         ]
         cursor = preds_log_col.aggregate(pipeline)
@@ -336,10 +399,10 @@ def get_comparison(current_user: User = Depends(get_current_user)):
     }
 
 @api_router.get("/word-cloud")
-def get_word_cloud(sentiment: str = None, current_user: User = Depends(get_current_user)):
+def get_word_cloud(sentiment: str = None, project_id: int = None, current_user: User = Depends(get_current_user)):
     query = {}
-    if sentiment:
-        query["sentiment"] = sentiment
+    if sentiment: query["sentiment"] = sentiment
+    if project_id: query["project_id"] = project_id
     
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(2000)
     word_counts = {}
@@ -356,48 +419,35 @@ def get_word_cloud(sentiment: str = None, current_user: User = Depends(get_curre
     return [{"text": w, "value": c} for w, c in sorted_words]
 
 @api_router.post("/correction")
-def submit_correction(prediction_id: str = None, text: str = None, corrected_sentiment: str = None, current_user: User = Depends(get_current_user)):
+def submit_correction(prediction_id: str = None, text: str = None, corrected_sentiment: str = None, project_id: int = None, current_user: User = Depends(get_current_user)):
     # Store user feedback for future retraining
     entry = {
         "text": text,
         "corrected_sentiment": corrected_sentiment,
         "user": current_user.username,
         "timestamp": datetime.utcnow(),
-        "original_id": prediction_id
+        "original_id": prediction_id,
+        "project_id": project_id
     }
     feedback_col.insert_one(entry)
     return {"status": "success", "message": "Feedback recorded. Thank you!"}
 
-@api_router.post("/register")
-def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == username).first():
-        raise HTTPException(status_code=400, detail="Username exists")
-    db.add(User(username=username, hashed_password=pwd_context.hash(password), role=role))
-    db.commit()
-    return {"message": "Success"}
-
-@api_router.post("/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
-    return {"access_token": create_access_token(data={"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
-
 @api_router.post("/predict")
-async def predict_single(review_text: str, current_user: User = Depends(get_current_user)):
+async def predict_single(review_text: str, project_id: int = None, current_user: User = Depends(get_current_user)):
     try:
         res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10)
         result = res.json()
         preds_log_col.insert_one({
             "text": review_text, "sentiment": result.get("sentiment"),
-            "user": current_user.username, "timestamp": datetime.utcnow()
+            "user": current_user.username, "timestamp": datetime.utcnow(),
+            "project_id": project_id
         })
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
 
 @api_router.post("/analyze-csv")
-async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+async def analyze_csv(file: UploadFile = File(...), project_id: int = None, current_user: User = Depends(get_current_user)):
     content = await file.read()
     df = pd.read_csv(io.BytesIO(content))
     
@@ -435,32 +485,33 @@ async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends
             "text": text, 
             "sentiment": sentiment, 
             "user": current_user.username, 
-            "timestamp": timestamp
+            "timestamp": timestamp,
+            "project_id": project_id
         })
         
     if log_entries:
         preds_log_col.insert_many(log_entries)
         
     return {
-    "summary": summary,
-    "total_processed": len(results),
-    "results": results[:100] # Return only first 100 for UI performance
+        "summary": summary,
+        "total_processed": len(results),
+        "results": results[:100] # Return only first 100 for UI performance
     }
 
 # NEW: Connectors & Alerts Management
 @api_router.get("/connectors")
-def get_connectors(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_connectors(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    return db.query(DataSource).all()
+    query = db.query(DataSource)
+    if project_id: query = query.filter(DataSource.project_id == project_id)
+    return query.all()
 
 @api_router.post("/connectors")
-def add_connector(platform: str, app_id: str, schedule: str = "daily", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def add_connector(platform: str, app_id: str, project_id: int, schedule: str = "daily", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    if db.query(DataSource).filter(DataSource.app_id == app_id).first():
-        raise HTTPException(status_code=400, detail="App ID already registered")
-    new_source = DataSource(platform=platform, app_id=app_id, schedule=schedule)
+    new_source = DataSource(platform=platform, app_id=app_id, schedule=schedule, project_id=project_id)
     db.add(new_source)
     db.commit()
     return {"message": "Connector added successfully"}
@@ -474,16 +525,18 @@ def delete_connector(connector_id: int, db: Session = Depends(get_db), current_u
     return {"message": "Connector removed"}
 
 @api_router.get("/alerts")
-def get_alert_rules(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_alert_rules(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    return db.query(AlertRule).all()
+    query = db.query(AlertRule)
+    if project_id: query = query.filter(AlertRule.project_id == project_id)
+    return query.all()
 
 @api_router.post("/alerts")
-def add_alert_rule(name: str, threshold: int, channel: str, destination: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def add_alert_rule(name: str, threshold: int, channel: str, destination: str, project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    new_rule = AlertRule(name=name, threshold=threshold, channel=channel, destination=destination)
+    new_rule = AlertRule(name=name, threshold=threshold, channel=channel, destination=destination, project_id=project_id)
     db.add(new_rule)
     db.commit()
     return {"message": "Alert rule created"}

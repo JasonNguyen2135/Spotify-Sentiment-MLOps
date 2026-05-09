@@ -7,11 +7,14 @@ import {
   CheckCircle2, AlertCircle, Loader2, RefreshCw
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { redirect } from 'next/navigation';
+import { useProject } from '@/context/ProjectContext';
+import { redirect, useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 
 export default function ConnectorsPage() {
   const { user, loading: authLoading } = useAuth();
+  const { activeProject } = useProject();
+  const router = useRouter();
   
   // States for Data Sources
   const [sources, setSources] = useState<any[]>([]);
@@ -30,12 +33,14 @@ export default function ConnectorsPage() {
   const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
 
   const fetchData = useCallback(async () => {
+    if (!activeProject) return;
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
+      const params = { project_id: activeProject.id };
       const [sourcesRes, alertsRes] = await Promise.all([
-        axios.get('/api/connectors', { headers }),
-        axios.get('/api/alerts', { headers })
+        axios.get('/api/connectors', { headers, params }),
+        axios.get('/api/alerts', { headers, params })
       ]);
       setSources(sourcesRes.data);
       setAlerts(alertsRes.data);
@@ -44,24 +49,29 @@ export default function ConnectorsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeProject]);
 
   useEffect(() => {
     if (!authLoading && user?.role !== 'admin') {
       redirect('/');
     }
+    if (!authLoading && !activeProject) {
+      router.push('/');
+      return;
+    }
     if (user?.role === 'admin') {
       fetchData();
     }
-  }, [user, authLoading, fetchData]);
+  }, [user, authLoading, fetchData, activeProject, router]);
 
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!activeProject) return;
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
       await axios.post('/api/connectors', null, {
-        params: { platform: newPlatform, app_id: newAppId },
+        params: { platform: newPlatform, app_id: newAppId, project_id: activeProject.id },
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setNewAppId('');
@@ -76,11 +86,12 @@ export default function ConnectorsPage() {
 
   const handleAddAlert = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!activeProject) return;
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
       await axios.post('/api/alerts', null, {
-        params: { name: ruleName, threshold, channel, destination },
+        params: { name: ruleName, threshold, channel, destination, project_id: activeProject.id },
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setRuleName('');

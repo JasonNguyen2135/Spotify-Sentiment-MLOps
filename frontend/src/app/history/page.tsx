@@ -1,21 +1,30 @@
 'use client';
-import { useEffect, useState } from 'react';
-import axios from 'axios';
+import { useAuth } from '@/context/AuthContext';
+import { useProject } from '@/context/ProjectContext';
+import { useRouter } from 'next/navigation';
 import { History as HistoryIcon, Search, Calendar, Filter, Loader2, MessageSquare, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export default function HistoryPage() {
+  const { user, loading: authLoading } = useAuth();
+  const { activeProject } = useProject();
+  const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    if (!authLoading && !activeProject) {
+      router.push('/');
+      return;
+    }
+
     const fetchHistory = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('/api/user-history', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const headers = { 'Authorization': `Bearer ${token}` };
+        const params = { project_id: activeProject?.id };
+        const response = await axios.get('/api/user-history', { headers, params });
         setHistory(response.data);
       } catch (err) {
         console.error("Failed to fetch history", err);
@@ -23,8 +32,8 @@ export default function HistoryPage() {
         setLoading(false);
       }
     };
-    fetchHistory();
-  }, []);
+    if (activeProject) fetchHistory();
+  }, [activeProject, authLoading, router]);
 
   const filteredHistory = history.filter(item => 
     item.text.toLowerCase().includes(searchTerm.toLowerCase())
