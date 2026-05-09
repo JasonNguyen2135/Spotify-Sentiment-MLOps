@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import Column, Integer, String, create_engine, func, DateTime
+from sqlalchemy import Column, Integer, String, create_engine, func, DateTime, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from jose import JWTError, jwt
@@ -70,7 +70,23 @@ Base.metadata.create_all(bind=engine)
 def migrate_db():
     db = SessionLocal()
     try:
-        # Ensure default admin exists first
+        # 0. Handle Schema Changes (Manually add columns if they don't exist)
+        try:
+            db.execute(text("ALTER TABLE projects ADD COLUMN owner_id INTEGER"))
+            db.commit()
+        except: db.rollback()
+        
+        try:
+            db.execute(text("ALTER TABLE data_sources ADD COLUMN project_id INTEGER"))
+            db.commit()
+        except: db.rollback()
+        
+        try:
+            db.execute(text("ALTER TABLE alert_rules ADD COLUMN project_id INTEGER"))
+            db.commit()
+        except: db.rollback()
+
+        # 1. Ensure default admin exists
         admin = db.query(User).filter(User.username == "admin").first()
         if not admin:
             admin = User(username="admin", hashed_password=pwd_context.hash("admin123"), role="admin")
