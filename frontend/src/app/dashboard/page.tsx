@@ -27,9 +27,6 @@ export default function Home() {
   const [comparison, setComparison] = useState<any>(null);
   const [keywords, setKeywords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [review, setReview] = useState('');
-  const [prediction, setPrediction] = useState<any>(null);
-  const [predicting, setPredicting] = useState(false);
 
   useEffect(() => {
     if (!activeProject) {
@@ -66,25 +63,6 @@ export default function Home() {
     }
   }, [user, activeProject, router]);
 
-  const handlePredict = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!review.trim() || !activeProject) return;
-    setPredicting(true);
-    setPrediction(null);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`/api/predict`, null, {
-          params: { review_text: review, project_id: activeProject.id },
-          headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setPrediction(response.data);
-    } catch (err) {
-      console.error("Prediction failed", err);
-    } finally {
-      setPredicting(false);
-    }
-  };
-
   const handlePrintReport = () => {
     window.print();
   };
@@ -106,10 +84,11 @@ export default function Home() {
 
   return (
     <div className="animate-in fade-in duration-700 pb-20 print:p-0">
+      {/* Header */}
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">
-            {user?.role === 'admin' ? 'Monitoring' : 'Project'} <span className="text-brand">Center</span>
+            {user?.role === 'admin' ? 'System Monitoring' : 'Project Dashboard'}
           </h1>
           <p className="text-slate-500 text-lg">
             {user?.role === 'admin' 
@@ -130,7 +109,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Overview Cards - Admin Only */}
+      {/* Admin Metrics - RESTRICTED */}
       {user?.role === 'admin' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10 no-print">
           {[
@@ -194,40 +173,13 @@ export default function Home() {
             </div>
 
             <div className="max-w-xs bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
-              <p className="text-xs text-slate-300 leading-relaxed italic">
+              <p className="text-xs text-slate-300 leading-relaxed italic italic">
                 "User sentiment is trending <strong>{comparison.delta_positive >= 0 ? 'upwards' : 'downwards'}</strong> this month. Primary drivers include increased engagement in key features."
               </p>
             </div>
           </div>
         </div>
       )}
-
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        {[
-          { name: 'Model Accuracy', value: stats?.accuracy || '94.2%', icon: Target, trend: '+0.5%', up: true, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { name: 'Total Predictions', value: stats?.total_predictions?.toLocaleString() || '0', icon: Activity, trend: '+12%', up: true, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { name: 'System Drift', value: stats?.drift_score || '0.2%', icon: Zap, trend: '-0.1%', up: false, color: 'text-amber-600', bg: 'bg-amber-50' },
-          { name: 'Active Analysts', value: stats?.active_users || '1', icon: Users, trend: '+2', up: true, color: 'text-purple-600', bg: 'bg-purple-50' },
-        ].map((item) => (
-          <div key={item.name} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm transition-all hover:shadow-md group">
-            <div className="flex justify-between items-start mb-4">
-              <div className={`${item.bg} ${item.color} p-3 rounded-2xl`}>
-                <item.icon className="w-6 h-6" />
-              </div>
-              <div className={clsx(
-                "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg",
-                item.up ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
-              )}>
-                {item.up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                {item.trend}
-              </div>
-            </div>
-            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">{item.name}</h3>
-            <p className="text-3xl font-black text-slate-900 mt-1">{item.value}</p>
-          </div>
-        ))}
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
         {/* Main Chart */}
@@ -259,21 +211,9 @@ export default function Home() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="date" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 11}}
-                  dy={10}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 11}}
-                />
-                <Tooltip 
-                  contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
-                />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}} />
                 <Area type="monotone" dataKey="positive" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorPos)" />
                 <Area type="monotone" dataKey="negative" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorNeg)" />
               </AreaChart>
@@ -296,8 +236,8 @@ export default function Home() {
                 {word.text}
               </span>
             )) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-300 italic text-sm">
-                Insufficient data for topic mapping
+              <div className="w-full h-full flex items-center justify-center text-slate-300 italic text-sm text-center">
+                Insufficient monitoring data for topic mapping. Run a sync to populate insights.
               </div>
             )}
           </div>
@@ -315,7 +255,7 @@ export default function Home() {
                 />
               ))}
             </div>
-            <div className="flex justify-between mt-3 text-[10px] font-bold text-slate-500 uppercase">
+            <div className="flex justify-between mt-3 text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
               <span>Pos: {((sentimentData.find(d => d.name === 'Positive')?.value || 0) / sentimentData.reduce((a,b) => a+b.value, 0) * 100).toFixed(0)}%</span>
               <span>Neg: {((sentimentData.find(d => d.name === 'Negative')?.value || 0) / sentimentData.reduce((a,b) => a+b.value, 0) * 100).toFixed(0)}%</span>
             </div>
@@ -323,98 +263,38 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Instant Analysis */}
-        <div className="bg-slate-900 p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-brand opacity-20 blur-[100px]"></div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="bg-brand/20 p-2 rounded-lg text-brand">
-                <Send className="w-5 h-5" />
-              </div>
-              <h2 className="text-2xl font-bold text-white">Ad-hoc Analysis</h2>
-            </div>
-            
-            <form onSubmit={handlePredict} className="relative mb-8">
-              <input 
-                type="text"
-                value={review}
-                onChange={(e) => setReview(e.target.value)}
-                placeholder="Paste user comment for instant scoring..."
-                className="w-full pl-6 pr-32 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-brand text-white transition-all placeholder:text-slate-500"
-              />
-              <button 
-                type="submit"
-                disabled={predicting || !review.trim()}
-                className="absolute right-2 top-2 bottom-2 bg-brand text-white px-6 rounded-xl font-bold hover:opacity-90 disabled:bg-slate-700 transition-all flex items-center gap-2"
-              >
-                {predicting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Score"}
-              </button>
-            </form>
-
-            {prediction && (
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10 animate-in slide-in-from-top duration-500">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={clsx(
-                      "p-3 rounded-full",
-                      prediction.sentiment === "positive" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
-                    )}>
-                      {prediction.sentiment === "positive" ? <CheckCircle2 className="w-6 h-6" /> : <ShieldAlert className="w-6 h-6" />}
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 font-medium">Predicted Sentiment</p>
-                      <p className="text-2xl font-black text-white mt-1 uppercase tracking-tight">
-                        {prediction.sentiment}
-                      </p>
-                    </div>
-                  </div>
-                  <button className="text-[10px] font-black text-slate-500 uppercase border border-white/10 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
-                    Report Error
-                  </button>
-                </div>
-              </div>
-            )}
+      {/* Actionable Intelligence */}
+      <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm max-w-4xl mx-auto">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="bg-brand/10 p-2 rounded-lg text-brand">
+            <Sparkles className="w-5 h-5" />
           </div>
+          <h2 className="text-2xl font-bold text-slate-800">Monitoring Insights</h2>
         </div>
-
-        {/* Actionable Intelligence */}
-        <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="bg-brand/10 p-2 rounded-lg text-brand">
-              <Sparkles className="w-5 h-5" />
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="flex gap-4 p-5 bg-slate-50 rounded-3xl border border-slate-100">
+            <div className="w-10 h-10 bg-white rounded-2xl flex-shrink-0 flex items-center justify-center shadow-sm">
+              <TrendingUp className="w-5 h-5 text-emerald-500" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-800">Smart Recommendations</h2>
+            <div>
+              <p className="text-sm font-bold text-slate-900">Health Check</p>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                App performance is stable. No critical sentiment drops detected in the last 7 days.
+              </p>
+            </div>
           </div>
-          
-          <div className="space-y-6">
-            <div className="flex gap-4 p-5 bg-slate-50 rounded-3xl border border-slate-100">
-              <div className="w-10 h-10 bg-white rounded-2xl flex-shrink-0 flex items-center justify-center shadow-sm">
-                <TrendingUp className="w-5 h-5 text-emerald-500" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-900">Optimization Opportunity</p>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Negative sentiment around "performance" decreased by 15%. Recommend highlighting speed improvements in next update.
-                </p>
-              </div>
-            </div>
 
-            <div className="flex gap-4 p-5 bg-slate-50 rounded-3xl border border-slate-100">
-              <div className="w-10 h-10 bg-white rounded-2xl flex-shrink-0 flex items-center justify-center shadow-sm">
-                <MessageSquare className="w-5 h-5 text-brand" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-900">Feedback Loop Active</p>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  24 corrections were submitted this week. Model retraining is advised to align with evolving user vocabulary.
-                </p>
-              </div>
+          <div className="flex gap-4 p-5 bg-slate-50 rounded-3xl border border-slate-100">
+            <div className="w-10 h-10 bg-white rounded-2xl flex-shrink-0 flex items-center justify-center shadow-sm">
+              <MessageSquare className="w-5 h-5 text-brand" />
             </div>
-
-            <button className="w-full py-5 bg-brand text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:opacity-90 transition-all shadow-lg shadow-brand/20">
-              Generate Detailed AI Report
-            </button>
+            <div>
+              <p className="text-sm font-bold text-slate-900">Alert Status</p>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Automation engine is active. Ensuring your alert thresholds are monitored 24/7.
+              </p>
+            </div>
           </div>
         </div>
       </div>

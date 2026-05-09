@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';
-import { redirect, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 
 export default function ConnectorsPage() {
@@ -18,23 +18,20 @@ export default function ConnectorsPage() {
   const router = useRouter();
   
   const [activeTab, setActiveTab] = useState<'crawlers' | 'alerts' | 'webhooks'>('crawlers');
-  
-  // States for Data Sources
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
+  const [syncing, setSyncing] = useState<number | null>(null);
+
   const [sources, setSources] = useState<any[]>([]);
   const [newAppId, setNewAppId] = useState('');
   const [newPlatform, setNewPlatform] = useState('Google Play');
   
-  // States for Alert Rules
   const [alerts, setAlerts] = useState<any[]>([]);
   const [ruleName, setRuleName] = useState('');
   const [threshold, setThreshold] = useState(25);
   const [channel, setChannel] = useState('Telegram');
   const [destination, setDestination] = useState('');
-
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
-  const [syncing, setSyncing] = useState<number | null>(null);
 
   const webhookUrl = activeProject ? `${window.location.protocol}//${window.location.host}/api/collect/${activeProject.id}` : '';
 
@@ -42,21 +39,6 @@ export default function ConnectorsPage() {
     navigator.clipboard.writeText(text);
     setStatus({ type: 'success', msg: 'Copied to clipboard!' });
     setTimeout(() => setStatus(null), 3000);
-  };
-
-  const handleSync = async (connectorId: number) => {
-    setSyncing(connectorId);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(`/api/connectors/sync/${connectorId}`, null, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setStatus({ type: 'success', msg: `Successfully synced ${res.data.synced_count} records!` });
-    } catch (err: any) {
-      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Sync failed' });
-    } finally {
-      setSyncing(null);
-    }
   };
 
   const fetchData = useCallback(async () => {
@@ -79,25 +61,47 @@ export default function ConnectorsPage() {
   }, [activeProject]);
 
   useEffect(() => {
-    if (!authLoading && user?.role !== 'admin') {
-      redirect('/');
-    }
-    if (!authLoading && !activeProject) {
-      router.push('/');
+    // Robust redirect logic: wait for auth, then check project
+    if (authLoading) return;
+    
+    if (!user) {
+      router.push('/login');
       return;
     }
-    if (user?.role === 'admin') {
-      fetchData();
+
+    // Wait a bit if activeProject is null (loading from localStorage)
+    if (!activeProject) {
+      const timer = setTimeout(() => {
+        if (!activeProject) router.push('/');
+      }, 1000);
+      return () => clearTimeout(timer);
     }
+
+    fetchData();
   }, [user, authLoading, fetchData, activeProject, router]);
+
+  const handleSync = async (connectorId: number) => {
+    setSyncing(connectorId);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`/api/connectors/sync/${connectorId}`, null, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setStatus({ type: 'success', msg: `Successfully synced ${res.data.synced_count} records!` });
+      fetchData();
+    } catch (err: any) {
+      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Sync failed' });
+    } finally {
+      setSyncing(null);
+    }
+  };
 
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeProject) return;
 
-    // Enforce 1 app per project: Show confirmation if already tracking
     if (sources.length > 0) {
-      const confirmChange = window.confirm("Important: Each project can only track one application at a time. Registering a new app will PERMANENTLY DELETE all current history and reports for this project. Continue?");
+      const confirmChange = window.confirm("Important: Each project can only track one application at a time. Registering a new app will PERMANENTLY DELETE all current history for this project. Continue?");
       if (!confirmChange) return;
     }
 
@@ -109,10 +113,10 @@ export default function ConnectorsPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setNewAppId('');
-      setStatus({ type: 'success', msg: 'Application updated! Current workspace data has been reset.' });
+      setStatus({ type: 'success', msg: 'Application updated!' });
       fetchData();
     } catch (err: any) {
-      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Failed to update connector' });
+      setStatus({ type: 'error', msg: 'Failed to update' });
     } finally {
       setSubmitting(false);
     }
@@ -128,12 +132,11 @@ export default function ConnectorsPage() {
         params: { name: ruleName, threshold, channel, destination, project_id: activeProject.id },
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      setRuleName('');
-      setDestination('');
-      setStatus({ type: 'success', msg: 'Alert rule active. Monitoring started.' });
+      setRuleName(''); setDestination('');
+      setStatus({ type: 'success', msg: 'Alert rule active.' });
       fetchData();
     } catch (err: any) {
-      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Failed to create alert' });
+      setStatus({ type: 'error', msg: 'Failed to create alert' });
     } finally {
       setSubmitting(false);
     }
@@ -151,7 +154,7 @@ export default function ConnectorsPage() {
     }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || (loading && !sources.length && !alerts.length)) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh]">
         <Loader2 className="w-12 h-12 text-brand animate-spin mb-4" />
@@ -161,8 +164,8 @@ export default function ConnectorsPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
-      <div className="mb-10 flex justify-between items-end">
+    <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20 px-4">
+      <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
           <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3">
             <RefreshCw className="text-brand w-10 h-10" />
@@ -209,9 +212,11 @@ export default function ConnectorsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-brand" /> Add Source
+              <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-brand" /> {sources.length > 0 ? 'Replace App' : 'Register App'}
               </h2>
+              <p className="text-[10px] text-red-500 font-bold uppercase mb-6 italic">Note: Only 1 app per project allowed.</p>
+              
               <form onSubmit={handleAddSource} className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Store Platform</label>
@@ -241,7 +246,7 @@ export default function ConnectorsPage() {
                   className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
-                  Register App
+                  {sources.length > 0 ? 'Update App' : 'Register App'}
                 </button>
               </form>
             </div>
@@ -251,44 +256,44 @@ export default function ConnectorsPage() {
             <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden h-full">
               <div className="p-8 border-b border-slate-50">
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Database className="w-5 h-5 text-brand" /> Tracked Applications
+                  <Database className="w-5 h-5 text-brand" /> Tracked Application
                 </h2>
               </div>
-              <div className="p-4">
+              <div className="p-8">
                 {sources.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     {sources.map((s) => (
-                      <div key={s.id} className="flex items-center justify-between p-5 bg-slate-50 rounded-[2rem] border border-slate-100 group hover:border-brand/30 transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
-                            {s.platform === 'Google Play' ? <Smartphone className="w-6 h-6 text-emerald-500" /> : <Globe className="w-6 h-6 text-blue-500" />}
+                      <div key={s.id} className="flex items-center justify-between p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 group hover:border-brand/30 transition-all">
+                        <div className="flex items-center gap-6">
+                          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100">
+                            {s.platform === 'Google Play' ? <Smartphone className="w-7 h-7 text-emerald-500" /> : <Globe className="w-7 h-7 text-blue-500" />}
                           </div>
                           <div>
-                            <p className="text-sm font-black text-slate-900 truncate max-w-[150px]">{s.app_id}</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.platform}</p>
+                            <p className="text-lg font-black text-slate-900">{s.app_id}</p>
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{s.platform}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           <button 
                             onClick={() => handleSync(s.id)}
                             disabled={syncing === s.id}
-                            className="p-2 text-brand hover:bg-brand/5 rounded-xl transition-all"
+                            className="p-3 text-brand hover:bg-white rounded-2xl transition-all shadow-sm bg-white/50"
                             title="Sync Now"
                           >
-                            {syncing === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                            {syncing === s.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
                           </button>
                           <button 
                             onClick={() => handleDelete('connectors', s.id)}
-                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                            className="p-3 text-slate-300 hover:text-red-500 hover:bg-white rounded-2xl transition-all shadow-sm"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-5 h-5" />
                           </button>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="py-20 text-center text-slate-400 font-medium italic">No applications registered for this project yet.</div>
+                  <div className="py-20 text-center text-slate-400 font-medium italic">No application registered for this project yet.</div>
                 )}
               </div>
             </div>
@@ -417,7 +422,6 @@ export default function ConnectorsPage() {
               <h2 className="text-4xl font-black mb-4">Ingest from any application.</h2>
               <p className="text-slate-400 text-lg mb-10 leading-relaxed">
                 Use your unique Webhook URL to push user feedback directly into **{activeProject?.name}**. 
-                Ideal for custom web apps, internal CRM systems, or microservices that aren't on public stores.
               </p>
 
               <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
@@ -432,93 +436,6 @@ export default function ConnectorsPage() {
                   >
                     <Copy className="w-6 h-6" />
                   </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-            {/* Implementation Guide */}
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
-                <Terminal className="w-6 h-6 text-brand" /> Implementation Guide
-              </h3>
-              
-              <div className="space-y-8">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest">
-                    <div className="w-1.5 h-1.5 bg-brand rounded-full"></div> cURL Example
-                  </div>
-                  <div className="bg-slate-900 p-5 rounded-2xl relative group">
-                    <pre className="text-slate-300 text-xs font-mono leading-relaxed">
-                      {`curl -X POST "${webhookUrl}" \\
--H "Content-Type: application/json" \\
--d '{
-  "text": "The app interface is very intuitive!",
-  "source": "my_web_app"
-}'`}
-                    </pre>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest">
-                    <div className="w-1.5 h-1.5 bg-brand rounded-full"></div> Python (Requests)
-                  </div>
-                  <div className="bg-slate-900 p-5 rounded-2xl relative group">
-                    <pre className="text-slate-300 text-xs font-mono leading-relaxed">
-                      {`import requests
-
-url = "${webhookUrl}"
-data = {
-    "text": "I really love the new update!",
-    "source": "backend_service"
-}
-
-response = requests.post(url, json=data)`}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Ingestion Specs */}
-            <div className="bg-slate-50 p-10 rounded-[3rem] border border-slate-200">
-               <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
-                <Info className="w-6 h-6 text-slate-400" /> API Specification
-              </h3>
-              
-              <div className="space-y-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Allowed Methods</p>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg">POST</span>
-                    <span className="text-slate-400 text-xs">application/json</span>
-                  </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">JSON Body Fields</p>
-                  <ul className="space-y-4">
-                    <li className="flex items-start gap-3">
-                      <div className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded text-brand font-bold">text</div>
-                      <div className="text-xs text-slate-500 leading-relaxed">
-                        <span className="font-bold text-slate-700">Required.</span> The actual user feedback or comment string to analyze.
-                      </div>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <div className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold">source</div>
-                      <div className="text-xs text-slate-500 leading-relaxed">
-                        <span className="font-bold text-slate-400 italic">Optional.</span> Identifier for where the data originated (e.g., "ios_v2").
-                      </div>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="p-6 bg-brand/5 rounded-2xl border border-brand/10">
-                   <p className="text-xs text-brand-700 leading-relaxed">
-                    <span className="font-bold">Security Note:</span> In this version, URLs are project-specific and public. Avoid exposing them in frontend code; ideally, call them from your own backend.
-                  </p>
                 </div>
               </div>
             </div>
