@@ -2,3 +2,5 @@ schedule
 pymongo
 requests
 google-play-scraper
+sqlalchemy
+psycopg2-binary
