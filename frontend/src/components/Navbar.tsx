@@ -63,6 +63,17 @@ export default function Navbar() {
                   <BarChart3 className="w-4 h-4" />
                   Pipeline
                 </a>
+
+                <Link 
+                  href="/admin/connectors"
+                  className={clsx(
+                    "flex items-center gap-1 text-sm font-medium transition-colors",
+                    pathname === '/admin/connectors' ? "text-brand" : "text-gray-600 hover:text-brand"
+                  )}
+                >
+                  <Zap className="w-4 h-4" />
+                  Alerts
+                </Link>
               </div>
             )}
 

@@ -39,6 +39,22 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(String, default="user")
 
+class DataSource(Base):
+    __tablename__ = "data_sources"
+    id = Column(Integer, primary_key=True, index=True)
+    platform = Column(String)
+    app_id = Column(String, unique=True)
+    schedule = Column(String, default="daily") # daily, weekly, monthly
+    status = Column(String, default="active")
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    threshold = Column(Integer) # e.g. 25 for 25%
+    channel = Column(String) # Telegram, Email, Slack
+    destination = Column(String) # Chat ID or Email
+
 Base.metadata.create_all(bind=engine)
 mongo_client = MongoClient(MONGO_URL)
 mongo_db = mongo_client["sentiment_db"]
@@ -426,11 +442,61 @@ async def analyze_csv(file: UploadFile = File(...), current_user: User = Depends
         preds_log_col.insert_many(log_entries)
         
     return {
-        "summary": summary,
-        "total_processed": len(results),
-        "results": results[:100] # Return only first 100 for UI performance
+    "summary": summary,
+    "total_processed": len(results),
+    "results": results[:100] # Return only first 100 for UI performance
     }
 
-# Include router at root and with /api prefix
+# NEW: Connectors & Alerts Management
+@api_router.get("/connectors")
+def get_connectors(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return db.query(DataSource).all()
+
+@api_router.post("/connectors")
+def add_connector(platform: str, app_id: str, schedule: str = "daily", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if db.query(DataSource).filter(DataSource.app_id == app_id).first():
+        raise HTTPException(status_code=400, detail="App ID already registered")
+    new_source = DataSource(platform=platform, app_id=app_id, schedule=schedule)
+    db.add(new_source)
+    db.commit()
+    return {"message": "Connector added successfully"}
+
+@api_router.delete("/connectors/{connector_id}")
+def delete_connector(connector_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    db.query(DataSource).filter(DataSource.id == connector_id).delete()
+    db.commit()
+    return {"message": "Connector removed"}
+
+@api_router.get("/alerts")
+def get_alert_rules(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return db.query(AlertRule).all()
+
+@api_router.post("/alerts")
+def add_alert_rule(name: str, threshold: int, channel: str, destination: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    new_rule = AlertRule(name=name, threshold=threshold, channel=channel, destination=destination)
+    db.add(new_rule)
+    db.commit()
+    return {"message": "Alert rule created"}
+
+@api_router.delete("/alerts/{rule_id}")
+def delete_alert_rule(rule_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    db.query(AlertRule).filter(AlertRule.id == rule_id).delete()
+    db.commit()
+    return {"message": "Alert rule removed"}
+
+    # Include router at root and with /api prefix
+
 app.include_router(api_router)
 app.include_router(api_router, prefix="/api")
