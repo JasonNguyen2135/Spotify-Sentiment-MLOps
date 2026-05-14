@@ -40,39 +40,66 @@ def load_model_for_project(project_id: str, target: str = "Production"):
     last_error = None
 
     for model_name in model_names_to_try:
-        try:
-            print(f"Đang thử load model: {model_name} (Target: {target})")
-            model_uri = f"models:/{model_name}/{target}"
-            model = mlflow.sklearn.load_model(model_uri)
-            
-            meta = {"version": "unknown", "accuracy": "N/A", "run_id": "none", "target": target, "model_name": model_name}
-            
+        # Danh sách các stage để thử load
+        targets_to_try = [target]
+        if target != "Production": targets_to_try.append("Production")
+        targets_to_try.append("Staging")
+        targets_to_try.append(None) # None nghĩa là lấy version mới nhất không kể stage
+
+        for current_target in targets_to_try:
             try:
-                if target.isdigit():
-                    mv = client.get_model_version(model_name, target)
+                if current_target:
+                    print(f"Đang thử load model: {model_name} (Target: {current_target})")
+                    model_uri = f"models:/{model_name}/{current_target}"
                 else:
-                    latest_versions = client.get_latest_versions(model_name, stages=[target])
-                    mv = latest_versions[0] if latest_versions else None
+                    print(f"Đang thử load model: {model_name} (Phiên bản mới nhất)")
+                    # Lấy version mới nhất từ client
+                    all_versions = client.get_latest_versions(model_name, stages=["Production", "Staging", "None"])
+                    if not all_versions:
+                        # Thử lấy tất cả versions nếu không tìm thấy version nào có stage
+                        all_versions = client.search_model_versions(f"name='{model_name}'")
                     
-                if mv:
-                    run_id = mv.run_id
-                    run = client.get_run(run_id)
-                    acc = run.data.metrics.get("accuracy") or run.data.metrics.get("acc")
-                    meta["accuracy"] = f"{acc*100:.1f}%" if acc and acc <= 1 else f"{acc:.1f}%" if acc else "N/A"
-                    meta["dataset_size"] = run.data.params.get("dataset_size", "N/A")
-                    meta["run_id"] = run_id
-                    meta["version"] = mv.version
-            except Exception as meta_e:
-                print(f"Không thể lấy metadata cho {model_name}: {meta_e}")
+                    if all_versions:
+                        # Sắp xếp theo version giảm dần
+                        latest_v = sorted(all_versions, key=lambda x: int(x.version), reverse=True)[0]
+                        model_uri = f"models:/{model_name}/{latest_v.version}"
+                        print(f"Tìm thấy version mới nhất: {latest_v.version}")
+                    else:
+                        continue
+
+                model = mlflow.sklearn.load_model(model_uri)
                 
-            models_cache[cache_key] = model
-            metadata_cache[cache_key] = meta
-            print(f"Thành công: Đã load model {model_name}")
-            return model, meta
-            
-        except Exception as e:
-            last_error = e
-            continue
+                meta = {"version": "unknown", "accuracy": "N/A", "run_id": "none", "target": str(current_target), "model_name": model_name}
+                
+                try:
+                    # Lấy metadata
+                    if current_target and str(current_target).isdigit():
+                        mv = client.get_model_version(model_name, current_target)
+                    elif current_target:
+                        lvs = client.get_latest_versions(model_name, stages=[current_target])
+                        mv = lvs[0] if lvs else None
+                    else:
+                        mv = latest_v if 'latest_v' in locals() else None
+                        
+                    if mv:
+                        run_id = mv.run_id
+                        run = client.get_run(run_id)
+                        acc = run.data.metrics.get("accuracy") or run.data.metrics.get("acc")
+                        meta["accuracy"] = f"{acc*100:.1f}%" if acc and acc <= 1 else f"{acc:.1f}%" if acc else "N/A"
+                        meta["dataset_size"] = run.data.params.get("dataset_size", "N/A")
+                        meta["run_id"] = run_id
+                        meta["version"] = mv.version
+                except Exception as meta_e:
+                    print(f"Không thể lấy metadata: {meta_e}")
+                    
+                models_cache[cache_key] = model
+                metadata_cache[cache_key] = meta
+                print(f"Thành công: Đã load model {model_name} từ URI {model_uri}")
+                return model, meta
+                
+            except Exception as e:
+                last_error = e
+                continue
             
     print(f"Lỗi: Không thể tìm thấy bất kỳ model nào trong danh sách. Lỗi cuối cùng: {last_error}")
     return None, None
