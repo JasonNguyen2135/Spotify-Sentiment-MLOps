@@ -27,7 +27,7 @@ jobs:
             frontend: ['frontend/**']
             crawler: ['crawler/**']
             monitoring_consumer: ['model/monitoring/**']
-            trainer_logic: ['model/train.py', 'model/Dockerfile.train', 'dags/spotify_training_dag.py']
+            trainer_logic: ['model/train.py', 'model/Dockerfile.train', 'model/requirements.txt', 'dags/spotify_training_dag.py']
 
   build-and-gitops:
     needs: check-changes

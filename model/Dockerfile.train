@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir \
     python-dotenv \
     boto3 \
     pymysql \
-    requests
+    requests \
+    pymongo
 
 # Pod sẽ tự kéo code vào thư mục này lúc chạy, nên không cần COPY code
 CMD ["python", "train.py"]
