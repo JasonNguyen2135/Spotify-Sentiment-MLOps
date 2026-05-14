@@ -413,7 +413,8 @@ def get_airflow_runs(current_user: User = Depends(get_current_user)):
     try:
         import base64
         auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
-        url = f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns"
+        # Updated to /api/v2 for Airflow 3 compatibility
+        url = f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns"
         print(f"DEBUG: Fetching Airflow runs from {url}")
         res = requests.get(
             url,
@@ -460,15 +461,11 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
         if res.status_code == 204:
-            # Vẫn gọi Airflow song song nếu bạn muốn dashboard hiện trạng thái Run (tùy chọn)
-            # Hoặc chỉ cần thông báo đã kích hoạt Action
             return {"status": "success", "message": f"Đã kích hoạt GitHub Action để huấn luyện model với dữ liệu: {dataset_source}"}
         else:
             return {"status": "error", "message": f"GitHub API error: {res.text}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
-        print(f"Airflow error: {e}")
-        return []
 
 @api_router.get("/airflow/logs/{dag_run_id}")
 def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_user)):
@@ -479,9 +476,9 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
         # Task ID is hardcoded based on the DAG definition
         task_id = "model_training_pipeline"
-        # 1. Get task instances to find the try_number
+        # 1. Get task instances to find the try_number (Updated to /api/v2)
         ti_res = requests.get(
-            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}",
+            f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}",
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=5
         )
@@ -490,9 +487,9 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         
         try_number = ti_res.json().get("try_number", 1)
         
-        # 2. Fetch logs
+        # 2. Fetch logs (Updated to /api/v2)
         log_res = requests.get(
-            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
+            f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=10
         )
@@ -500,31 +497,6 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
     except Exception as e:
         return {"logs": f"Error fetching logs: {str(e)}"}
 
-@api_router.post("/train")
-def trigger_training(dataset_source: str, project_id: int = None, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    try:
-        import base64
-        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
-        payload = {
-            "conf": {
-                "data_source": dataset_source,
-                "project_id": project_id
-            }
-        }
-        res = requests.post(
-            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns",
-            json=payload,
-            headers={"Authorization": f"Basic {auth_header}"},
-            timeout=10
-        )
-        if res.status_code in [200, 201]:
-            return {"status": "success", "dag_run_id": res.json().get("dag_run_id")}
-        else:
-            raise HTTPException(status_code=res.status_code, detail=res.text)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/user-history")
 def get_user_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
