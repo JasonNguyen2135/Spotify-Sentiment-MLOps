@@ -305,7 +305,7 @@ def get_models(project_id: int = None, db: Session = Depends(get_db), current_us
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
         # Standardized global model name for Admin Hub
-        model_name = "Sentiment_Analysis_Platform"
+        model_name = "Spotify_Production_Model"
         
         all_versions = []
         try:
@@ -334,7 +334,7 @@ def deploy_model(version: str, model_name: str = None, project_id: int = None, d
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
         # Standardized global model name
-        model_name = "Sentiment_Analysis_Platform"
+        model_name = "Spotify_Production_Model"
             
         payload = {
             "name": model_name,
