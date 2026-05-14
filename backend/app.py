@@ -21,7 +21,7 @@ from evidently.metric_preset import DataDriftPreset
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@postgres:5432/mlops_auth")
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
-MLFLOW_URL = os.getenv("MLFLOW_TRACKING_URI", "http://18.140.71.49:5000")
+MLFLOW_URL = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow.ntdevopsmlflow.io.vn")
 AIRFLOW_URL = os.getenv("AIRFLOW_URL", "http://airflow-webserver:8080")
 AIRFLOW_AUTH = os.getenv("AIRFLOW_AUTH", "admin:admin")
 SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-key")

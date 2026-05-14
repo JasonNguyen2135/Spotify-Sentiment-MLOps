@@ -182,7 +182,7 @@ export default function Home() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-        {/* Main Chart */}
+        {/* Main Chart: Historical Trends */}
         <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -221,12 +221,72 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Sentiment Distribution Pie Chart */}
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col">
+          <h2 className="text-xl font-bold text-slate-800 mb-2">Sentiment Split</h2>
+          <p className="text-sm text-slate-400 mb-8">Overall proportion of user feelings</p>
+          
+          <div className="flex-1 h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={sentimentData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {sentimentData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="mt-8 pt-8 border-t border-slate-50 text-center">
+            <p className="text-sm font-bold text-slate-900">Total Analyzed</p>
+            <p className="text-2xl font-black text-brand mt-1">
+              {sentimentData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+        {/* Daily Volume Bar Chart */}
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">Review Volume</h2>
+              <p className="text-sm text-slate-400">Daily frequency of feedback collection</p>
+            </div>
+          </div>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
+                <Tooltip />
+                <Bar dataKey="positive" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="negative" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="neutral" stackId="a" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
         {/* Aspect Analysis (Keywords) */}
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col">
           <h2 className="text-xl font-bold text-slate-800 mb-2">Topic Analysis</h2>
           <p className="text-sm text-slate-400 mb-8">Frequent keywords in user feedback</p>
           
-          <div className="flex-1 flex flex-wrap gap-2 content-start">
+          <div className="flex-1 flex flex-wrap gap-2 content-start overflow-auto max-h-[250px]">
             {keywords.length > 0 ? keywords.map((word, i) => (
               <span 
                 key={i} 
@@ -240,25 +300,6 @@ export default function Home() {
                 Insufficient monitoring data for topic mapping. Run a sync to populate insights.
               </div>
             )}
-          </div>
-
-          <div className="mt-8 pt-8 border-t border-slate-50">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Sentiment Split</h4>
-            <div className="flex h-3 rounded-full overflow-hidden bg-slate-100">
-              {sentimentData.map((item, i) => (
-                <div 
-                  key={i} 
-                  style={{ 
-                    width: `${(item.value / sentimentData.reduce((a,b) => a+b.value, 0)) * 100}%`,
-                    backgroundColor: item.color 
-                  }}
-                />
-              ))}
-            </div>
-            <div className="flex justify-between mt-3 text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
-              <span>Pos: {((sentimentData.find(d => d.name === 'Positive')?.value || 0) / sentimentData.reduce((a,b) => a+b.value, 0) * 100).toFixed(0)}%</span>
-              <span>Neg: {((sentimentData.find(d => d.name === 'Negative')?.value || 0) / sentimentData.reduce((a,b) => a+b.value, 0) * 100).toFixed(0)}%</span>
-            </div>
           </div>
         </div>
       </div>

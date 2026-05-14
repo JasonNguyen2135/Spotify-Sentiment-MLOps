@@ -24,7 +24,10 @@ export default function ProjectsLanding() {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
+  const [monitorType, setMonitorType] = useState<'api' | 'google_play'>('api');
+  const [appId, setAppId] = useState('');
   const [creating, setSubmitting] = useState(false);
+  const [createdProject, setCreatedProject] = useState<any>(null);
 
   // Ad-hoc Analysis States
   const [review, setReview] = useState('');
@@ -63,9 +66,28 @@ export default function ProjectsLanding() {
         params: { name, description: desc },
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      setProjects([...projects, res.data]);
-      setShowCreate(false);
-      setName(''); setDesc('');
+      
+      const project = res.data;
+
+      if (monitorType === 'google_play' && appId) {
+        await axios.post('/api/connectors', null, {
+          params: { platform: 'Google Play', app_id: appId, project_id: project.id, schedule: 'daily' },
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        // Initial sync
+        axios.post(`/api/connectors/sync/${project.id}`, null, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(e => console.error("Initial sync failed", e));
+      }
+
+      setProjects([...projects, project]);
+      setCreatedProject(project);
+      
+      if (monitorType === 'google_play') {
+          setShowCreate(false);
+          setName(''); setDesc(''); setAppId('');
+          setCreatedProject(null);
+      }
     } catch (err) {
       alert("Failed to create project");
     } finally {
@@ -234,28 +256,102 @@ export default function ProjectsLanding() {
       {showCreate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl relative overflow-hidden">
-            <h2 className="text-3xl font-black text-slate-900 mb-2">New Workspace</h2>
-            <p className="text-slate-500 mb-8 font-medium">Create a dedicated project for live app tracking.</p>
-            <form onSubmit={handleCreate} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Project Name</label>
-                <input 
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. My Mobile App Monitoring"
-                  className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-brand font-bold"
-                  required
-                />
-              </div>
-              <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setShowCreate(false)} className="flex-1 font-black text-xs uppercase tracking-widest text-slate-400">Cancel</button>
-                <button type="submit" disabled={creating} className="flex-[2] bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-                  Create
+            {!createdProject ? (
+              <>
+                <h2 className="text-3xl font-black text-slate-900 mb-2">New Workspace</h2>
+                <p className="text-slate-500 mb-8 font-medium">Create a dedicated project for live app tracking.</p>
+                <form onSubmit={handleCreate} className="space-y-6">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Project Name</label>
+                    <input 
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. My Mobile App Monitoring"
+                      className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-brand font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Monitoring Mode</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button 
+                        type="button"
+                        onClick={() => setMonitorType('api')}
+                        className={clsx(
+                          "p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2",
+                          monitorType === 'api' ? "border-brand bg-brand/5" : "border-slate-50 hover:border-slate-200"
+                        )}
+                      >
+                        <Zap className={clsx("w-6 h-6", monitorType === 'api' ? "text-brand" : "text-slate-400")} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Push API</span>
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setMonitorType('google_play')}
+                        className={clsx(
+                          "p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2",
+                          monitorType === 'google_play' ? "border-brand bg-brand/5" : "border-slate-50 hover:border-slate-200"
+                        )}
+                      >
+                        <LayoutGrid className={clsx("w-6 h-6", monitorType === 'google_play' ? "text-brand" : "text-slate-400")} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Google Play</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {monitorType === 'google_play' && (
+                    <div className="animate-in slide-in-from-top duration-300">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Google Play App ID</label>
+                      <input 
+                        type="text"
+                        value={appId}
+                        onChange={(e) => setAppId(e.target.value)}
+                        placeholder="com.spotify.music"
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-brand font-bold"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex gap-4 pt-4">
+                    <button type="button" onClick={() => setShowCreate(false)} className="flex-1 font-black text-xs uppercase tracking-widest text-slate-400">Cancel</button>
+                    <button type="submit" disabled={creating} className="flex-[2] bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+                      {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+                      Create
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <div className="animate-in zoom-in duration-300">
+                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mb-6 mx-auto">
+                  <CheckCircle2 className="w-10 h-10" />
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 mb-2 text-center">Project Ready!</h2>
+                <p className="text-slate-500 mb-8 font-medium text-center">Your monitoring workspace has been configured.</p>
+                
+                {monitorType === 'api' && (
+                  <div className="bg-slate-900 p-6 rounded-3xl border border-white/10 mb-8">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Your Collection Endpoint</label>
+                    <div className="bg-white/5 p-4 rounded-xl font-mono text-xs text-brand break-all">
+                      POST {typeof window !== 'undefined' ? window.location.origin : ''}/api/collect/{createdProject.id}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-4 leading-relaxed">
+                      Send JSON payloads with a <code className="text-slate-300">"text"</code> field to this URL to track sentiment in real-time.
+                    </p>
+                  </div>
+                )}
+
+                <button 
+                  onClick={() => { setShowCreate(false); setCreatedProject(null); setName(''); setDesc(''); setAppId(''); }}
+                  className="w-full bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all"
+                >
+                  Enter Workspace
                 </button>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}

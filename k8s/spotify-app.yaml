@@ -122,7 +122,7 @@ spec:
         imagePullPolicy: IfNotPresent
         env:
           - name: MLFLOW_TRACKING_URI
-            value: "http://18.140.71.49:5000"
+            value: "http://mlflow.ntdevopsmlflow.io.vn"
           - name: AWS_ACCESS_KEY_ID
             valueFrom: { secretKeyRef: { name: aws-creds, key: AWS_ACCESS_KEY_ID } }
           - name: AWS_SECRET_ACCESS_KEY
