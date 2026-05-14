@@ -85,7 +85,7 @@ export default function PipelinePage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setStatus({ type: 'success', msg: 'Training pipeline triggered successfully!' });
-      fetchData();
+      await fetchData();
     } catch (err: any) {
       setStatus({ type: 'error', msg: err.response?.data?.detail || 'Failed to trigger pipeline' });
     } finally {
@@ -164,6 +164,13 @@ export default function PipelinePage() {
         </div>
         
         <div className="flex gap-3">
+          <a 
+            href="https://github.com/JasonNguyen2135/Spotify-Sentiment-MLOps/actions" 
+            target="_blank" 
+            className="bg-slate-900 text-white border border-slate-800 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-all shadow-sm"
+          >
+            <Github className="w-4 h-4" /> GitHub Actions
+          </a>
           <a 
             href="http://localhost:31190" 
             target="_blank" 
@@ -271,9 +278,17 @@ export default function PipelinePage() {
                 <List className="w-5 h-5 text-brand" />
                 <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">Tiến trình chạy gần đây</h2>
               </div>
-              <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">
-                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-                Đang trực tiếp
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => fetchData()}
+                  className="text-[10px] font-black text-slate-400 hover:text-brand flex items-center gap-2 uppercase tracking-widest transition-all"
+                >
+                  <RefreshCw className="w-3 h-3" /> Làm mới
+                </button>
+                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+                  Đang trực tiếp
+                </div>
               </div>
             </div>
 
