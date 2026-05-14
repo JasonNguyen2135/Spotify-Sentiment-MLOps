@@ -304,41 +304,63 @@ def get_models(project_id: int = None, db: Session = Depends(get_db), current_us
     if project_id is None: return []
     verify_project_owner(project_id, current_user.id, db)
     try:
-        model_name = f"Sentiment_Analysis_Model_{project_id}"
-        res = requests.get(
-            f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search",
-            params={"filter": f"name='{model_name}'"},
-            timeout=5
-        )
-        if res.status_code == 200:
-            versions = res.json().get("model_versions", [])
-            # Thêm link trực tiếp đến MLflow cho mỗi version
-            for v in versions:
-                v['mlflow_url'] = f"{MLFLOW_URL}/#/models/{model_name}/versions/{v['version']}"
-            return sorted(versions, key=lambda x: int(x['version']), reverse=True)
-        return []
+        # Danh sách các pattern tên model để tìm kiếm
+        model_names_to_search = [
+            f"Sentiment_Analysis_Model_{project_id}",
+            "Sentiment_Analysis_Model",
+            "Spotify_Production_Model",
+            "Spotify_Sentiment_Model",
+            "Sentiment_Analysis_Model_default"
+        ]
+        
+        all_versions = []
+        for model_name in model_names_to_search:
+            try:
+                res = requests.get(
+                    f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search",
+                    params={"filter": f"name='{model_name}'"},
+                    timeout=5
+                )
+                if res.status_code == 200:
+                    versions = res.json().get("model_versions", [])
+                    for v in versions:
+                        v['mlflow_url'] = f"{MLFLOW_URL}/#/models/{model_name}/versions/{v['version']}"
+                        # Đánh dấu nếu là model cụ thể của project
+                        v['is_project_specific'] = (model_name == f"Sentiment_Analysis_Model_{project_id}")
+                    all_versions.extend(versions)
+            except Exception as e:
+                print(f"Lỗi khi tìm model {model_name}: {e}")
+        
+        # Sắp xếp: Ưu tiên project specific, sau đó theo version giảm dần
+        return sorted(all_versions, key=lambda x: (x.get('is_project_specific', False), int(x['version'])), reverse=True)
     except Exception as e:
-        print(f"MLflow error: {e}")
+        print(f"MLflow search error: {e}")
         return []
 
 @api_router.post("/deploy-model")
-def deploy_model(version: str, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def deploy_model(version: str, model_name: str = None, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: raise HTTPException(status_code=400, detail="project_id required")
     verify_project_owner(project_id, current_user.id, db)
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        model_name = f"Sentiment_Analysis_Model_{project_id}"
+        # Nếu không truyền model_name, mặc định theo project
+        if not model_name:
+            model_name = f"Sentiment_Analysis_Model_{project_id}"
+            
         payload = {
             "name": model_name,
             "version": version,
             "stage": "Production",
             "archive_existing_versions": True
         }
-        requests.post(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/transition-stage", json=payload, timeout=5)
+        res = requests.post(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/transition-stage", json=payload, timeout=5)
+        if res.status_code != 200:
+            raise Exception(f"MLflow error: {res.text}")
+            
         return {
             "status": "success", 
-            "message": f"Version {version} promoted to Production",
+            "message": f"Model {model_name} v{version} promoted to Production",
             "model_name": model_name,
             "version": version
         }
@@ -346,15 +368,14 @@ def deploy_model(version: str, project_id: int = None, db: Session = Depends(get
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/build-deploy")
-def trigger_build_deploy(version: str, project_id: int, current_user: User = Depends(get_current_user)):
+def trigger_build_deploy(version: str, model_name: str = None, project_id: int = None, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Kích hoạt GitHub Action thông qua Workflow Dispatch
     GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
     if not GITHUB_TOKEN:
-        # Fallback hoặc thông báo lỗi nếu chưa cấu hình token
-        return {"status": "warning", "message": "Backend chưa cấu hình GITHUB_TOKEN. Vui lòng kiểm tra lại pipeline."}
+        return {"status": "warning", "message": "Backend chưa cấu hình GITHUB_TOKEN."}
 
     owner = "JasonNguyen2135"
     repo = "Spotify-Sentiment-MLOps"
@@ -365,17 +386,20 @@ def trigger_build_deploy(version: str, project_id: int, current_user: User = Dep
         "Authorization": f"token {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json"
     }
+    
+    # Nếu là model toàn cục, gửi kèm model_name để CI biết đường build
     payload = {
         "ref": "main",
         "inputs": {
-            "model_target": version
+            "model_target": version,
+            "model_name": model_name or f"Sentiment_Analysis_Model_{project_id}"
         }
     }
     
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
         if res.status_code == 204:
-            return {"status": "success", "message": f"Đã kích hoạt CI/CD để build và deploy Model version {version}"}
+            return {"status": "success", "message": f"Đã kích hoạt CI/CD cho {model_name or 'model dự án'} version {version}"}
         else:
             return {"status": "error", "message": f"GitHub API error: {res.text}"}
     except Exception as e:
@@ -389,15 +413,54 @@ def get_airflow_runs(current_user: User = Depends(get_current_user)):
     try:
         import base64
         auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
+        url = f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns"
+        print(f"DEBUG: Fetching Airflow runs from {url}")
         res = requests.get(
-            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns?limit=10&order_by=-execution_date",
+            url,
+            params={"limit": 10, "order_by": "-execution_date"},
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=5
         )
         if res.status_code == 200:
             return res.json().get("dag_runs", [])
+        else:
+            print(f"DEBUG: Airflow Error {res.status_code}: {res.text}")
         return []
     except Exception as e:
+        print(f"Airflow connection error: {e}")
+        return []
+
+@api_router.post("/train")
+def trigger_training(dataset_source: str, project_id: int = None, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        import base64
+        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
+        payload = {
+            "conf": {
+                "data_source": dataset_source,
+                "project_id": project_id
+            }
+        }
+        url = f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns"
+        print(f"DEBUG: Triggering Airflow DAG at {url} with payload {payload}")
+        
+        res = requests.post(
+            url,
+            json=payload,
+            headers={"Authorization": f"Basic {auth_header}"},
+            timeout=10
+        )
+        
+        if res.status_code in [200, 201]:
+            return {"status": "success", "dag_run_id": res.json().get("dag_run_id")}
+        else:
+            print(f"DEBUG: Airflow Trigger Error {res.status_code}: {res.text}")
+            raise HTTPException(status_code=res.status_code, detail=res.text)
+    except Exception as e:
+        print(f"Airflow trigger exception: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
         print(f"Airflow error: {e}")
         return []
 
