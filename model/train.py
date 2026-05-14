@@ -93,7 +93,11 @@ def train_and_deploy():
 
         # Dynamic model name based on project
         project_id = os.getenv("PROJECT_ID", "default")
-        model_name = f"Sentiment_Analysis_Model_{project_id}"
+        if project_id in ["admin_hub", "default", "Sentiment_Analysis_Platform"]:
+            model_name = "Spotify_Production_Model"
+        else:
+            model_name = f"Sentiment_Analysis_Model_{project_id}"
+        
         print(f"Registering model as: {model_name}")
 
         mlflow.sklearn.log_model(
