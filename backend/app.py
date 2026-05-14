@@ -413,8 +413,8 @@ def get_airflow_runs(current_user: User = Depends(get_current_user)):
     try:
         import base64
         auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
-        # Reverted to /api/v1 for Airflow 2 compatibility
-        url = f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns"
+        # Reverted to /api/v2 for Airflow 3 compatibility
+        url = f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns"
         print(f"DEBUG: Fetching Airflow runs from {url}")
         res = requests.get(
             url,
@@ -485,9 +485,9 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         
         # Task ID is hardcoded based on the DAG definition
         task_id = "model_training_pipeline"
-        # 1. Get task instances to find the try_number (Updated to /api/v1)
+        # 1. Get task instances to find the try_number (Updated to /api/v2)
         ti_res = requests.get(
-            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}",
+            f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}",
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=5
         )
@@ -497,9 +497,9 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         
         try_number = ti_res.json().get("try_number", 1)
         
-        # 2. Fetch logs (Updated to /api/v1)
+        # 2. Fetch logs (Updated to /api/v2)
         log_res = requests.get(
-            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
+            f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=10
         )

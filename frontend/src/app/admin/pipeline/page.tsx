@@ -152,9 +152,9 @@ export default function PipelinePage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
-      // 2. Trigger build and deploy CI/CD
+      // 2. Trigger build and deploy CI/CD (Removed model_name as GitHub action doesn't support it)
       const buildRes = await axios.post('/api/build-deploy', null, {
-        params: { version, model_name: modelName, project_id: activeProject.id },
+        params: { version, project_id: activeProject.id },
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -323,55 +323,62 @@ export default function PipelinePage() {
             </div>
 
             <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                    <th className="px-8 py-4">Run Type / ID</th>
-                    <th className="px-8 py-4">Status</th>
-                    <th className="px-8 py-4">Details</th>
-                    <th className="px-8 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {runs.map((run) => (
-                    <tr key={run.id} className="hover:bg-slate-50/30 transition-colors">
-                      <td className="px-8 py-5">
-                        <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">{run.type}</p>
-                        <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{run.id}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">
-                          {new Date(run.time).toLocaleString()}
-                        </p>
-                      </td>
-                      <td className="px-8 py-5">
-                        <span className={clsx(
-                          "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-2 w-fit",
-                          run.status === 'success' || run.status === 'completed' ? "bg-emerald-100 text-emerald-700" :
-                          run.status === 'running' || run.status === 'in_progress' ? "bg-blue-100 text-blue-700" :
-                          run.status === 'failed' || run.status === 'failure' ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"
-                        )}>
-                          {(run.status === 'running' || run.status === 'in_progress') && <Loader2 className="w-3 h-3 animate-spin" />}
-                          {run.status}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5">
-                        <p className="text-xs text-slate-600 font-medium">{run.details}</p>
-                      </td>
-                      <td className="px-8 py-5 text-right">
-                        <button 
-                          onClick={() => handleFetchLogs(run)}
-                          className="text-xs font-black text-slate-400 hover:text-brand flex items-center gap-2 ml-auto uppercase tracking-widest"
-                        >
-                          {run.type.includes('Airflow') ? (
-                            <><Terminal className="w-4 h-4" /> View Logs</>
-                          ) : (
-                            <><ExternalLink className="w-4 h-4" /> View CI</>
-                          )}
-                        </button>
-                      </td>
+              <div className="max-h-[350px] overflow-y-auto scrollbar-hide">
+                <table className="w-full text-left">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                      <th className="px-8 py-4">Run Type / ID</th>
+                      <th className="px-8 py-4">Status</th>
+                      <th className="px-8 py-4">Details</th>
+                      <th className="px-8 py-4 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {runs.map((run) => (
+                      <tr key={run.id} className="hover:bg-slate-50/30 transition-colors">
+                        <td className="px-8 py-5">
+                          <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">{run.type}</p>
+                          <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{run.id}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">
+                            {new Date(run.time).toLocaleString()}
+                          </p>
+                        </td>
+                        <td className="px-8 py-5">
+                          <span className={clsx(
+                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-2 w-fit",
+                            run.status === 'success' || run.status === 'completed' ? "bg-emerald-100 text-emerald-700" :
+                            run.status === 'running' || run.status === 'in_progress' ? "bg-blue-100 text-blue-700" :
+                            run.status === 'failed' || run.status === 'failure' ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"
+                          )}>
+                            {(run.status === 'running' || run.status === 'in_progress') && <Loader2 className="w-3 h-3 animate-spin" />}
+                            {run.status}
+                          </span>
+                        </td>
+                        <td className="px-8 py-5">
+                          <p className="text-xs text-slate-600 font-medium">{run.details}</p>
+                        </td>
+                        <td className="px-8 py-5 text-right">
+                          <button 
+                            onClick={() => handleFetchLogs(run)}
+                            className="text-xs font-black text-slate-400 hover:text-brand flex items-center gap-2 ml-auto uppercase tracking-widest"
+                          >
+                            {run.type.includes('Airflow') ? (
+                              <><Terminal className="w-4 h-4" /> View Logs</>
+                            ) : (
+                              <><ExternalLink className="w-4 h-4" /> View CI</>
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {runs.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-8 py-10 text-center text-slate-400 italic">No execution history found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
 
@@ -383,63 +390,70 @@ export default function PipelinePage() {
             </div>
 
             <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                    <th className="px-8 py-4">Version / Model Name</th>
-                    <th className="px-8 py-4">Stage</th>
-                    <th className="px-8 py-4 text-right">Deployment</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {models.map((model) => (
-                    <tr key={`${model.name}-${model.version}`} className="hover:bg-slate-50/30 transition-colors">
-                      <td className="px-8 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-black text-slate-500">
-                            v{model.version}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{model.name}</p>
-                            <a 
-                              href={model.mlflow_url} 
-                              target="_blank" 
-                              className="text-[10px] text-brand hover:underline font-black flex items-center gap-1 mt-1 uppercase"
-                            >
-                              <ExternalLink className="w-2.5 h-2.5" /> MLflow Details
-                            </a>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-8 py-5">
-                        <span className={clsx(
-                          "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                          model.current_stage === "Production" ? "bg-emerald-100 text-emerald-700 border border-emerald-200" :
-                          model.current_stage === "Staging" ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-slate-100 text-slate-500"
-                        )}>
-                          {model.current_stage}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5 text-right">
-                        {model.current_stage === "Production" ? (
-                          <div className="flex items-center justify-end gap-2 text-emerald-600 font-bold text-[10px] tracking-widest">
-                            <ShieldCheck className="w-4 h-4" /> SERVING (PROD)
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => handleDeploy(model.version, model.name)}
-                            disabled={!!deploying}
-                            className="bg-brand text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center gap-2 ml-auto disabled:bg-slate-100 disabled:text-slate-300"
-                          >
-                            {deploying === model.version ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
-                            PROMPT & DEPLOY
-                          </button>
-                        )}
-                      </td>
+              <div className="max-h-[350px] overflow-y-auto scrollbar-hide">
+                <table className="w-full text-left">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                      <th className="px-8 py-4">Version / Model Name</th>
+                      <th className="px-8 py-4">Stage</th>
+                      <th className="px-8 py-4 text-right">Deployment</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {models.map((model) => (
+                      <tr key={`${model.name}-${model.version}`} className="hover:bg-slate-50/30 transition-colors">
+                        <td className="px-8 py-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-black text-slate-500">
+                              v{model.version}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">{model.name}</p>
+                              <a 
+                                href={model.mlflow_url} 
+                                target="_blank" 
+                                className="text-[10px] text-brand hover:underline font-black flex items-center gap-1 mt-1 uppercase"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5" /> MLflow Details
+                              </a>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-8 py-5">
+                          <span className={clsx(
+                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                            model.current_stage === "Production" ? "bg-emerald-100 text-emerald-700 border border-emerald-200" :
+                            model.current_stage === "Staging" ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-slate-100 text-slate-500"
+                          )}>
+                            {model.current_stage}
+                          </span>
+                        </td>
+                        <td className="px-8 py-5 text-right">
+                          {model.current_stage === "Production" ? (
+                            <div className="flex items-center justify-end gap-2 text-emerald-600 font-bold text-[10px] tracking-widest">
+                              <ShieldCheck className="w-4 h-4" /> SERVING (PROD)
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => handleDeploy(model.version, model.name)}
+                              disabled={!!deploying}
+                              className="bg-brand text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center gap-2 ml-auto disabled:bg-slate-100 disabled:text-slate-300"
+                            >
+                              {deploying === model.version ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
+                              PROMPT & DEPLOY
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {models.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-8 py-10 text-center text-slate-400 italic">No models found in registry.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
         </div>
