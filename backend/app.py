@@ -442,7 +442,7 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
         "ref": "main",
         "inputs": {
             "data_source": dataset_source,
-            "project_id": str(project_id) if project_id else "default"
+            "project_id": "Sentiment_Analysis_Platform" if current_user.role == "admin" else (str(project_id) if project_id else "default")
         }
     }
     
