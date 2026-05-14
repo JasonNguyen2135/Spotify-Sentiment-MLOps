@@ -122,7 +122,12 @@ jobs:
           get_tag() {
             local service=$1
             local file=$2
-            grep -oP "image: registry.ntdevopsregistry\.(online\|io\.vn)/mlops/$service:\K[^\s#]*" "$file" | head -1 || echo "v1.0.0"
+            local tag=$(grep -oP "image: registry.ntdevopsregistry\.(online|io\.vn)/mlops/$service:\K[^\s#]+" "$file" | head -1)
+            if [ -z "$tag" ]; then
+              echo "v1.0.0"
+            else
+              echo "$tag"
+            fi
           }
 
           OLD_BACKEND_TAG=$(get_tag "backend" "k8s/spotify-app.yaml")
@@ -131,7 +136,7 @@ jobs:
           OLD_CRAWLER_TAG=$(get_tag "crawler" "k8s/spotify-app.yaml")
           OLD_MONITORING_TAG=$(get_tag "spotify-monitoring" "k8s/monitoring-service.yaml")
 
-          echo "Detected Tags: Backend=$OLD_BACKEND_TAG, Frontend=$OLD_FRONTEND_TAG, Model=$OLD_MODEL_TAG, Crawler=$OLD_CRAWLER_TAG"
+          echo "Detected Tags: Backend=$OLD_BACKEND_TAG, Frontend=$OLD_FRONTEND_TAG, Model=$OLD_MODEL_TAG, Crawler=$OLD_CRAWLER_TAG, Monitoring=$OLD_MONITORING_TAG"
 
           # Bước C: Ghi đè cấu hình infra từ main vào deploy
           cp /tmp/k8s-main/* k8s/
@@ -145,7 +150,8 @@ jobs:
             local changed=$5
             
             local target_tag=$old_tag
-            if [ "$changed" == "true" ]; then
+            # Nếu có thay đổi code HOẶC tag cũ bị hỏng/trống thì dùng tag mới
+            if [ "$changed" == "true" ] || [ -z "$target_tag" ] || [ "$target_tag" == "v1.0.0" ]; then
               target_tag=$new_tag
             fi
             
