@@ -37,15 +37,40 @@ export default function PipelinePage() {
       const headers = { 'Authorization': `Bearer ${token}` };
       const params = { project_id: activeProject.id };
       
-      const [datasetsRes, modelsRes, runsRes] = await Promise.all([
+      const [datasetsRes, modelsRes, airflowRunsRes, githubRunsRes] = await Promise.all([
         axios.get('/api/datasets', { headers, params }),
         axios.get('/api/models', { headers, params }),
-        axios.get('/api/airflow/runs', { headers })
+        axios.get('/api/airflow/runs', { headers }),
+        axios.get('/api/github/runs', { headers })
       ]);
       
       setDatasets(datasetsRes.data);
       setModels(modelsRes.data);
-      setRuns(runsRes.data);
+      
+      // Merge and sort runs
+      const airflowRuns = (airflowRunsRes.data || []).map((r: any) => ({
+        id: r.dag_run_id,
+        type: 'Airflow (Training)',
+        status: r.state,
+        time: r.execution_date,
+        details: r.conf?.data_source ? `Source: ${r.conf.data_source.split('/').pop()}` : 'Spotify Sentiment Pipeline',
+        raw: r
+      }));
+      
+      const githubRuns = (githubRunsRes.data || []).map((r: any) => ({
+        id: r.id,
+        type: r.workflow_filename === 'manual_train.yml' ? 'GitHub (Training)' : 'GitHub (Build/Deploy)',
+        status: r.conclusion || r.status,
+        time: r.created_at,
+        details: r.display_title || r.name,
+        raw: r
+      }));
+      
+      const combinedRuns = [...airflowRuns, ...githubRuns].sort((a, b) => 
+        new Date(b.time).getTime() - new Date(a.time).getTime()
+      );
+      
+      setRuns(combinedRuns);
       
       if (!selectedDataset && datasetsRes.data.length > 0) {
         setSelectedDataset(datasetsRes.data[0].source);
@@ -59,7 +84,7 @@ export default function PipelinePage() {
 
   useEffect(() => {
     if (!authLoading && user?.role !== 'admin') {
-      redirect('/');
+      router.push('/');
     }
     if (!authLoading && !activeProject) {
       router.push('/');
@@ -68,7 +93,7 @@ export default function PipelinePage() {
     
     if (user?.role === 'admin' && activeProject) {
       fetchData();
-      const interval = setInterval(fetchData, 10000); // Poll every 10s
+      const interval = setInterval(fetchData, 15000); // Poll every 15s
       return () => clearInterval(interval);
     }
   }, [user, authLoading, fetchData, activeProject, router]);
@@ -93,50 +118,55 @@ export default function PipelinePage() {
     }
   };
 
-  const handleFetchLogs = async (runId: string) => {
-    setViewingLogs(runId);
-    setFetchingLogs(true);
-    setLogs('');
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`/api/airflow/logs/${runId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setLogs(res.data.logs);
-    } catch (err) {
-      setLogs('Failed to fetch logs. Check if task has started.');
-    } finally {
-      setFetchingLogs(false);
+  const handleFetchLogs = async (run: any) => {
+    if (run.type.includes('Airflow')) {
+      setViewingLogs(run.id);
+      setFetchingLogs(true);
+      setLogs('');
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`/api/airflow/logs/${run.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        setLogs(res.data.logs);
+      } catch (err) {
+        setLogs('Failed to fetch logs. Check if task has started.');
+      } finally {
+        setFetchingLogs(false);
+      }
+    } else {
+      // For GitHub runs, redirect to GitHub actions page
+      window.open(run.raw.html_url, '_blank');
     }
   };
 
-  const handleDeploy = async (version: string) => {
+  const handleDeploy = async (version: string, modelName: string) => {
     if (!activeProject) return;
     setDeploying(version);
     setStatus(null);
     try {
       const token = localStorage.getItem('token');
-      // 1. Chuyển stage trong MLflow
+      // 1. Transition stage in MLflow
       await axios.post('/api/deploy-model', null, {
-        params: { version, project_id: activeProject.id },
+        params: { version, model_name: modelName, project_id: activeProject.id },
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
-      // 2. Kích hoạt build và deploy CI/CD
+      // 2. Trigger build and deploy CI/CD
       const buildRes = await axios.post('/api/build-deploy', null, {
-        params: { version, project_id: activeProject.id },
+        params: { version, model_name: modelName, project_id: activeProject.id },
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (buildRes.data.status === 'success') {
-        setStatus({ type: 'success', msg: `Mô hình v${version} đã được chuyển sang Production và đang kích hoạt build CI/CD!` });
+        setStatus({ type: 'success', msg: `Model v${version} promoted to Production and CI/CD build triggered!` });
       } else {
-        setStatus({ type: 'success', msg: `Mô hình v${version} đã được chuyển sang Production (CI/CD: ${buildRes.data.message})` });
+        setStatus({ type: 'success', msg: `Model v${version} promoted to Production (CI/CD: ${buildRes.data.message})` });
       }
       
       fetchData();
     } catch (err: any) {
-      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Lỗi khi triển khai mô hình' });
+      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Error deploying model' });
     } finally {
       setDeploying(null);
     }
@@ -158,9 +188,9 @@ export default function PipelinePage() {
         <div>
           <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3">
             <Cpu className="text-brand w-10 h-10" />
-            Trung tâm <span className="text-brand">Điều phối</span>
+            Orchestration <span className="text-brand">Hub</span>
           </h1>
-          <p className="text-gray-500 mt-2">Hệ thống quản lý MLOps: huấn luyện, giám sát và triển khai mô hình tự động.</p>
+          <p className="text-gray-500 mt-2">MLOps Management: automated training, monitoring, and deployment.</p>
         </div>
         
         <div className="flex gap-3">
@@ -197,7 +227,7 @@ export default function PipelinePage() {
             {status.type === 'success' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
             <span className="font-bold">{status.msg}</span>
           </div>
-          <button onClick={() => setStatus(null)} className="text-sm opacity-50 hover:opacity-100 uppercase font-black">Đóng</button>
+          <button onClick={() => setStatus(null)} className="text-sm opacity-50 hover:opacity-100 uppercase font-black">Close</button>
         </div>
       )}
 
@@ -207,12 +237,12 @@ export default function PipelinePage() {
           <section className="space-y-6">
             <div className="flex items-center gap-2 px-2">
               <Database className="w-5 h-5 text-brand" />
-              <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">Huấn luyện mô hình</h2>
+              <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">Train Model</h2>
             </div>
             
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
               <div className="mb-6">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Đường dẫn Dataset tùy chỉnh</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Custom Dataset URL</label>
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                     <LinkIcon className="w-4 h-4" />
@@ -228,7 +258,7 @@ export default function PipelinePage() {
               </div>
 
               <div className="mb-8">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Hoặc chọn từ Registry/MongoDB</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Or choose from Registry/MongoDB</label>
                 <div className="space-y-2">
                   {datasets.map((ds) => (
                     <div 
@@ -243,7 +273,7 @@ export default function PipelinePage() {
                         <Database className={clsx("w-5 h-5", selectedDataset === ds.source && !customDataset ? "text-brand" : "text-slate-400")} />
                         <div>
                           <p className="text-xs font-bold text-slate-900">{ds.name}</p>
-                          <p className="text-[10px] text-brand-600 font-black mt-0.5">{ds.count.toLocaleString()} bản ghi</p>
+                          <p className="text-[10px] text-brand-600 font-black mt-0.5">{ds.count.toLocaleString()} records</p>
                         </div>
                       </div>
                     </div>
@@ -257,14 +287,14 @@ export default function PipelinePage() {
                 className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-md hover:bg-slate-800 transition-all flex items-center justify-center gap-3 shadow-xl shadow-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
               >
                 {triggering ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-white" />}
-                KÍCH HOẠT TRAIN
+                TRIGGER TRAINING
               </button>
             </div>
           </section>
 
           <div className="bg-brand/5 p-6 rounded-3xl border border-brand/10">
             <p className="text-xs text-brand-700 leading-relaxed">
-              <span className="font-bold">Lưu ý:</span> Việc kích hoạt huấn luyện sẽ khởi tạo một pod Kubernetes tạm thời. Trạng thái thực thi và log sẽ được cập nhật tự động.
+              <span className="font-bold">Note:</span> Triggering training will initialize a temporary Kubernetes pod. Execution state and logs will update automatically.
             </p>
           </div>
         </div>
@@ -275,19 +305,19 @@ export default function PipelinePage() {
           <section className="space-y-6">
             <div className="flex items-center justify-between px-2">
               <div className="flex items-center gap-2">
-                <List className="w-5 h-5 text-brand" />
-                <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">Tiến trình chạy gần đây</h2>
+                <Clock className="w-5 h-5 text-brand" />
+                <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">Execution History</h2>
               </div>
               <div className="flex items-center gap-4">
                 <button 
                   onClick={() => fetchData()}
                   className="text-[10px] font-black text-slate-400 hover:text-brand flex items-center gap-2 uppercase tracking-widest transition-all"
                 >
-                  <RefreshCw className="w-3 h-3" /> Làm mới
+                  <RefreshCw className="w-3 h-3" /> Refresh
                 </button>
                 <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">
                   <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-                  Đang trực tiếp
+                  Live Status
                 </div>
               </div>
             </div>
@@ -296,37 +326,46 @@ export default function PipelinePage() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                    <th className="px-8 py-4">Run ID / Thời gian</th>
-                    <th className="px-8 py-4">Trạng thái</th>
-                    <th className="px-8 py-4 text-right">Hành động</th>
+                    <th className="px-8 py-4">Run Type / ID</th>
+                    <th className="px-8 py-4">Status</th>
+                    <th className="px-8 py-4">Details</th>
+                    <th className="px-8 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {runs.map((run) => (
-                    <tr key={run.dag_run_id} className="hover:bg-slate-50/30 transition-colors">
+                    <tr key={run.id} className="hover:bg-slate-50/30 transition-colors">
                       <td className="px-8 py-5">
-                        <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{run.dag_run_id}</p>
+                        <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">{run.type}</p>
+                        <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{run.id}</p>
                         <p className="text-[10px] text-slate-400 font-medium">
-                          {new Date(run.execution_date).toLocaleString()}
+                          {new Date(run.time).toLocaleString()}
                         </p>
                       </td>
                       <td className="px-8 py-5">
                         <span className={clsx(
                           "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-2 w-fit",
-                          run.state === 'success' ? "bg-emerald-100 text-emerald-700" :
-                          run.state === 'running' ? "bg-blue-100 text-blue-700" :
-                          run.state === 'failed' ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"
+                          run.status === 'success' || run.status === 'completed' ? "bg-emerald-100 text-emerald-700" :
+                          run.status === 'running' || run.status === 'in_progress' ? "bg-blue-100 text-blue-700" :
+                          run.status === 'failed' || run.status === 'failure' ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"
                         )}>
-                          {run.state === 'running' && <Loader2 className="w-3 h-3 animate-spin" />}
-                          {run.state}
+                          {(run.status === 'running' || run.status === 'in_progress') && <Loader2 className="w-3 h-3 animate-spin" />}
+                          {run.status}
                         </span>
+                      </td>
+                      <td className="px-8 py-5">
+                        <p className="text-xs text-slate-600 font-medium">{run.details}</p>
                       </td>
                       <td className="px-8 py-5 text-right">
                         <button 
-                          onClick={() => handleFetchLogs(run.dag_run_id)}
+                          onClick={() => handleFetchLogs(run)}
                           className="text-xs font-black text-slate-400 hover:text-brand flex items-center gap-2 ml-auto uppercase tracking-widest"
                         >
-                          <Terminal className="w-4 h-4" /> Xem Log
+                          {run.type.includes('Airflow') ? (
+                            <><Terminal className="w-4 h-4" /> View Logs</>
+                          ) : (
+                            <><ExternalLink className="w-4 h-4" /> View CI</>
+                          )}
                         </button>
                       </td>
                     </tr>
@@ -339,35 +378,35 @@ export default function PipelinePage() {
           {/* Model Registry */}
           <section className="space-y-6">
             <div className="flex items-center gap-2 px-2">
-              <RefreshCw className="w-5 h-5 text-brand" />
-              <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">Danh sách Model (MLflow)</h2>
+              <Layers className="w-5 h-5 text-brand" />
+              <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">Model Registry (MLflow)</h2>
             </div>
 
             <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                    <th className="px-8 py-4">Phiên bản</th>
-                    <th className="px-8 py-4">Giai đoạn</th>
-                    <th className="px-8 py-4 text-right">Quản lý</th>
+                    <th className="px-8 py-4">Version / Model Name</th>
+                    <th className="px-8 py-4">Stage</th>
+                    <th className="px-8 py-4 text-right">Deployment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {models.map((model) => (
-                    <tr key={model.version} className="hover:bg-slate-50/30 transition-colors">
+                    <tr key={`${model.name}-${model.version}`} className="hover:bg-slate-50/30 transition-colors">
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-black text-slate-500">
                             v{model.version}
                           </div>
                           <div>
-                            <p className="text-sm font-bold text-slate-900">Run #{model.run_id.slice(0, 8)}</p>
+                            <p className="text-sm font-bold text-slate-900">{model.name}</p>
                             <a 
                               href={model.mlflow_url} 
                               target="_blank" 
                               className="text-[10px] text-brand hover:underline font-black flex items-center gap-1 mt-1 uppercase"
                             >
-                              <ExternalLink className="w-2.5 h-2.5" /> Xem chi tiết MLflow
+                              <ExternalLink className="w-2.5 h-2.5" /> MLflow Details
                             </a>
                           </div>
                         </div>
@@ -384,16 +423,16 @@ export default function PipelinePage() {
                       <td className="px-8 py-5 text-right">
                         {model.current_stage === "Production" ? (
                           <div className="flex items-center justify-end gap-2 text-emerald-600 font-bold text-[10px] tracking-widest">
-                            <ShieldCheck className="w-4 h-4" /> ĐANG PHỤC VỤ (PROD)
+                            <ShieldCheck className="w-4 h-4" /> SERVING (PROD)
                           </div>
                         ) : (
                           <button 
-                            onClick={() => handleDeploy(model.version)}
+                            onClick={() => handleDeploy(model.version, model.name)}
                             disabled={!!deploying}
                             className="bg-brand text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center gap-2 ml-auto disabled:bg-slate-100 disabled:text-slate-300"
                           >
                             {deploying === model.version ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
-                            BUILD & DEPLOY
+                            PROMPT & DEPLOY
                           </button>
                         )}
                       </td>

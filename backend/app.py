@@ -288,13 +288,13 @@ def get_datasets(project_id: int = None, db: Session = Depends(get_db), current_
             "name": f"Current Project Data (MongoDB)", 
             "source": "mongodb", 
             "count": mongo_count,
-            "description": "Dữ liệu mới nhất được crawl hoặc upload cho dự án này."
+            "description": "Latest data crawled or uploaded for this project."
         },
         {
             "name": "Enterprise Baseline v1.0", 
             "source": "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv", 
             "count": 12500,
-            "description": "Bộ dữ liệu chuẩn để huấn luyện mô hình cơ bản."
+            "description": "Standard dataset for baseline model training."
         }
     ]
 
@@ -304,7 +304,7 @@ def get_models(project_id: int = None, db: Session = Depends(get_db), current_us
     if project_id is None: return []
     verify_project_owner(project_id, current_user.id, db)
     try:
-        # Danh sách các pattern tên model để tìm kiếm
+        # Model name patterns to search
         model_names_to_search = [
             f"Sentiment_Analysis_Model_{project_id}",
             "Sentiment_Analysis_Model",
@@ -325,13 +325,13 @@ def get_models(project_id: int = None, db: Session = Depends(get_db), current_us
                     versions = res.json().get("model_versions", [])
                     for v in versions:
                         v['mlflow_url'] = f"{MLFLOW_URL}/#/models/{model_name}/versions/{v['version']}"
-                        # Đánh dấu nếu là model cụ thể của project
+                        # Mark if it's project-specific
                         v['is_project_specific'] = (model_name == f"Sentiment_Analysis_Model_{project_id}")
                     all_versions.extend(versions)
             except Exception as e:
-                print(f"Lỗi khi tìm model {model_name}: {e}")
+                print(f"Error finding model {model_name}: {e}")
         
-        # Sắp xếp: Ưu tiên project specific, sau đó theo version giảm dần
+        # Sort: Project specific first, then by version descending
         return sorted(all_versions, key=lambda x: (x.get('is_project_specific', False), int(x['version'])), reverse=True)
     except Exception as e:
         print(f"MLflow search error: {e}")
@@ -344,7 +344,7 @@ def deploy_model(version: str, model_name: str = None, project_id: int = None, d
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        # Nếu không truyền model_name, mặc định theo project
+        # If model_name is not provided, default to project-specific name
         if not model_name:
             model_name = f"Sentiment_Analysis_Model_{project_id}"
             
@@ -372,10 +372,10 @@ def trigger_build_deploy(version: str, model_name: str = None, project_id: int =
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    # Kích hoạt GitHub Action thông qua Workflow Dispatch
+    # Trigger GitHub Action via Workflow Dispatch
     GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
     if not GITHUB_TOKEN:
-        return {"status": "warning", "message": "Backend chưa cấu hình GITHUB_TOKEN."}
+        return {"status": "warning", "message": "Backend GITHUB_TOKEN not configured."}
 
     owner = "JasonNguyen2135"
     repo = "Spotify-Sentiment-MLOps"
@@ -387,7 +387,7 @@ def trigger_build_deploy(version: str, model_name: str = None, project_id: int =
         "Accept": "application/vnd.github.v3+json"
     }
     
-    # Nếu là model toàn cục, gửi kèm model_name để CI biết đường build
+    # Use provided model_name or project-specific default
     payload = {
         "ref": "main",
         "inputs": {
@@ -399,7 +399,7 @@ def trigger_build_deploy(version: str, model_name: str = None, project_id: int =
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
         if res.status_code == 204:
-            return {"status": "success", "message": f"Đã kích hoạt CI/CD cho {model_name or 'model dự án'} version {version}"}
+            return {"status": "success", "message": f"Triggered CI/CD for {model_name or 'project model'} version {version}"}
         else:
             return {"status": "error", "message": f"GitHub API error: {res.text}"}
     except Exception as e:
@@ -413,8 +413,8 @@ def get_airflow_runs(current_user: User = Depends(get_current_user)):
     try:
         import base64
         auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
-        # Updated to /api/v2 for Airflow 3 compatibility
-        url = f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns"
+        # Reverted to /api/v1 for Airflow 2 compatibility
+        url = f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns"
         print(f"DEBUG: Fetching Airflow runs from {url}")
         res = requests.get(
             url,
@@ -439,7 +439,7 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
     GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
     if not GITHUB_TOKEN:
         print("DEBUG: GITHUB_TOKEN is missing in environment variables")
-        return {"status": "warning", "message": "Backend chưa cấu hình GITHUB_TOKEN."}
+        return {"status": "warning", "message": "Backend GITHUB_TOKEN not configured."}
 
     owner = "JasonNguyen2135"
     repo = "Spotify-Sentiment-MLOps"
@@ -468,7 +468,7 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
         print(f"DEBUG: GitHub API Response Body: {res.text}")
         
         if res.status_code == 204:
-            return {"status": "success", "message": f"Đã kích hoạt GitHub Action để huấn luyện model với dữ liệu: {dataset_source}"}
+            return {"status": "success", "message": f"Triggered GitHub Action to train model with data: {dataset_source}"}
         else:
             return {"status": "error", "message": f"GitHub API error: {res.text}"}
     except Exception as e:
@@ -485,9 +485,9 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         
         # Task ID is hardcoded based on the DAG definition
         task_id = "model_training_pipeline"
-        # 1. Get task instances to find the try_number (Updated to /api/v2)
+        # 1. Get task instances to find the try_number (Updated to /api/v1)
         ti_res = requests.get(
-            f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}",
+            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}",
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=5
         )
@@ -497,9 +497,9 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         
         try_number = ti_res.json().get("try_number", 1)
         
-        # 2. Fetch logs (Updated to /api/v2)
+        # 2. Fetch logs (Updated to /api/v1)
         log_res = requests.get(
-            f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
+            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=10
         )
@@ -866,7 +866,44 @@ def delete_alert_rule(rule_id: int, db: Session = Depends(get_db), current_user:
     db.commit()
     return {"message": "Alert rule removed"}
 
-    # Include router at root and with /api prefix
+@api_router.get("/github/runs")
+def get_github_runs(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+    if not GITHUB_TOKEN:
+        return []
+
+    owner = "JasonNguyen2135"
+    repo = "Spotify-Sentiment-MLOps"
+    
+    # Fetch runs for both relevant workflows
+    workflows = ["manual_train.yml", "manual_build_deploy_model_service.yml"]
+    all_runs = []
+    
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    for wf in workflows:
+        try:
+            url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{wf}/runs"
+            res = requests.get(url, headers=headers, params={"per_page": 5}, timeout=5)
+            if res.status_code == 200:
+                runs = res.json().get("workflow_runs", [])
+                for r in runs:
+                    # Enrich run data with workflow name for the UI
+                    r['workflow_filename'] = wf
+                    all_runs.append(r)
+        except Exception as e:
+            print(f"Error fetching GitHub runs for {wf}: {e}")
+            
+    # Sort by creation date descending
+    return sorted(all_runs, key=lambda x: x['created_at'], reverse=True)
+
+# Include router at root and with /api prefix
 
 app.include_router(api_router)
 app.include_router(api_router, prefix="/api")
