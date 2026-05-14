@@ -331,7 +331,7 @@ def get_airflow_runs(current_user: User = Depends(get_current_user)):
         import base64
         auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
         res = requests.get(
-            f"{AIRFLOW_URL}/api/v1/dags/sentiment_analysis_training/dagRuns?limit=10&order_by=-execution_date",
+            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns?limit=10&order_by=-execution_date",
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=5
         )
@@ -353,7 +353,7 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         task_id = "model_training_pipeline"
         # 1. Get task instances to find the try_number
         ti_res = requests.get(
-            f"{AIRFLOW_URL}/api/v1/dags/sentiment_analysis_training/dagRuns/{dag_run_id}/taskInstances/{task_id}",
+            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}",
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=5
         )
@@ -364,7 +364,7 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         
         # 2. Fetch logs
         log_res = requests.get(
-            f"{AIRFLOW_URL}/api/v1/dags/sentiment_analysis_training/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
+            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=10
         )
@@ -386,7 +386,7 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
             }
         }
         res = requests.post(
-            f"{AIRFLOW_URL}/api/v1/dags/sentiment_analysis_training/dagRuns",
+            f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns",
             json=payload,
             headers={"Authorization": f"Basic {auth_header}"},
             timeout=10
