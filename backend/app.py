@@ -301,55 +301,40 @@ def get_datasets(project_id: int = None, db: Session = Depends(get_db), current_
 # NEW: Model Management (MLflow Proxy)
 @api_router.get("/models")
 def get_models(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if project_id is None: return []
-    verify_project_owner(project_id, current_user.id, db)
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        # Model name patterns to search - PRIORITIZE project specific
-        model_names_to_search = [f"Sentiment_Analysis_Model_{project_id}"]
-        
-        # Only add fallbacks if it's the default project
-        if not project_id or str(project_id) == "1": # 1 is usually the default project ID
-             model_names_to_search.extend([
-                "Sentiment_Analysis_Model",
-                "Spotify_Production_Model",
-                "Spotify_Sentiment_Model",
-                "Sentiment_Analysis_Model_default"
-            ])
+        # Standardized global model name for Admin Hub
+        model_name = "Sentiment_Analysis_Platform"
         
         all_versions = []
-        for model_name in model_names_to_search:
-            try:
-                res = requests.get(
-                    f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search",
-                    params={"filter": f"name='{model_name}'"},
-                    timeout=5
-                )
-                if res.status_code == 200:
-                    versions = res.json().get("model_versions", [])
-                    for v in versions:
-                        v['mlflow_url'] = f"{MLFLOW_URL}/#/models/{model_name}/versions/{v['version']}"
-                        # Mark if it's project-specific
-                        v['is_project_specific'] = (model_name == f"Sentiment_Analysis_Model_{project_id}")
-                    all_versions.extend(versions)
-            except Exception as e:
-                print(f"Error finding model {model_name}: {e}")
+        try:
+            res = requests.get(
+                f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search",
+                params={"filter": f"name='{model_name}'"},
+                timeout=5
+            )
+            if res.status_code == 200:
+                versions = res.json().get("model_versions", [])
+                for v in versions:
+                    v['mlflow_url'] = f"{MLFLOW_URL}/#/models/{model_name}/versions/{v['version']}"
+                    v['is_project_specific'] = True
+                all_versions.extend(versions)
+        except Exception as e:
+            print(f"Error finding model {model_name}: {e}")
         
-        # Sort: Project specific first, then by version descending
-        return sorted(all_versions, key=lambda x: (x.get('is_project_specific', False), int(x['version'])), reverse=True)
+        return sorted(all_versions, key=lambda x: int(x['version']), reverse=True)
     except Exception as e:
         print(f"MLflow search error: {e}")
         return []
 
 @api_router.post("/deploy-model")
 def deploy_model(version: str, model_name: str = None, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if project_id is None: raise HTTPException(status_code=400, detail="project_id required")
-    verify_project_owner(project_id, current_user.id, db)
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        # If model_name is not provided, default to project-specific name
-        if not model_name:
-            model_name = f"Sentiment_Analysis_Model_{project_id}"
+        # Standardized global model name
+        model_name = "Sentiment_Analysis_Platform"
             
         payload = {
             "name": model_name,
