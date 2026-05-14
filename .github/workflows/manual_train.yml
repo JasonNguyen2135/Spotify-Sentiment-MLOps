@@ -7,6 +7,10 @@ on:
         description: 'Dataset CSV source URL (DagsHub) or local path'
         required: false
         default: 'https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv'
+      project_id:
+        description: 'Project ID for model registration'
+        required: false
+        default: 'default'
 
 jobs:
   trigger-airflow:
@@ -27,8 +31,8 @@ jobs:
 
       - name: Execute Airflow Trigger
         run: |
-          echo "Triggering training pipeline with source: ${{ github.event.inputs.data_source }}"
-          kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k8s_native -c "{\"data_source\": \"${{ github.event.inputs.data_source }}\"}"
+          echo "Triggering training pipeline for Project: ${{ github.event.inputs.project_id }} with source: ${{ github.event.inputs.data_source }}"
+          kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k8s_native -c "{\"data_source\": \"${{ github.event.inputs.data_source }}\", \"project_id\": \"${{ github.event.inputs.project_id }}\"}"
 
       - name: Slack Notification
         if: always()

@@ -411,18 +411,15 @@ def get_airflow_runs(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        # Airflow 3 may require standard Basic auth or specific configuration
+        import base64
+        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
+        # Updated to /api/v2 for Airflow 3 compatibility
         url = f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns"
         print(f"DEBUG: Fetching Airflow runs from {url}")
-        
-        # Split AIRFLOW_AUTH into user/pass for requests' built-in auth
-        auth_parts = AIRFLOW_AUTH.split(":")
-        auth = (auth_parts[0], auth_parts[1]) if len(auth_parts) == 2 else ("admin", "admin")
-        
         res = requests.get(
             url,
             params={"limit": 10, "order_by": "-execution_date"},
-            auth=auth,
+            headers={"Authorization": f"Basic {auth_header}"},
             timeout=5
         )
         if res.status_code == 200:
@@ -457,7 +454,8 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
     payload = {
         "ref": "main",
         "inputs": {
-            "data_source": dataset_source
+            "data_source": dataset_source,
+            "project_id": str(project_id) if project_id else "default"
         }
     }
     
@@ -482,15 +480,15 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        auth_parts = AIRFLOW_AUTH.split(":")
-        auth = (auth_parts[0], auth_parts[1]) if len(auth_parts) == 2 else ("admin", "admin")
+        import base64
+        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
         
         # Task ID is hardcoded based on the DAG definition
         task_id = "model_training_pipeline"
         # 1. Get task instances to find the try_number (Updated to /api/v2)
         ti_res = requests.get(
             f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}",
-            auth=auth,
+            headers={"Authorization": f"Basic {auth_header}"},
             timeout=5
         )
         if ti_res.status_code != 200:
@@ -502,7 +500,7 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         # 2. Fetch logs (Updated to /api/v2)
         log_res = requests.get(
             f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
-            auth=auth,
+            headers={"Authorization": f"Basic {auth_header}"},
             timeout=10
         )
         return {"logs": log_res.text}
