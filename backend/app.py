@@ -411,15 +411,18 @@ def get_airflow_runs(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        import base64
-        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
-        # Updated to /api/v2 for Airflow 3 compatibility
+        # Airflow 3 may require standard Basic auth or specific configuration
         url = f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns"
         print(f"DEBUG: Fetching Airflow runs from {url}")
+        
+        # Split AIRFLOW_AUTH into user/pass for requests' built-in auth
+        auth_parts = AIRFLOW_AUTH.split(":")
+        auth = (auth_parts[0], auth_parts[1]) if len(auth_parts) == 2 else ("admin", "admin")
+        
         res = requests.get(
             url,
             params={"limit": 10, "order_by": "-execution_date"},
-            headers={"Authorization": f"Basic {auth_header}"},
+            auth=auth,
             timeout=5
         )
         if res.status_code == 200:
@@ -438,6 +441,7 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
     
     GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
     if not GITHUB_TOKEN:
+        print("DEBUG: GITHUB_TOKEN is missing in environment variables")
         return {"status": "warning", "message": "Backend chưa cấu hình GITHUB_TOKEN."}
 
     owner = "JasonNguyen2135"
@@ -453,18 +457,24 @@ def trigger_training(dataset_source: str, project_id: int = None, current_user: 
     payload = {
         "ref": "main",
         "inputs": {
-            "data_source": dataset_source,
-            "project_id": str(project_id) if project_id else "default"
+            "data_source": dataset_source
         }
     }
     
+    print(f"DEBUG: Triggering GitHub Action: {url}")
+    print(f"DEBUG: Payload: {payload}")
+    
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"DEBUG: GitHub API Response Code: {res.status_code}")
+        print(f"DEBUG: GitHub API Response Body: {res.text}")
+        
         if res.status_code == 204:
             return {"status": "success", "message": f"Đã kích hoạt GitHub Action để huấn luyện model với dữ liệu: {dataset_source}"}
         else:
             return {"status": "error", "message": f"GitHub API error: {res.text}"}
     except Exception as e:
+        print(f"DEBUG: Exception during GitHub Trigger: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 @api_router.get("/airflow/logs/{dag_run_id}")
@@ -472,17 +482,19 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        import base64
-        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
+        auth_parts = AIRFLOW_AUTH.split(":")
+        auth = (auth_parts[0], auth_parts[1]) if len(auth_parts) == 2 else ("admin", "admin")
+        
         # Task ID is hardcoded based on the DAG definition
         task_id = "model_training_pipeline"
         # 1. Get task instances to find the try_number (Updated to /api/v2)
         ti_res = requests.get(
             f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}",
-            headers={"Authorization": f"Basic {auth_header}"},
+            auth=auth,
             timeout=5
         )
         if ti_res.status_code != 200:
+            print(f"DEBUG: Airflow TI Error {ti_res.status_code}: {ti_res.text}")
             return {"logs": "Task instance not found or still queued..."}
         
         try_number = ti_res.json().get("try_number", 1)
@@ -490,11 +502,12 @@ def get_airflow_logs(dag_run_id: str, current_user: User = Depends(get_current_u
         # 2. Fetch logs (Updated to /api/v2)
         log_res = requests.get(
             f"{AIRFLOW_URL}/api/v2/dags/spotify_sentiment_train_k8s_native/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{try_number}",
-            headers={"Authorization": f"Basic {auth_header}"},
+            auth=auth,
             timeout=10
         )
         return {"logs": log_res.text}
     except Exception as e:
+        print(f"DEBUG: Airflow Log Fetch Error: {str(e)}")
         return {"logs": f"Error fetching logs: {str(e)}"}
 
 
