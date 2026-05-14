@@ -60,7 +60,11 @@ def train_and_deploy():
         mlflow.log_param("dataset_size", len(df))
         mlflow.log_metric("accuracy", acc)
 
-        model_name = "Spotify_Production_Model"
+        # Dynamic model name based on project
+        project_id = os.getenv("PROJECT_ID", "default")
+        model_name = f"Sentiment_Analysis_Model_{project_id}"
+        print(f"Registering model as: {model_name}")
+
         mlflow.sklearn.log_model(
             sk_model=pipeline,
             artifact_path="model_files",

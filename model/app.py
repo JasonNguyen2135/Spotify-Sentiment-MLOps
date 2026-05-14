@@ -9,45 +9,49 @@ app = FastAPI(title="Sentiment Analysis Service")
 
 # Configuration
 TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow.ntdevopsmlflow.io.vn")
-MODEL_TARGET = os.getenv("MODEL_TARGET", "Production") # Can be "Production", "Staging", or a version number like "5"
 mlflow.set_tracking_uri(TRACKING_URI)
 
-MODEL_METADATA = {"version": "unknown", "accuracy": "N/A", "run_id": "none", "target": MODEL_TARGET}
+# Cache for loaded models and metadata
+models_cache = {}
+metadata_cache = {}
 
-print(f"Connecting to MLflow server at {TRACKING_URI}")
-try:
-    model_name = "Sentiment_Analysis_Model"
+def load_model_for_project(project_id: str, target: str = "Production"):
+    cache_key = f"{project_id}_{target}"
+    if cache_key in models_cache:
+        return models_cache[cache_key], metadata_cache.get(cache_key, {})
+
+    model_name = f"Sentiment_Analysis_Model_{project_id}"
+    print(f"Attempting to load model: {model_name} (Target: {target})")
     
-    # Check if MODEL_TARGET is a numeric version or a stage name
-    if MODEL_TARGET.isdigit():
-        model_uri = f"models:/{model_name}/{MODEL_TARGET}"
-    else:
-        model_uri = f"models:/{model_name}/{MODEL_TARGET}"
+    try:
+        model_uri = f"models:/{model_name}/{target}"
+        model = mlflow.sklearn.load_model(model_uri)
         
-    print(f"Loading model from: {model_uri}")
-    model = mlflow.sklearn.load_model(model_uri)
-    
-    client = mlflow.tracking.MlflowClient()
-    
-    # Get metadata for the specific target
-    if MODEL_TARGET.isdigit():
-        mv = client.get_model_version(model_name, MODEL_TARGET)
-    else:
-        latest_versions = client.get_latest_versions(model_name, stages=[MODEL_TARGET])
-        mv = latest_versions[0] if latest_versions else None
+        client = mlflow.tracking.MlflowClient()
+        meta = {"version": "unknown", "accuracy": "N/A", "run_id": "none", "target": target}
         
-    if mv:
-        run_id = mv.run_id
-        run = client.get_run(run_id)
-        acc = run.data.metrics.get("accuracy") or run.data.metrics.get("acc")
-        MODEL_METADATA["accuracy"] = f"{acc*100:.1f}%" if acc and acc <= 1 else f"{acc:.1f}%" if acc else "N/A"
-        MODEL_METADATA["dataset_size"] = run.data.params.get("dataset_size", "N/A")
-        MODEL_METADATA["run_id"] = run_id
-        MODEL_METADATA["version"] = mv.version
-    print(f"Model successfully loaded. Current accuracy: {MODEL_METADATA['accuracy']}")
-except Exception as e:
-    print(f"Warning: Could not load target model ({MODEL_TARGET}): {e}")
-    model = None
+        if target.isdigit():
+            mv = client.get_model_version(model_name, target)
+        else:
+            latest_versions = client.get_latest_versions(model_name, stages=[target])
+            mv = latest_versions[0] if latest_versions else None
+            
+        if mv:
+            run_id = mv.run_id
+            run = client.get_run(run_id)
+            acc = run.data.metrics.get("accuracy") or run.data.metrics.get("acc")
+            meta["accuracy"] = f"{acc*100:.1f}%" if acc and acc <= 1 else f"{acc:.1f}%" if acc else "N/A"
+            meta["dataset_size"] = run.data.params.get("dataset_size", "N/A")
+            meta["run_id"] = run_id
+            meta["version"] = mv.version
+            
+        models_cache[cache_key] = model
+        metadata_cache[cache_key] = meta
+        print(f"Successfully loaded model {model_name}")
+        return model, meta
+    except Exception as e:
+        print(f"Warning: Could not load model {model_name}: {e}")
+        return None, None
 
 def publish_to_queue(log_data):
     try:
@@ -75,17 +79,20 @@ def publish_to_queue(log_data):
         print(f"Error publishing message to queue: {e}")
 
 @app.get("/")
-def health_check():
-    return {"status": "operational", "model_info": MODEL_METADATA}
+def health_check(project_id: str = "default"):
+    _, meta = load_model_for_project(project_id)
+    return {"status": "operational", "model_info": meta or "Model not loaded"}
 
 @app.get("/metadata")
-def get_metadata():
-    return MODEL_METADATA
+def get_metadata(project_id: str = "default"):
+    _, meta = load_model_for_project(project_id)
+    return meta or {"error": "Model not loaded"}
 
 @app.post("/predict")
-def predict(review: str):
+def predict(review: str, project_id: str = "default"):
+    model, _ = load_model_for_project(project_id)
     if model is None:
-        return {"error": "Service unavailable: Model not initialized"}
+        return {"error": f"Service unavailable: Model for project {project_id} not initialized"}
     
     # Generate prediction
     prediction = model.predict([review])[0]
@@ -94,7 +101,8 @@ def predict(review: str):
     # Log event for monitoring
     log_data = {
         "text": review,
-        "prediction": sentiment
+        "prediction": sentiment,
+        "project_id": project_id
     }
     publish_to_queue(log_data)
     

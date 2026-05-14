@@ -199,7 +199,7 @@ def get_stats(project_id: int = None, monitor_only: bool = True, db: Session = D
     model_version = "v1.2.0-Prod"
     dataset_size = None
     try:
-        meta_res = requests.get(f"{MODEL_API_URL}/metadata", timeout=2)
+        meta_res = requests.get(f"{MODEL_API_URL}/metadata", params={"project_id": project_id}, timeout=2)
         if meta_res.status_code == 200:
             meta = meta_res.json()
             accuracy = meta.get("accuracy", "N/A")
@@ -535,7 +535,7 @@ async def predict_single(review_text: str, project_id: int = None, db: Session =
         verify_project_owner(project_id, current_user.id, db)
     
     try:
-        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10)
+        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text, "project_id": project_id}, timeout=10)
         result = res.json()
         
         # Only log to DB if project context exists
@@ -581,7 +581,7 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
             except: pass
                 
         try:
-            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text}, timeout=5)
+            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text, "project_id": project_id}, timeout=5)
             sentiment = res.json().get("sentiment", "neutral")
         except:
             sentiment = "neutral"
@@ -623,7 +623,7 @@ async def collect_webhook(project_id: int, data: dict, db: Session = Depends(get
 
     # 2. Predict sentiment
     try:
-        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text}, timeout=5)
+        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text, "project_id": project_id}, timeout=5)
         sentiment = res.json().get("sentiment", "neutral")
     except:
         sentiment = "neutral"
@@ -695,7 +695,7 @@ async def sync_connector(connector_id: int, db: Session = Depends(get_db), curre
                 
                 # Predict sentiment
                 try:
-                    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_content}, timeout=5)
+                    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_content, "project_id": source.project_id}, timeout=5)
                     sentiment = res.json().get("sentiment", "neutral")
                 except:
                     sentiment = "neutral"

@@ -43,7 +43,7 @@ init_container = k8s.V1Container(
 )
 
 with DAG(
-    dag_id='spotify_sentiment_train_k8s_native',
+    dag_id='sentiment_analysis_training',
     default_args=default_args,
     schedule='@weekly',
     start_date=datetime(2026, 4, 1),
@@ -99,6 +99,10 @@ with DAG(
             k8s.V1EnvVar(
                 name="DATA_SOURCE", 
                 value="{{ dag_run.conf.get('data_source', 'https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv') }}"
+            ),
+            k8s.V1EnvVar(
+                name="PROJECT_ID",
+                value="{{ dag_run.conf.get('project_id', 'default') }}"
             )
         ],
 
