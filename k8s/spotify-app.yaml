@@ -231,7 +231,10 @@ spec:
             - name: JWT_SECRET
               value: "super-secret-key-change-me-in-production"
             - name: GITHUB_TOKEN
-              value: "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"
+              valueFrom:
+                secretKeyRef:
+                  name: github-secret
+                  key: GITHUB_TOKEN
             - name: DAGSHUB_USERNAME
               valueFrom:
                 secretKeyRef:
