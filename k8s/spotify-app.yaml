@@ -1,23 +1,25 @@
-# ==========================================
-# 1. DATABASES (MongoDB & PostgreSQL)
-# ==========================================
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mongo-pvc
 spec:
-  accessModes: [ReadWriteOnce]
-  resources: { requests: { storage: 5Gi } }
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-pvc
 spec:
-  accessModes: [ReadWriteOnce]
-  resources: { requests: { storage: 5Gi } }
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
 ---
-# MongoDB Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,26 +27,35 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: mongodb }
+    matchLabels:
+      app: mongodb
   template:
     metadata:
-      labels: { app: mongodb }
+      labels:
+        app: mongodb
     spec:
       imagePullSecrets:
       - name: harbor-secret
       containers:
       - name: mongodb
         image: mongo:latest
-        ports: [{ containerPort: 27017 }]
-        volumeMounts: [{ name: mongo-storage, mountPath: /data/db }]
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-storage
+          mountPath: /data/db
         resources:
-          requests: { cpu: 100m, memory: 256Mi }
-          limits: { cpu: 500m, memory: 512Mi }
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
       volumes:
       - name: mongo-storage
-        persistentVolumeClaim: { claimName: mongo-pvc }
+        persistentVolumeClaim:
+          claimName: mongo-pvc
 ---
-# PostgreSQL Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -52,107 +63,129 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: postgres }
+    matchLabels:
+      app: postgres
   template:
     metadata:
-      labels: { app: postgres }
+      labels:
+        app: postgres
     spec:
       imagePullSecrets:
       - name: harbor-secret
       containers:
       - name: postgres
         image: postgres:15
-        ports: [{ containerPort: 5432 }]
+        ports:
+        - containerPort: 5432
         env:
         - name: POSTGRES_DB
-          value: "mlops_auth"
+          value: mlops_auth
         - name: POSTGRES_USER
-          value: "admin"
+          value: admin
         - name: POSTGRES_PASSWORD
-          value: "admin123"
-        volumeMounts: [{ name: postgres-storage, mountPath: /var/lib/postgresql/data }]
+          value: admin123
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
         resources:
-          requests: { cpu: 100m, memory: 256Mi }
-          limits: { cpu: 500m, memory: 512Mi }
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
       volumes:
       - name: postgres-storage
-        persistentVolumeClaim: { claimName: postgres-pvc }
+        persistentVolumeClaim:
+          claimName: postgres-pvc
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: mongodb
 spec:
-  selector: { app: mongodb }
-  ports: [{ port: 27017, targetPort: 27017 }]
+  selector:
+    app: mongodb
+  ports:
+  - port: 27017
+    targetPort: 27017
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: postgres
 spec:
-  selector: { app: postgres }
-  ports: [{ port: 5432, targetPort: 5432 }]
-
-# ==========================================
-# 2. MODEL SERVICE
-# ==========================================
-# 2. MODEL SERVICE
-# ==========================================
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: model-service
-  namespace: mlops-sentiment  # THÊM CÁI NÀY ĐỂ TRÁNH LẠC TRÔI
+  namespace: mlops-sentiment
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: model-service }
+    matchLabels:
+      app: model-service
   template:
     metadata:
-      labels: { app: model-service }
+      labels:
+        app: model-service
     spec:
       imagePullSecrets:
       - name: harbor-secret
       containers:
       - name: model-service
-        # NHỚ ĐỔI TAG MỖI LẦN BUILD MỚI (ví dụ v1.0.1)
         image: registry.ntdevopsregistry.io.vn/mlops/model-service:944d520a7912fb9d7a695c9ad1c59e25a7a075a4
         imagePullPolicy: IfNotPresent
         env:
-          - name: MLFLOW_TRACKING_URI
-            value: "http://mlflow.ntdevopsmlflow.io.vn"
-          - name: AWS_ACCESS_KEY_ID
-            valueFrom: { secretKeyRef: { name: aws-creds, key: AWS_ACCESS_KEY_ID } }
-          - name: AWS_SECRET_ACCESS_KEY
-            valueFrom: { secretKeyRef: { name: aws-creds, key: AWS_SECRET_ACCESS_KEY } }
-          - name: AWS_DEFAULT_REGION
-            valueFrom: { secretKeyRef: { name: aws-creds, key: AWS_DEFAULT_REGION } }
-          # --- ĐÂY LÀ CHÌA KHÓA VÀNG ---
-          - name: RABBITMQ_HOST
-            value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
-          # -----------------------------
-          - name: RABBITMQ_USER
-            value: mlops
-          - name: RABBITMQ_PASS
-            value: mlops123
-        ports: [{ containerPort: 8000 }]
+        - name: MLFLOW_TRACKING_URI
+          value: http://mlflow.ntdevopsmlflow.io.vn
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-creds
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-creds
+              key: AWS_SECRET_ACCESS_KEY
+        - name: AWS_DEFAULT_REGION
+          valueFrom:
+            secretKeyRef:
+              name: aws-creds
+              key: AWS_DEFAULT_REGION
+        - name: RABBITMQ_HOST
+          value: rabbitmq-service.mlops-sentiment.svc.cluster.local
+        - name: RABBITMQ_USER
+          value: mlops
+        - name: RABBITMQ_PASS
+          value: mlops123
+        ports:
+        - containerPort: 8000
         resources:
-          requests: { cpu: 200m, memory: 512Mi }
-          limits: { cpu: 1000m, memory: 1Gi }
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: model-service
 spec:
-  selector: { app: model-service }
-  ports: [{ port: 8000, targetPort: 8000 }]
-
-# ==========================================
-# 3. BACKEND
-# ==========================================
+  selector:
+    app: model-service
+  ports:
+  - port: 8000
+    targetPort: 8000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -161,10 +194,12 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: backend }
+    matchLabels:
+      app: backend
   template:
     metadata:
-      labels: { app: backend }
+      labels:
+        app: backend
     spec:
       imagePullSecrets:
       - name: harbor-secret
@@ -172,35 +207,45 @@ spec:
       - name: backend
         image: registry.ntdevopsregistry.io.vn/mlops/backend:v1.0.0
         imagePullPolicy: IfNotPresent
-        ports: [{ containerPort: 8000 }]
+        ports:
+        - containerPort: 8000
         env:
         - name: MODEL_API_URL
-          value: "http://model-service:8000"
+          value: http://model-service:8000
         - name: MONGO_URL
-          value: "mongodb://mongodb:27017"
+          value: mongodb://mongodb:27017
         - name: DATABASE_URL
-          value: "postgresql://admin:admin123@postgres:5432/mlops_auth"
+          value: postgresql://admin:admin123@postgres:5432/mlops_auth
         - name: JWT_SECRET
-          value: "super-secret-key-change-me-in-production"
+          value: super-secret-key-change-me-in-production
         - name: DAGSHUB_USERNAME
-          valueFrom: { secretKeyRef: { name: dagshub-secret, key: DAGSHUB_USERNAME } }
+          valueFrom:
+            secretKeyRef:
+              name: dagshub-secret
+              key: DAGSHUB_USERNAME
         - name: DAGSHUB_PASSWORD
-          valueFrom: { secretKeyRef: { name: dagshub-secret, key: DAGSHUB_PASSWORD } }
+          valueFrom:
+            secretKeyRef:
+              name: dagshub-secret
+              key: DAGSHUB_PASSWORD
         resources:
-          requests: { cpu: 100m, memory: 256Mi }
-          limits: { cpu: 500m, memory: 512Mi }
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: backend
 spec:
-  selector: { app: backend }
-  ports: [{ port: 8000, targetPort: 8000 }]
-
-# ==========================================
-# 4. FRONTEND
-# ==========================================
+  selector:
+    app: backend
+  ports:
+  - port: 8000
+    targetPort: 8000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -209,10 +254,12 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: frontend }
+    matchLabels:
+      app: frontend
   template:
     metadata:
-      labels: { app: frontend }
+      labels:
+        app: frontend
     spec:
       imagePullSecrets:
       - name: harbor-secret
@@ -220,13 +267,18 @@ spec:
       - name: frontend
         image: registry.ntdevopsregistry.io.vn/mlops/frontend:v1.0.0
         imagePullPolicy: IfNotPresent
-        ports: [{ containerPort: 3000 }]
+        ports:
+        - containerPort: 3000
         env:
         - name: BACKEND_API_URL
-          value: "http://backend:8000"
+          value: http://backend:8000
         resources:
-          requests: { cpu: 100m, memory: 256Mi }
-          limits: { cpu: 500m, memory: 512Mi }
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
@@ -234,14 +286,11 @@ metadata:
   name: frontend
 spec:
   type: NodePort
-  selector: { app: frontend }
+  selector:
+    app: frontend
   ports:
   - port: 8501
     targetPort: 3000
-
-# ==========================================
-# 5. CRAWLER
-# ==========================================
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -250,10 +299,12 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: crawler }
+    matchLabels:
+      app: crawler
   template:
     metadata:
-      labels: { app: crawler }
+      labels:
+        app: crawler
     spec:
       imagePullSecrets:
       - name: harbor-secret
@@ -263,7 +314,11 @@ spec:
         imagePullPolicy: IfNotPresent
         env:
         - name: MONGO_URL
-          value: "mongodb://mongodb:27017"
+          value: mongodb://mongodb:27017
         resources:
-          requests: { cpu: 50m, memory: 128Mi }
-          limits: { cpu: 200m, memory: 256Mi }
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
