@@ -23,7 +23,7 @@ shared_volume_mount = k8s.V1VolumeMount(
 # Container for repository synchronization
 init_container = k8s.V1Container(
     name="repository-sync",
-    image="registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest",
+    image="registry.ntdevopsregistry.io.vn/mlops/sentiment-trainer:latest",
     image_pull_policy="Always",
     command=["/bin/sh", "-c"],
     args=[
@@ -57,7 +57,7 @@ with DAG(
         namespace="airflow",
 
         # Execution environment
-        image="registry.ntdevopsregistry.online/mlops/sentiment-trainer:latest",
+        image="registry.ntdevopsregistry.io.vn/mlops/sentiment-trainer:latest",
         image_pull_policy="Always",
         image_pull_secrets=[k8s.V1LocalObjectReference("harbor-secret")],
 

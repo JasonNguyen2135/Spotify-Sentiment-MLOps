@@ -118,7 +118,7 @@ spec:
       containers:
       - name: model-service
         # NHỚ ĐỔI TAG MỖI LẦN BUILD MỚI (ví dụ v1.0.1)
-        image: registry.ntdevopsregistry.online/mlops/model-service:944d520a7912fb9d7a695c9ad1c59e25a7a075a4
+        image: registry.ntdevopsregistry.io.vn/mlops/model-service:944d520a7912fb9d7a695c9ad1c59e25a7a075a4
         imagePullPolicy: IfNotPresent
         env:
           - name: MLFLOW_TRACKING_URI
@@ -170,7 +170,7 @@ spec:
       - name: harbor-secret
       containers:
       - name: backend
-        image: registry.ntdevopsregistry.online/mlops/backend:v1.0.0
+        image: registry.ntdevopsregistry.io.vn/mlops/backend:v1.0.0
         imagePullPolicy: IfNotPresent
         ports: [{ containerPort: 8000 }]
         env:
@@ -218,7 +218,7 @@ spec:
       - name: harbor-secret
       containers:
       - name: frontend
-        image: registry.ntdevopsregistry.online/mlops/frontend:v1.0.0
+        image: registry.ntdevopsregistry.io.vn/mlops/frontend:v1.0.0
         imagePullPolicy: IfNotPresent
         ports: [{ containerPort: 3000 }]
         env:
@@ -259,7 +259,7 @@ spec:
       - name: harbor-secret
       containers:
       - name: crawler
-        image: registry.ntdevopsregistry.online/mlops/crawler:v1.0.0
+        image: registry.ntdevopsregistry.io.vn/mlops/crawler:v1.0.0
         imagePullPolicy: IfNotPresent
         env:
         - name: MONGO_URL
