@@ -14,13 +14,12 @@ spec:
         app: evidently-monitoring
     spec:
       imagePullSecrets:
-      - name: harbor-secret
+        - name: harbor-secret
       containers:
-      - name: monitoring
-        image: registry.ntdevopsregistry.io.vn/mlops/spotify-monitoring:v10
-        env:
-        - name: RABBITMQ_HOST
-          value: "rabbitmq-service.mlops-sentiment.svc.cluster.local" # Dùng FQDN luôn cho chắc ăn nha!
-        - name: EVIDENTLY_URL
-          # CẬP NHẬT CỔNG THÀNH 8000:
-          value: "http://evidently-service.mlops-sentiment.svc.cluster.local:8000"
+        - name: monitoring
+          image: registry.ntdevopsregistry.io.vn/mlops/spotify-monitoring:v10
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
+            - name: EVIDENTLY_URL
+              value: "http://evidently-service.mlops-sentiment.svc.cluster.local:8000"
