@@ -29,12 +29,17 @@ def load_model_for_project(project_id: str, target: str = "Production"):
 
     # Danh sách các tên model có thể thử (theo thứ tự ưu tiên)
     model_names_to_try = [
-        f"Sentiment_Analysis_Model_{project_id}",
-        "Sentiment_Analysis_Model_default",
-        "Sentiment_Analysis_Model",
-        "Spotify_Production_Model", # Fallback cho các bản build cũ
-        "Spotify_Sentiment_Model"
+        f"Sentiment_Analysis_Model_{project_id}"
     ]
+    
+    # Chỉ thêm fallback nếu không phải project cụ thể hoặc project_id là default
+    if project_id == "default":
+        model_names_to_try.extend([
+            "Sentiment_Analysis_Model_default",
+            "Sentiment_Analysis_Model",
+            "Spotify_Production_Model",
+            "Spotify_Sentiment_Model"
+        ])
     
     client = mlflow.tracking.MlflowClient()
     last_error = None

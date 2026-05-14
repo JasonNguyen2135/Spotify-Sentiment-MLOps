@@ -304,14 +304,17 @@ def get_models(project_id: int = None, db: Session = Depends(get_db), current_us
     if project_id is None: return []
     verify_project_owner(project_id, current_user.id, db)
     try:
-        # Model name patterns to search
-        model_names_to_search = [
-            f"Sentiment_Analysis_Model_{project_id}",
-            "Sentiment_Analysis_Model",
-            "Spotify_Production_Model",
-            "Spotify_Sentiment_Model",
-            "Sentiment_Analysis_Model_default"
-        ]
+        # Model name patterns to search - PRIORITIZE project specific
+        model_names_to_search = [f"Sentiment_Analysis_Model_{project_id}"]
+        
+        # Only add fallbacks if it's the default project
+        if not project_id or str(project_id) == "1": # 1 is usually the default project ID
+             model_names_to_search.extend([
+                "Sentiment_Analysis_Model",
+                "Spotify_Production_Model",
+                "Spotify_Sentiment_Model",
+                "Sentiment_Analysis_Model_default"
+            ])
         
         all_versions = []
         for model_name in model_names_to_search:
