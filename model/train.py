@@ -121,17 +121,14 @@ def train_and_deploy():
     except Exception as e:
         print(f"Could not retrieve current Production accuracy: {e}")
 
-    # 2. Compare and promote if better
+    # 2. Transition new version to Staging for manual review
     versions = client.get_latest_versions(model_name, stages=["None"])
     if versions:
         latest_version = versions[0].version
-        if acc > current_prod_acc:
-            client.transition_model_version_stage(
-                name=model_name, version=latest_version, stage="Production", archive_existing_versions=True
-            )
-            print(f"✅ Success: Version {latest_version} (Acc: {acc:.4f}) is better than Production (Acc: {current_prod_acc:.4f}). Transitioned to Production.")
-        else:
-            print(f"⚠️ Skip: Version {latest_version} (Acc: {acc:.4f}) is NOT better than Production (Acc: {current_prod_acc:.4f}). Kept in Staging.")
+        client.transition_model_version_stage(
+            name=model_name, version=latest_version, stage="Staging", archive_existing_versions=False
+        )
+        print(f"✅ Success: Version {latest_version} (Acc: {acc:.4f}) registered and moved to Staging for manual review.")
         
     print("Training job completed. Maintaining session for log collection.")
     time.sleep(60)
