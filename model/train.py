@@ -137,4 +137,5 @@ if __name__ == "__main__":
         train_and_deploy()
     except Exception as e:
         print(f"Process failed with error: {e}")
-        time.sleep(60)
+        import sys
+        sys.exit(1) # Exit with error code so Airflow knows it failed

@@ -391,8 +391,7 @@ def trigger_build_deploy(version: str, model_name: str = None, project_id: int =
     payload = {
         "ref": "main",
         "inputs": {
-            "model_target": version,
-            "model_name": model_name or f"Sentiment_Analysis_Model_{project_id}"
+            "model_target": version
         }
     }
     
