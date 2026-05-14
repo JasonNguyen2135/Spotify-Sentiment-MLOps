@@ -67,9 +67,8 @@ jobs:
             # If exists, update the value in the next line
             sed -i "/name: MODEL_TARGET/,/value: .*/ s/value: .*/value: \"$MODEL_TARGET\"/" k8s/spotify-app.yaml
           else
-            # If not exists, append it after the AWS_DEFAULT_REGION block
-            # This is safer: find the line with AWS_DEFAULT_REGION, find the next 'value:' line, and append after it
-            sed -i "/name: AWS_DEFAULT_REGION/,/value: .*/ { /value: .*/ a\          - name: MODEL_TARGET\n            value: \"$MODEL_TARGET\"
+            # If not exists, append it after the MLFLOW_TRACKING_URI block
+            sed -i "/name: MLFLOW_TRACKING_URI/,/value: .*/ { /value: .*/ a\            - name: MODEL_TARGET\n              value: \"$MODEL_TARGET\"
             }" k8s/spotify-app.yaml
           fi
 
