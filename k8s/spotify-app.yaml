@@ -230,6 +230,8 @@ spec:
               value: "postgresql://admin:admin123@postgres:5432/mlops_auth"
             - name: JWT_SECRET
               value: "super-secret-key-change-me-in-production"
+            - name: GITHUB_TOKEN
+              value: "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"
             - name: DAGSHUB_USERNAME
               valueFrom:
                 secretKeyRef:

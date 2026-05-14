@@ -276,10 +276,26 @@ def create_project(name: str, description: str = "", db: Session = Depends(get_d
 def get_datasets(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: return []
     verify_project_owner(project_id, current_user.id, db)
+    
     query = {"project_id": project_id}
+    mongo_count = 0
+    try:
+        mongo_count = reviews_col.count_documents(query)
+    except: pass
+
     return [
-        {"name": "Project Live Stream", "source": f"mongodb://{project_id}", "count": preds_log_col.count_documents(query)},
-        {"name": "Enterprise Baseline v1.0", "source": "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv", "count": 12500}
+        {
+            "name": f"Current Project Data (MongoDB)", 
+            "source": "mongodb", 
+            "count": mongo_count,
+            "description": "Dữ liệu mới nhất được crawl hoặc upload cho dự án này."
+        },
+        {
+            "name": "Enterprise Baseline v1.0", 
+            "source": "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv", 
+            "count": 12500,
+            "description": "Bộ dữ liệu chuẩn để huấn luyện mô hình cơ bản."
+        }
     ]
 
 # NEW: Model Management (MLflow Proxy)
@@ -288,7 +304,6 @@ def get_models(project_id: int = None, db: Session = Depends(get_db), current_us
     if project_id is None: return []
     verify_project_owner(project_id, current_user.id, db)
     try:
-        # Use project name or ID to filter models in MLflow
         model_name = f"Sentiment_Analysis_Model_{project_id}"
         res = requests.get(
             f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search",
@@ -297,6 +312,9 @@ def get_models(project_id: int = None, db: Session = Depends(get_db), current_us
         )
         if res.status_code == 200:
             versions = res.json().get("model_versions", [])
+            # Thêm link trực tiếp đến MLflow cho mỗi version
+            for v in versions:
+                v['mlflow_url'] = f"{MLFLOW_URL}/#/models/{model_name}/versions/{v['version']}"
             return sorted(versions, key=lambda x: int(x['version']), reverse=True)
         return []
     except Exception as e:
@@ -318,9 +336,50 @@ def deploy_model(version: str, project_id: int = None, db: Session = Depends(get
             "archive_existing_versions": True
         }
         requests.post(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/transition-stage", json=payload, timeout=5)
-        return {"status": "success", "message": f"Version {version} promoted to Production"}
+        return {
+            "status": "success", 
+            "message": f"Version {version} promoted to Production",
+            "model_name": model_name,
+            "version": version
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/build-deploy")
+def trigger_build_deploy(version: str, project_id: int, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Kích hoạt GitHub Action thông qua Workflow Dispatch
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+    if not GITHUB_TOKEN:
+        # Fallback hoặc thông báo lỗi nếu chưa cấu hình token
+        return {"status": "warning", "message": "Backend chưa cấu hình GITHUB_TOKEN. Vui lòng kiểm tra lại pipeline."}
+
+    owner = "JasonNguyen2135"
+    repo = "Spotify-Sentiment-MLOps"
+    workflow_id = "manual_build_deploy_model_service.yml"
+    
+    url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    payload = {
+        "ref": "main",
+        "inputs": {
+            "model_target": version
+        }
+    }
+    
+    try:
+        res = requests.post(url, json=payload, headers=headers, timeout=10)
+        if res.status_code == 204:
+            return {"status": "success", "message": f"Đã kích hoạt CI/CD để build và deploy Model version {version}"}
+        else:
+            return {"status": "error", "message": f"GitHub API error: {res.text}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # NEW: Training Orchestration (Airflow Proxy)
 @api_router.get("/airflow/runs")

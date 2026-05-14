@@ -11,33 +11,64 @@ from sklearn.metrics import accuracy_score
 import requests
 import io
 import time
+from pymongo import MongoClient
 
 # System Configuration
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow.ntdevopsmlflow.io.vn")
 DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME", "davidmoi2135")
 DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN")
 REPO_NAME = "Spotify-Sentiment-MLOps"
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
+PROJECT_ID = os.getenv("PROJECT_ID", "default")
 
 def train_and_deploy():
-    print("Initializing model training process")
+    print(f"Initializing model training process for Project: {PROJECT_ID}")
     
     # Setup MLflow Tracking
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment("Sentiment_Analysis_Platform")
-    print("Set up data source")
+    
     # Handle data acquisition
-    data_source = os.getenv("DATA_SOURCE", f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv")
-    print("Set up data source")
+    data_source = os.getenv("DATA_SOURCE", "mongodb")
+    
+    if data_source == "mongodb":
+        print(f"Fetching data from MongoDB for project: {PROJECT_ID}")
+        client = MongoClient(MONGO_URL)
+        db = client["sentiment_db"]
+        collection = db["raw_reviews"]
+        
+        # Lấy dữ liệu của project (fallback lấy hết nếu là default)
+        query = {}
+        if PROJECT_ID != "default" and str(PROJECT_ID).isdigit():
+            query = {"project_id": int(PROJECT_ID)}
+        elif PROJECT_ID != "default":
+            query = {"project_id": PROJECT_ID}
+            
+        cursor = collection.find(query)
+        df = pd.DataFrame(list(cursor))
+        
+        if df.empty:
+            print("⚠️ Warning: MongoDB dataset is empty for this project. Falling back to default baseline.")
+            data_source = f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv"
+        else:
+            print(f"Loaded {len(df)} records from MongoDB")
+            # Chuyển đổi _id của mongo sang string để tránh lỗi
+            if '_id' in df.columns:
+                df['_id'] = df['_id'].astype(str)
+
     if data_source.startswith("https"):
         print(f"Fetching data from remote source: {data_source}")
         response = requests.get(data_source, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
         response.raise_for_status() 
         df = pd.read_csv(io.StringIO(response.text))
-    else:
+    elif os.path.exists(data_source):
         print(f"Loading data from local path: {data_source}")
         df = pd.read_csv(data_source)
         
-    print(f"Successfully loaded {len(df)} records")
+    if df.empty:
+        raise Exception("No data available for training.")
+
+    print(f"Successfully loaded {len(df)} records for training")
 
     X = df['text'].fillna('')
     y = df['sentiment']
