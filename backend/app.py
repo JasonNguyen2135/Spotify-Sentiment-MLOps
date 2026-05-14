@@ -434,33 +434,39 @@ def get_airflow_runs(current_user: User = Depends(get_current_user)):
 def trigger_training(dataset_source: str, project_id: int = None, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    try:
-        import base64
-        auth_header = base64.b64encode(AIRFLOW_AUTH.encode('ascii')).decode('ascii')
-        payload = {
-            "conf": {
-                "data_source": dataset_source,
-                "project_id": project_id
-            }
+    
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+    if not GITHUB_TOKEN:
+        return {"status": "warning", "message": "Backend chưa cấu hình GITHUB_TOKEN."}
+
+    owner = "JasonNguyen2135"
+    repo = "Spotify-Sentiment-MLOps"
+    workflow_id = "manual_train.yml"
+    
+    url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    payload = {
+        "ref": "main",
+        "inputs": {
+            "data_source": dataset_source,
+            "project_id": str(project_id) if project_id else "default"
         }
-        url = f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns"
-        print(f"DEBUG: Triggering Airflow DAG at {url} with payload {payload}")
-        
-        res = requests.post(
-            url,
-            json=payload,
-            headers={"Authorization": f"Basic {auth_header}"},
-            timeout=10
-        )
-        
-        if res.status_code in [200, 201]:
-            return {"status": "success", "dag_run_id": res.json().get("dag_run_id")}
+    }
+    
+    try:
+        res = requests.post(url, json=payload, headers=headers, timeout=10)
+        if res.status_code == 204:
+            # Vẫn gọi Airflow song song nếu bạn muốn dashboard hiện trạng thái Run (tùy chọn)
+            # Hoặc chỉ cần thông báo đã kích hoạt Action
+            return {"status": "success", "message": f"Đã kích hoạt GitHub Action để huấn luyện model với dữ liệu: {dataset_source}"}
         else:
-            print(f"DEBUG: Airflow Trigger Error {res.status_code}: {res.text}")
-            raise HTTPException(status_code=res.status_code, detail=res.text)
+            return {"status": "error", "message": f"GitHub API error: {res.text}"}
     except Exception as e:
-        print(f"Airflow trigger exception: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"status": "error", "message": str(e)}
         print(f"Airflow error: {e}")
         return []
 

@@ -6,7 +6,8 @@ import {
   Settings, Play, ExternalLink, Clock, CheckCircle2, 
   AlertCircle, Database, Cpu, Layers, Zap, 
   ArrowRight, ShieldCheck, Loader2, RefreshCw,
-  Terminal, BarChart3, List, X, Link as LinkIcon
+  Terminal, BarChart3, List, X, Link as LinkIcon,
+  Github
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
