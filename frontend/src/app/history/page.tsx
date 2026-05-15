@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
-  History as HistoryIcon, Search, Calendar, 
-  MessageSquare, User, CheckCircle2, ShieldAlert,
+  Calendar, 
+  MessageSquare, CheckCircle2, ShieldAlert,
   Info, Loader2, Download
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';

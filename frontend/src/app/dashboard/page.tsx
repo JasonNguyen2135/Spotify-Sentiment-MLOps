@@ -2,18 +2,14 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { 
-  Activity, Users, Database, Zap, Loader2, Send, 
-  CheckCircle2, ShieldAlert, Target, TrendingUp, 
-  BarChart3, PieChart as PieChartIcon, ArrowUpRight, 
-  ArrowDownRight, Info, Download, Calendar, Sparkles,
-  MessageSquare
+  Activity, Loader2, Download, TrendingUp, Sparkles, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';
 import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, 
+  XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, BarChart, Bar, 
   Cell, PieChart, Pie, Legend, AreaChart, Area
 } from 'recharts';

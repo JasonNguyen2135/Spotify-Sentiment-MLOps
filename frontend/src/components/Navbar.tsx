@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   Activity, LayoutDashboard, BarChart3, Settings, 
-  ShieldCheck, LogOut, User, History, ArrowLeftRight,
+  LogOut, History, ArrowLeftRight,
   Zap
 } from 'lucide-react';
 import { clsx } from 'clsx';
