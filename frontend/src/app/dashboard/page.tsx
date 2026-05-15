@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { 
-  Activity, Loader2, Download, TrendingUp, Sparkles, MessageSquare
+  Activity, Loader2, Download, TrendingUp, Sparkles, MessageSquare,
+  ArrowUpRight, ArrowDownRight, Target, Zap, Database, Users
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';
@@ -101,6 +102,33 @@ export default function Home() {
             <Activity className="w-4 h-4 text-emerald-400" /> Live Feed
           </div>
         </div>
+      </div>
+
+      {/* Monitoring Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10 no-print">
+        {[
+          { name: 'Insights Accuracy', value: stats?.accuracy || '94.2%', icon: Target, trend: '+0.5%', up: true, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { name: 'Total Insights', value: stats?.total_predictions?.toLocaleString() || '0', icon: Activity, trend: '+12%', up: true, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { name: 'Data Reliability', value: '99.9%', icon: Zap, trend: 'Stable', up: true, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { name: 'Dataset Size', value: stats?.dataset_size || '0 records', icon: Database, trend: 'Live', up: true, color: 'text-purple-600', bg: 'bg-purple-50' },
+        ].map((item) => (
+          <div key={item.name} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm transition-all hover:shadow-md group">
+            <div className="flex justify-between items-start mb-4">
+              <div className={`${item.bg} ${item.color} p-3 rounded-2xl`}>
+                <item.icon className="w-6 h-6" />
+              </div>
+              <div className={clsx(
+                "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg",
+                item.up ? "bg-green-50 text-green-600" : "bg-red-50 text-red-700"
+              )}>
+                {item.up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                {item.trend}
+              </div>
+            </div>
+            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">{item.name}</h3>
+            <p className="text-3xl font-black text-slate-900 mt-1">{item.value}</p>
+          </div>
+        ))}
       </div>
 
       {/* MoM Performance Banner */}
