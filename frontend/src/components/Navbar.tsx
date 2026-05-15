@@ -48,16 +48,19 @@ export default function Navbar() {
           </div>
           
           <div className="flex gap-6 items-center">
-            <Link 
-              href="/"
-              className={clsx(
-                "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                pathname === '/' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-              )}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              Dashboard
-            </Link>
+            {/* Global View Items */}
+            {!activeProject && (
+              <Link 
+                href="/"
+                className={clsx(
+                  "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                  pathname === '/' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                )}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Dashboard
+              </Link>
+            )}
 
             {/* Project-specific items */}
             {activeProject && (
@@ -71,6 +74,32 @@ export default function Navbar() {
                 <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
                 Observability
               </Link>
+            )}
+
+            {/* Admin specific Control split */}
+            {user?.role === 'admin' && (
+              <>
+                <Link 
+                  href="/admin/pipeline"
+                  className={clsx(
+                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                    pathname === '/admin/pipeline' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                  )}
+                >
+                  <Activity className="w-4 h-4 text-emerald-500" />
+                  Training
+                </Link>
+                <Link 
+                  href="/admin/pipeline"
+                  className={clsx(
+                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                    pathname === '/admin/pipeline' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                  )}
+                >
+                  <Settings className="w-4 h-4 text-blue-500" />
+                  Registry
+                </Link>
+              </>
             )}
 
             {/* Toolkit items only shown in Global View (no activeProject) */}
@@ -106,21 +135,6 @@ export default function Navbar() {
                   <History className="w-4 h-4" />
                   History
                 </Link>
-
-                <div className="flex gap-4 border-l pl-4">
-                  {user?.role === 'admin' && (
-                    <Link 
-                      href="/admin/pipeline"
-                      className={clsx(
-                        "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                        pathname === '/admin/pipeline' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                      )}
-                    >
-                      <Settings className="w-4 h-4" />
-                      Control
-                    </Link>
-                  )}
-                </div>
               </>
             )}
 
