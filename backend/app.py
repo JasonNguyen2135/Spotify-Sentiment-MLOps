@@ -505,6 +505,32 @@ def get_user_history(project_id: int = None, db: Session = Depends(get_db), curr
         })
     return history
 
+@api_router.get("/alerts")
+def get_alert_rules(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = db.query(AlertRule)
+    if project_id:
+        verify_project_owner(project_id, current_user.id, db)
+        query = query.filter(AlertRule.project_id == project_id)
+    return query.all()
+
+@api_router.post("/alerts")
+def add_alert_rule(name: str, threshold: int, channel: str, destination: str, project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_owner(project_id, current_user.id, db)
+    new_rule = AlertRule(name=name, threshold=threshold, channel=channel, destination=destination, project_id=project_id)
+    db.add(new_rule)
+    db.commit()
+    return {"message": "Alert rule created"}
+
+@api_router.delete("/alerts/{rule_id}")
+def delete_alert_rule(rule_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    rule = db.query(AlertRule).filter(AlertRule.id == rule_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    verify_project_owner(rule.project_id, current_user.id, db)
+    db.delete(rule)
+    db.commit()
+    return {"message": "Alert rule removed"}
+
 @api_router.get("/monthly-analytics")
 def get_monthly_analytics(project_id: int = None, monitor_only: bool = True, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: return []
@@ -831,32 +857,6 @@ def delete_connector(connector_id: int, db: Session = Depends(get_db), current_u
     db.delete(source)
     db.commit()
     return {"message": "Connector removed"}
-
-@api_router.get("/alerts")
-def get_alert_rules(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    query = db.query(AlertRule)
-    if project_id:
-        verify_project_owner(project_id, current_user.id, db)
-        query = query.filter(AlertRule.project_id == project_id)
-    return query.all()
-
-@api_router.post("/alerts")
-def add_alert_rule(name: str, threshold: int, channel: str, destination: str, project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    verify_project_owner(project_id, current_user.id, db)
-    new_rule = AlertRule(name=name, threshold=threshold, channel=channel, destination=destination, project_id=project_id)
-    db.add(new_rule)
-    db.commit()
-    return {"message": "Alert rule created"}
-
-@api_router.delete("/alerts/{rule_id}")
-def delete_alert_rule(rule_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    rule = db.query(AlertRule).filter(AlertRule.id == rule_id).first()
-    if not rule:
-        raise HTTPException(status_code=404, detail="Rule not found")
-    verify_project_owner(rule.project_id, current_user.id, db)
-    db.delete(rule)
-    db.commit()
-    return {"message": "Alert rule removed"}
 
 @api_router.get("/github/runs")
 def get_github_runs(current_user: User = Depends(get_current_user)):

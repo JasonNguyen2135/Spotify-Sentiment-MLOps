@@ -31,11 +31,11 @@ export default function PipelinePage() {
   const [fetchingLogs, setFetchingLogs] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!activeProject) return;
+    if (!activeProject && user?.role !== 'admin') return;
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
-      const params = { project_id: activeProject.id };
+      const params = { project_id: activeProject?.id || null };
       
       const [datasetsRes, modelsRes, airflowRunsRes, githubRunsRes] = await Promise.all([
         axios.get('/api/datasets', { headers, params }),
@@ -80,18 +80,14 @@ export default function PipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [activeProject, selectedDataset]);
+  }, [activeProject, selectedDataset, user]);
 
   useEffect(() => {
     if (!authLoading && user?.role !== 'admin') {
       router.push('/');
     }
-    if (!authLoading && !activeProject) {
-      router.push('/');
-      return;
-    }
     
-    if (user?.role === 'admin' && activeProject) {
+    if (user?.role === 'admin') {
       fetchData();
       const interval = setInterval(fetchData, 15000); // Poll every 15s
       return () => clearInterval(interval);
@@ -299,89 +295,8 @@ export default function PipelinePage() {
           </div>
         </div>
 
-        {/* Right Column: Monitoring & Registry */}
+        {/* Right Column: Registry */}
         <div className="lg:col-span-2 space-y-10">
-          {/* Recent Runs Table */}
-          <section className="space-y-6">
-            <div className="flex items-center justify-between px-2">
-              <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-brand" />
-                <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">Execution History</h2>
-              </div>
-              <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => fetchData()}
-                  className="text-[10px] font-black text-slate-400 hover:text-brand flex items-center gap-2 uppercase tracking-widest transition-all"
-                >
-                  <RefreshCw className="w-3 h-3" /> Refresh
-                </button>
-                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">
-                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-                  Live Status
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-              <div className="max-h-[350px] overflow-y-auto scrollbar-hide">
-                <table className="w-full text-left">
-                  <thead className="sticky top-0 z-10">
-                    <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                      <th className="px-8 py-4">Run Type / ID</th>
-                      <th className="px-8 py-4">Status</th>
-                      <th className="px-8 py-4">Details</th>
-                      <th className="px-8 py-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {runs.map((run) => (
-                      <tr key={run.id} className="hover:bg-slate-50/30 transition-colors">
-                        <td className="px-8 py-5">
-                          <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">{run.type}</p>
-                          <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{run.id}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">
-                            {new Date(run.time).toLocaleString()}
-                          </p>
-                        </td>
-                        <td className="px-8 py-5">
-                          <span className={clsx(
-                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-2 w-fit",
-                            run.status === 'success' || run.status === 'completed' ? "bg-emerald-100 text-emerald-700" :
-                            run.status === 'running' || run.status === 'in_progress' ? "bg-blue-100 text-blue-700" :
-                            run.status === 'failed' || run.status === 'failure' ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"
-                          )}>
-                            {(run.status === 'running' || run.status === 'in_progress') && <Loader2 className="w-3 h-3 animate-spin" />}
-                            {run.status}
-                          </span>
-                        </td>
-                        <td className="px-8 py-5">
-                          <p className="text-xs text-slate-600 font-medium">{run.details}</p>
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <button 
-                            onClick={() => handleFetchLogs(run)}
-                            className="text-xs font-black text-slate-400 hover:text-brand flex items-center gap-2 ml-auto uppercase tracking-widest"
-                          >
-                            {run.type.includes('Airflow') ? (
-                              <><Terminal className="w-4 h-4" /> View Logs</>
-                            ) : (
-                              <><ExternalLink className="w-4 h-4" /> View CI</>
-                            )}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {runs.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-8 py-10 text-center text-slate-400 italic">No execution history found.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
           {/* Model Registry */}
           <section className="space-y-6">
             <div className="flex items-center gap-2 px-2">
@@ -390,7 +305,7 @@ export default function PipelinePage() {
             </div>
 
             <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-              <div className="max-h-[350px] overflow-y-auto scrollbar-hide">
+              <div className="max-h-[700px] overflow-y-auto scrollbar-hide">
                 <table className="w-full text-left">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
@@ -458,56 +373,6 @@ export default function PipelinePage() {
           </section>
         </div>
       </div>
-
-      {/* Log Viewer Overlay */}
-      {viewingLogs && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-6 md:p-12 animate-in fade-in duration-300">
-          <div className="bg-slate-900 w-full max-w-5xl h-full max-h-[800px] rounded-[2.5rem] border border-white/10 shadow-2xl flex flex-col overflow-hidden">
-            <div className="p-6 border-b border-white/10 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="bg-brand/20 p-2 rounded-xl text-brand">
-                  <Terminal className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-white font-bold">Execution Logs</h3>
-                  <p className="text-slate-500 text-xs">Run ID: {viewingLogs}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setViewingLogs(null)}
-                className="p-2 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-all"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-auto p-8 font-mono text-sm">
-              {fetchingLogs ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
-                  <Loader2 className="w-8 h-8 animate-spin text-brand" />
-                  <p className="animate-pulse">Retrieving logs from cluster...</p>
-                </div>
-              ) : (
-                <pre className="text-slate-300 whitespace-pre-wrap leading-relaxed">
-                  {logs || "No logs available for this task execution."}
-                </pre>
-              )}
-            </div>
-
-            <div className="p-6 border-t border-white/10 bg-black/20 flex justify-between items-center">
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                Source: Airflow Kubernetes Worker
-              </p>
-              <button 
-                onClick={() => handleFetchLogs(viewingLogs)}
-                className="flex items-center gap-2 text-xs font-black text-brand uppercase tracking-widest hover:bg-brand/10 px-4 py-2 rounded-xl transition-all"
-              >
-                <RefreshCw className="w-4 h-4" /> Refresh Logs
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -16,13 +16,6 @@ export default function Navbar() {
   const { activeProject, setActiveProject } = useProject();
   const router = useRouter();
 
-  const navItems = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Analysis', href: '/analyze', icon: BarChart3 },
-    { name: 'Compare', href: '/compare', icon: ArrowLeftRight },
-    { name: 'History', href: '/history', icon: History },
-  ];
-
   if (pathname === '/login' || pathname === '/register') return null;
 
   const handleSwitchProject = () => {
@@ -54,45 +47,78 @@ export default function Navbar() {
           </div>
           
           <div className="flex gap-6 items-center">
-            {navItems.map((item) => (
-              <Link 
-                key={item.href}
-                href={item.href}
-                className={clsx(
-                  "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                  pathname === item.href ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                )}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.name}
-              </Link>
-            ))}
+            <Link 
+              href="/"
+              className={clsx(
+                "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                pathname === '/' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+              )}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
+            </Link>
 
-            <div className="flex gap-4 border-l pl-4">
-              <Link 
-                href="/admin/connectors"
-                className={clsx(
-                  "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                  pathname === '/admin/connectors' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                )}
-              >
-                <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
-                Alerts
-              </Link>
-
-              {user?.role === 'admin' && (
+            {/* Toolkit items only shown in Global View (no activeProject) */}
+            {!activeProject && (
+              <>
                 <Link 
-                  href="/admin/pipeline"
+                  href="/analyze"
                   className={clsx(
                     "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                    pathname === '/admin/pipeline' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                    pathname === '/analyze' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
                   )}
                 >
-                  <Settings className="w-4 h-4" />
-                  Control
+                  <BarChart3 className="w-4 h-4" />
+                  Analysis
                 </Link>
-              )}
-            </div>
+                <Link 
+                  href="/compare"
+                  className={clsx(
+                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                    pathname === '/compare' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                  )}
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                  Compare
+                </Link>
+                <Link 
+                  href="/history"
+                  className={clsx(
+                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                    pathname === '/history' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                  )}
+                >
+                  <History className="w-4 h-4" />
+                  History
+                </Link>
+
+                <div className="flex gap-4 border-l pl-4">
+                  <Link 
+                    href="/admin/connectors"
+                    className={clsx(
+                      "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                      pathname === '/admin/connectors' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                    )}
+                  >
+                    <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    Alerts
+                  </Link>
+
+                  {user?.role === 'admin' && (
+                    <Link 
+                      href="/admin/pipeline"
+                      className={clsx(
+                        "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                        pathname === '/admin/pipeline' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                      )}
+                    >
+                      <Settings className="w-4 h-4" />
+                      Control
+                    </Link>
+                  )}
+                </div>
+              </>
+            )}
 
             <div className="flex items-center gap-4 ml-4 pl-4 border-l">
               {user ? (

@@ -17,10 +17,10 @@ export default function ConnectorsPage() {
   const { activeProject } = useProject();
   const router = useRouter();
   
-  const [activeTab, setActiveTab] = useState<'crawlers' | 'alerts' | 'webhooks'>('crawlers');
+  const [activeTab, setActiveTab] = useState<'crawlers' | 'webhooks' | 'alerts'>('crawlers');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
+  const [status, setStats] = useState<{type: 'success' | 'error', msg: string} | null>(null);
   const [syncing, setSyncing] = useState<number | null>(null);
 
   const [sources, setSources] = useState<any[]>([]);
@@ -37,8 +37,8 @@ export default function ConnectorsPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    setStatus({ type: 'success', msg: 'Copied to clipboard!' });
-    setTimeout(() => setStatus(null), 3000);
+    setStats({ type: 'success', msg: 'Copied to clipboard!' });
+    setTimeout(() => setStats(null), 3000);
   };
 
   const fetchData = useCallback(async () => {
@@ -52,7 +52,7 @@ export default function ConnectorsPage() {
         axios.get('/api/alerts', { headers, params })
       ]);
       setSources(sourcesRes.data);
-      setAlerts(alertsRes.data);
+      setAlerts(alertsRes.data || []);
     } catch (err) {
       console.error("Failed to fetch settings", err);
     } finally {
@@ -61,7 +61,6 @@ export default function ConnectorsPage() {
   }, [activeProject]);
 
   useEffect(() => {
-    // Robust redirect logic: wait for auth
     if (authLoading) return;
     
     if (!user) {
@@ -79,10 +78,10 @@ export default function ConnectorsPage() {
       const res = await axios.post(`/api/connectors/sync/${connectorId}`, null, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      setStatus({ type: 'success', msg: `Successfully synced ${res.data.synced_count} records!` });
+      setStats({ type: 'success', msg: `Successfully synced ${res.data.synced_count} records!` });
       fetchData();
     } catch (err: any) {
-      setStatus({ type: 'error', msg: err.response?.data?.detail || 'Sync failed' });
+      setStats({ type: 'error', msg: err.response?.data?.detail || 'Sync failed' });
     } finally {
       setSyncing(null);
     }
@@ -105,10 +104,10 @@ export default function ConnectorsPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setNewAppId('');
-      setStatus({ type: 'success', msg: 'Application updated!' });
+      setStats({ type: 'success', msg: 'Application updated!' });
       fetchData();
     } catch (err: any) {
-      setStatus({ type: 'error', msg: 'Failed to update' });
+      setStats({ type: 'error', msg: 'Failed to update' });
     } finally {
       setSubmitting(false);
     }
@@ -125,10 +124,10 @@ export default function ConnectorsPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setRuleName(''); setDestination('');
-      setStatus({ type: 'success', msg: 'Alert rule active.' });
+      setStats({ type: 'success', msg: 'Alert rule active.' });
       fetchData();
     } catch (err: any) {
-      setStatus({ type: 'error', msg: 'Failed to create alert' });
+      setStats({ type: 'error', msg: 'Failed to create alert' });
     } finally {
       setSubmitting(false);
     }
@@ -169,7 +168,7 @@ export default function ConnectorsPage() {
         <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
           {[
             { id: 'crawlers', label: 'Auto-Crawlers', icon: Smartphone },
-            { id: 'alerts', label: 'Smart Alerts', icon: Zap },
+            ...(!activeProject ? [{ id: 'alerts', label: 'Smart Alerts', icon: Zap }] : []),
             { id: 'webhooks', label: 'Webhooks', icon: Code },
           ].map((tab) => (
             <button
@@ -196,7 +195,7 @@ export default function ConnectorsPage() {
             {status.type === 'success' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
             <span className="font-bold">{status.msg}</span>
           </div>
-          <button onClick={() => setStatus(null)} className="text-sm opacity-50 hover:opacity-100 uppercase font-black">Dismiss</button>
+          <button onClick={() => setStats(null)} className="text-sm opacity-50 hover:opacity-100 uppercase font-black">Dismiss</button>
         </div>
       )}
 
@@ -293,7 +292,7 @@ export default function ConnectorsPage() {
         </div>
       )}
 
-      {activeTab === 'alerts' && (
+      {activeTab === 'alerts' && !activeProject && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           <div className="lg:col-span-1">
              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
