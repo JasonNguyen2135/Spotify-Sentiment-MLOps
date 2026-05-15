@@ -17,7 +17,7 @@ export default function Navbar() {
   const router = useRouter();
 
   const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Analysis', href: '/analyze', icon: BarChart3 },
     { name: 'Compare', href: '/compare', icon: ArrowLeftRight },
     { name: 'History', href: '/history', icon: History },
@@ -40,23 +40,21 @@ export default function Navbar() {
               <span className="font-bold text-xl tracking-tight text-gray-900">SentimentAI</span>
             </div>
             
-            {activeProject && (
-              <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-100 rounded-2xl">
-                <div className="w-2 h-2 bg-brand rounded-full animate-pulse"></div>
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Project:</span>
-                <span className="text-sm font-bold text-slate-700">{activeProject.name}</span>
-                <button 
-                  onClick={handleSwitchProject}
-                  className="ml-2 text-[10px] font-black text-brand uppercase hover:underline"
-                >
-                  Switch
-                </button>
-              </div>
-            )}
+            <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-100 rounded-2xl">
+              <div className={clsx("w-2 h-2 rounded-full", activeProject ? "bg-brand animate-pulse" : "bg-slate-300")}></div>
+              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Context:</span>
+              <span className="text-sm font-bold text-slate-700">{activeProject ? activeProject.name : 'Platform View'}</span>
+              <button 
+                onClick={handleSwitchProject}
+                className="ml-2 text-[10px] font-black text-brand uppercase hover:underline"
+              >
+                {activeProject ? 'Switch' : 'Select Project'}
+              </button>
+            </div>
           </div>
           
           <div className="flex gap-6 items-center">
-            {activeProject && navItems.map((item) => (
+            {navItems.map((item) => (
               <Link 
                 key={item.href}
                 href={item.href}
@@ -70,33 +68,31 @@ export default function Navbar() {
               </Link>
             ))}
 
-            {activeProject && (
-              <div className="flex gap-4 border-l pl-4">
+            <div className="flex gap-4 border-l pl-4">
+              <Link 
+                href="/admin/connectors"
+                className={clsx(
+                  "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                  pathname === '/admin/connectors' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                )}
+              >
+                <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                Alerts
+              </Link>
+
+              {user?.role === 'admin' && (
                 <Link 
-                  href="/admin/connectors"
+                  href="/admin/pipeline"
                   className={clsx(
                     "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                    pathname === '/admin/connectors' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                    pathname === '/admin/pipeline' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
                   )}
                 >
-                  <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
-                  Alerts
+                  <Settings className="w-4 h-4" />
+                  Control
                 </Link>
-
-                {user?.role === 'admin' && (
-                  <Link 
-                    href="/admin/pipeline"
-                    className={clsx(
-                      "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                      pathname === '/admin/pipeline' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                    )}
-                  >
-                    <Settings className="w-4 h-4" />
-                    Control
-                  </Link>
-                )}
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="flex items-center gap-4 ml-4 pl-4 border-l">
               {user ? (

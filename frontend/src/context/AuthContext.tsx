@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('role', role);
     localStorage.setItem('username', username);
     setUser({ username, role });
-    router.push('/');
+    router.push('/dashboard');
   };
 
   const logout = () => {

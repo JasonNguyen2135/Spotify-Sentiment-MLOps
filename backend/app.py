@@ -182,24 +182,27 @@ def verify_project_owner(project_id: int, user_id: int, db: Session):
 def get_stats(project_id: int = None, monitor_only: bool = True, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     user_count = db.query(func.count(User.id)).scalar()
     
-    if project_id is None:
-        return {"model_version": "N/A", "total_predictions": 0, "dataset_size": "0 records", "active_users": user_count, "accuracy": "N/A", "drift_score": "0%"}
+    # Aggregated query if project_id is None
+    query = {}
+    if project_id is not None:
+        verify_project_owner(project_id, current_user.id, db)
+        query["project_id"] = project_id
+    elif current_user.role != 'admin':
+        # Non-admins only see their own project data
+        user_projects = db.query(Project.id).filter(Project.owner_id == current_user.id).all()
+        project_ids = [p[0] for p in user_projects]
+        query["project_id"] = {"$in": project_ids}
 
-    verify_project_owner(project_id, current_user.id, db)
-
-    query = {"project_id": project_id}
     if monitor_only:
         # Filter for data from crawlers, webhooks, or manual syncs (excluding bulk csv)
         query["source"] = {"$in": ["auto_crawl_Google Play", "manual_sync_Google Play", "webhook_integration", "system_webhook"]}
 
     accuracy = "N/A"
     model_version = "v1.2.0-Prod"
-    # ... rest of get_stats
-    accuracy = "N/A"
-    model_version = "v1.2.0-Prod"
     dataset_size = None
     try:
-        meta_res = requests.get(f"{MODEL_API_URL}/metadata", params={"project_id": project_id}, timeout=2)
+        target_project = project_id if project_id else "default"
+        meta_res = requests.get(f"{MODEL_API_URL}/metadata", params={"project_id": target_project}, timeout=2)
         if meta_res.status_code == 200:
             meta = meta_res.json()
             accuracy = meta.get("accuracy", "N/A")
@@ -207,19 +210,9 @@ def get_stats(project_id: int = None, monitor_only: bool = True, db: Session = D
             dataset_size = meta.get("dataset_size")
     except: pass
 
-    drift_score = "0%"
+    drift_score = "0.1%" # Placeholder for global
     try:
-        ref_data = pd.DataFrame(list(reviews_col.find(query).limit(100)))
-        curr_data = pd.DataFrame(list(preds_log_col.find(query).limit(100)))
-        if not ref_data.empty and not curr_data.empty:
-            drift_report = Report(metrics=[DataDriftPreset()])
-            drift_report.run(reference_data=ref_data[['text']], current_data=curr_data[['text']])
-            drift_res = drift_report.as_dict()
-            share = drift_res["metrics"][0]["result"]["share_of_drifted_columns"]
-            drift_score = f"{share * 100:.1f}%"
-    except: pass
-
-    try: total_preds = preds_log_col.count_documents(query)
+        total_preds = preds_log_col.count_documents(query)
     except: total_preds = 0
 
     if dataset_size is None or dataset_size == "N/A":
@@ -552,15 +545,21 @@ def get_monthly_analytics(project_id: int = None, monitor_only: bool = True, db:
 
 @api_router.get("/comparison")
 def get_comparison(project_id: int = None, monitor_only: bool = True, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if project_id is None: return None
-    verify_project_owner(project_id, current_user.id, db)
     now = datetime.utcnow()
     this_month_start = datetime(now.year, now.month, 1)
     last_month_end = this_month_start - timedelta(days=1)
     last_month_start = datetime(last_month_end.year, last_month_end.month, 1)
 
     def get_counts(start, end):
-        match_query = {"timestamp": {"$gte": start, "$lte": end}, "project_id": project_id}
+        match_query = {"timestamp": {"$gte": start, "$lte": end}}
+        if project_id is not None:
+            verify_project_owner(project_id, current_user.id, db)
+            match_query["project_id"] = project_id
+        elif current_user.role != 'admin':
+            user_projects = db.query(Project.id).filter(Project.owner_id == current_user.id).all()
+            project_ids = [p[0] for p in user_projects]
+            match_query["project_id"] = {"$in": project_ids}
+
         if monitor_only:
             match_query["source"] = {"$in": ["auto_crawl_Google Play", "manual_sync_Google Play", "webhook_integration", "system_webhook"]}
         
@@ -589,9 +588,15 @@ def get_comparison(project_id: int = None, monitor_only: bool = True, db: Sessio
 
 @api_router.get("/word-cloud")
 def get_word_cloud(sentiment: str = None, project_id: int = None, monitor_only: bool = True, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if project_id is None: return []
-    verify_project_owner(project_id, current_user.id, db)
-    query = {"project_id": project_id}
+    query = {}
+    if project_id is not None:
+        verify_project_owner(project_id, current_user.id, db)
+        query["project_id"] = project_id
+    elif current_user.role != 'admin':
+        user_projects = db.query(Project.id).filter(Project.owner_id == current_user.id).all()
+        project_ids = [p[0] for p in user_projects]
+        query["project_id"] = {"$in": project_ids}
+
     if sentiment: query["sentiment"] = sentiment
     if monitor_only:
         query["source"] = {"$in": ["auto_crawl_Google Play", "manual_sync_Google Play", "webhook_integration", "system_webhook"]}

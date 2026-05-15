@@ -42,11 +42,11 @@ export default function ConnectorsPage() {
   };
 
   const fetchData = useCallback(async () => {
-    if (!activeProject) return;
+    setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
-      const params = { project_id: activeProject.id };
+      const params = { project_id: activeProject?.id || null };
       const [sourcesRes, alertsRes] = await Promise.all([
         axios.get('/api/connectors', { headers, params }),
         axios.get('/api/alerts', { headers, params })
@@ -61,7 +61,7 @@ export default function ConnectorsPage() {
   }, [activeProject]);
 
   useEffect(() => {
-    // Robust redirect logic: wait for auth, then check project
+    // Robust redirect logic: wait for auth
     if (authLoading) return;
     
     if (!user) {
@@ -69,16 +69,8 @@ export default function ConnectorsPage() {
       return;
     }
 
-    // Wait a bit if activeProject is null (loading from localStorage)
-    if (!activeProject) {
-      const timer = setTimeout(() => {
-        if (!activeProject) router.push('/');
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-
     fetchData();
-  }, [user, authLoading, fetchData, activeProject, router]);
+  }, [user, authLoading, fetchData]);
 
   const handleSync = async (connectorId: number) => {
     setSyncing(connectorId);

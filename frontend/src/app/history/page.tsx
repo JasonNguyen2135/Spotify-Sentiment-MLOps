@@ -16,16 +16,12 @@ export default function HistoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (!authLoading && !activeProject) {
-      router.push('/');
-      return;
-    }
-
     const fetchHistory = async () => {
+      setLoading(true);
       try {
         const token = localStorage.getItem('token');
         const headers = { 'Authorization': `Bearer ${token}` };
-        const params = { project_id: activeProject?.id };
+        const params = { project_id: activeProject?.id || null };
         const response = await axios.get('/api/user-history', { headers, params });
         setHistory(response.data);
       } catch (err) {
@@ -34,8 +30,11 @@ export default function HistoryPage() {
         setLoading(false);
       }
     };
-    if (activeProject) fetchHistory();
-  }, [activeProject, authLoading, router]);
+    
+    if (user) {
+      fetchHistory();
+    }
+  }, [user, activeProject]);
 
   const filteredHistory = history.filter(item => 
     item.text.toLowerCase().includes(searchTerm.toLowerCase())
