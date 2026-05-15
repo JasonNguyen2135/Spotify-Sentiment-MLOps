@@ -58,16 +58,19 @@ export default function Navbar() {
               Dashboard
             </Link>
 
-            <Link 
-              href="/admin/connectors"
-              className={clsx(
-                "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                pathname === '/admin/connectors' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-              )}
-            >
-              <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
-              Alerts
-            </Link>
+            {/* Project-specific items */}
+            {activeProject && (
+              <Link 
+                href="/admin/connectors"
+                className={clsx(
+                  "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
+                  pathname === '/admin/connectors' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                )}
+              >
+                <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                Observability
+              </Link>
+            )}
 
             {/* Toolkit items only shown in Global View (no activeProject) */}
             {!activeProject && (

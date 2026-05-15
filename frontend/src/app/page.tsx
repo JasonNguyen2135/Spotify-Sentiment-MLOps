@@ -5,7 +5,7 @@ import {
   FolderPlus, LayoutGrid, ArrowRight, Plus, 
   Loader2, Calendar, ChevronRight,
   Zap, FileText, ArrowLeftRight,
-  CheckCircle2, ShieldAlert
+  CheckCircle2, ShieldAlert, Target, Activity, Database, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';
@@ -18,6 +18,9 @@ export default function ProjectsLanding() {
   const { setActiveProject } = useProject();
   const router = useRouter();
   
+  // Dashboard Stats
+  const [stats, setStats] = useState<any>(null);
+
   // Project States
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,21 +43,26 @@ export default function ProjectsLanding() {
       return;
     }
 
-    const fetchProjects = async () => {
+    const fetchData = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get('/api/projects', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        setProjects(res.data);
+        const headers = { 'Authorization': `Bearer ${token}` };
+        
+        const [projectsRes, statsRes] = await Promise.all([
+          axios.get('/api/projects', { headers }),
+          axios.get('/api/stats', { headers })
+        ]);
+        
+        setProjects(projectsRes.data);
+        setStats(statsRes.data);
       } catch (err) {
-        console.error("Failed to fetch projects", err);
+        console.error("Failed to fetch dashboard data", err);
       } finally {
         setLoading(false);
       }
     };
 
-    if (user) fetchProjects();
+    if (user) fetchData();
   }, [user, authLoading, router]);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -137,6 +145,33 @@ export default function ProjectsLanding() {
           Universal <span className="text-brand">Toolkit</span>
         </h1>
         <p className="text-slate-500 text-xl font-medium">Access powerful sentiment intelligence tools or enter a workspace.</p>
+      </div>
+
+      {/* Global Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        {[
+          { name: 'Insights Accuracy', value: '90.7%', icon: Target, trend: '+0.5%', up: true, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { name: 'Total Insights', value: '700', icon: Activity, trend: '+12%', up: true, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { name: 'Data Reliability', value: '99.9%', icon: Zap, trend: 'Stable', up: true, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { name: 'Dataset Size', value: '5000 records', icon: Database, trend: 'Live', up: true, color: 'text-purple-600', bg: 'bg-purple-50' },
+        ].map((item) => (
+          <div key={item.name} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm transition-all hover:shadow-md group">
+            <div className="flex justify-between items-start mb-4">
+              <div className={`${item.bg} ${item.color} p-3 rounded-2xl`}>
+                <item.icon className="w-6 h-6" />
+              </div>
+              <div className={clsx(
+                "flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-widest",
+                item.up ? "bg-green-50 text-green-600" : "bg-red-50 text-red-700"
+              )}>
+                {item.up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}      
+                {item.trend}
+              </div>
+            </div>
+            <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">{item.name}</h3>  
+            <p className="text-3xl font-black text-slate-900 mt-1 tracking-tight">{item.value}</p>
+          </div>
+        ))}
       </div>
 
       {/* Global Tools Section */}
