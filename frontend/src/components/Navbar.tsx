@@ -35,14 +35,15 @@ export default function Navbar() {
             
             <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-100 rounded-2xl">
               <div className={clsx("w-2 h-2 rounded-full", activeProject ? "bg-brand animate-pulse" : "bg-slate-300")}></div>
-              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Context:</span>
-              <span className="text-sm font-bold text-slate-700">{activeProject ? activeProject.name : 'Platform View'}</span>
-              <button 
-                onClick={handleSwitchProject}
-                className="ml-2 text-[10px] font-black text-brand uppercase hover:underline"
-              >
-                {activeProject ? 'Switch' : 'Select Project'}
-              </button>
+              <span className="text-sm font-bold text-slate-700">{activeProject ? activeProject.name : 'Global View'}</span>
+              {activeProject && (
+                <button 
+                  onClick={handleSwitchProject}
+                  className="ml-2 text-[10px] font-black text-brand uppercase hover:underline border-l pl-3 border-slate-200"
+                >
+                  Back to Hub
+                </button>
+              )}
             </div>
           </div>
           
