@@ -29,8 +29,9 @@ export default function ConnectorsPage() {
   const [newPlatform, setNewPlatform] = useState('Google Play');
 
   // Monitoring Strategy Lock
-  const isCrawlerMode = sources.length > 0;
+  const [forceCrawlerMode, setForceCrawlerMode] = useState(false);
   const [forceApiMode, setForceApiMode] = useState(false); 
+  const isCrawlerMode = sources.length > 0 || forceCrawlerMode;
   const currentMode = isCrawlerMode ? 'CRAWLER' : (forceApiMode ? 'API' : 'NONE');
 
   const [alerts, setAlerts] = useState<any[]>([]);
@@ -177,7 +178,7 @@ export default function ConnectorsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <button 
-            onClick={() => { setActiveTab('crawlers'); }}
+            onClick={() => { setForceCrawlerMode(true); setActiveTab('crawlers'); }}
             className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl hover:scale-[1.02]"
           >
             <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-colors">

@@ -94,9 +94,9 @@ export default function AnalyzePage() {
             <div className="space-y-8 animate-in slide-in-from-bottom duration-500">
               <div className="grid grid-cols-3 gap-6">
                  {[
-                  { label: 'Positive', count: results.summary.positive, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-                  { label: 'Negative', count: results.summary.negative, color: 'text-red-500', bg: 'bg-red-50' },
-                  { label: 'Neutral', count: results.summary.neutral, color: 'text-blue-500', bg: 'bg-blue-50' },
+                  { label: 'Positive', count: results?.summary?.positive || 0, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+                  { label: 'Negative', count: results?.summary?.negative || 0, color: 'text-red-500', bg: 'bg-red-50' },
+                  { label: 'Neutral', count: results?.summary?.neutral || 0, color: 'text-blue-500', bg: 'bg-blue-50' },
                 ].map(item => (
                   <div key={item.label} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
@@ -114,9 +114,9 @@ export default function AnalyzePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {results.results.map((r: any, i: number) => (
+                    {(results?.results || []).map((r: any, i: number) => (
                       <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-8 py-4 text-xs font-medium text-slate-600 truncate max-w-[400px]">{r.text}</td>
+                        <td className="px-8 py-4 text-xs font-medium text-slate-600 truncate max-w-[400px]">{r?.text || 'No content'}</td>
                         <td className="px-8 py-4">
                            <span className={clsx(
                              "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider",
