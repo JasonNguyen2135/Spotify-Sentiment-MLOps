@@ -67,7 +67,7 @@ export default function HistoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {Array.isArray(history) && history.length > 0 ? history.map((item, i) => (
+              {Array.isArray(history) && history.map((item, i) => (
                 <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-10 py-6">
                     <div className="flex items-center gap-4">
