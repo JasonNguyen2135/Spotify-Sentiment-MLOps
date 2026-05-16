@@ -47,6 +47,11 @@ export default function UniversalHub() {
   const [prediction, setPrediction] = useState<any>(null);
   const [predicting, setPredicting] = useState(false);
 
+  // Global Harvester States
+  const [harvestId, setHarvestId] = useState('');
+  const [harvestPlatform, setHarvestPlatform] = useState('Google Play');
+  const [harvesting, setHarvesting] = useState(false);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -127,6 +132,36 @@ export default function UniversalHub() {
       console.error("Prediction failed", err);
     } finally {
       setPredicting(false);
+    }
+  };
+
+  const handleHarvest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!harvestId.trim()) return;
+    setHarvesting(true);
+    try {
+      const token = localStorage.getItem('token');
+      // In a real scenario, this would call a dedicated bulk scraping endpoint
+      // For now, we simulate the process and provide a downloadable CSV
+      const res = await axios.get(`/api/connectors/harvest`, {
+        params: { platform: harvestPlatform, app_id: harvestId, limit: 1000 },
+        headers: { 'Authorization': `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${harvestPlatform}_${harvestId}_harvest.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setStats({ ...stats, type: 'success', msg: 'Harvest complete! 1000 items exported.' });
+    } catch (err) {
+      console.error("Harvest failed", err);
+      alert("Harvesting failed. Ensure the ID is correct.");
+    } finally {
+      setHarvesting(false);
     }
   };
 
@@ -213,6 +248,38 @@ export default function UniversalHub() {
 
           {/* Ad-hoc & Quick Actions */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+            <div className="lg:col-span-1 bg-slate-900 p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col group">
+              <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-emerald-500 opacity-10 blur-[100px] group-hover:opacity-20 transition-opacity"></div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-emerald-500/20 p-2 rounded-lg text-emerald-400"><Database className="w-5 h-5" /></div>
+                  <h2 className="text-2xl font-black text-white tracking-tight">Intelligence Harvester</h2>
+                </div>
+                <form onSubmit={handleHarvest} className="space-y-4">
+                  <select 
+                    value={harvestPlatform}
+                    onChange={(e) => setHarvestPlatform(e.target.value)}
+                    className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all font-bold text-sm"
+                  >
+                    <option className="bg-slate-900">Google Play</option>
+                    <option className="bg-slate-900">App Store</option>
+                  </select>
+                  <input 
+                    type="text"
+                    value={harvestId}
+                    onChange={(e) => setHarvestId(e.target.value)}
+                    placeholder="Application ID (e.g. com.spotify.music)"
+                    className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all placeholder:text-slate-500 font-medium text-sm"
+                  />
+                  <button type="submit" disabled={harvesting || !harvestId.trim()} className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 disabled:bg-slate-700 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
+                    {harvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Harvest 1,000 Items
+                  </button>
+                </form>
+                <p className="text-[10px] text-slate-500 mt-6 font-black uppercase tracking-widest text-center italic">Exports standard CSV for Bulk Analysis</p>
+              </div>
+            </div>
+
             <div className="lg:col-span-2 bg-slate-900 p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col justify-center group">
               <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-brand opacity-20 blur-[100px] group-hover:opacity-30 transition-opacity"></div>
               <div className="relative z-10">
