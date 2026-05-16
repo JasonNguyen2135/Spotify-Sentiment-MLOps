@@ -337,5 +337,8 @@ def get_tickets(project_id: int = None, db: Session = Depends(get_db), current_u
         query = query.filter(Ticket.project_id == project_id)
     return query.all()
 
+# Register router twice: with and without prefix for compatibility
+app.include_router(api_router)
 app.include_router(api_router, prefix="/api")
+
 migrate_db()
