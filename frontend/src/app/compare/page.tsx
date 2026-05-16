@@ -47,8 +47,8 @@ export default function ComparePage() {
   );
 
   const chartData = [
-    { name: 'Current Period', positive: data.current.positive, negative: data.current.negative, neutral: data.current.neutral },
-    { name: 'Previous Period', positive: data.previous.positive, negative: data.previous.negative, neutral: data.previous.neutral },
+    { name: 'Current Period', positive: data?.current?.positive || 0, negative: data?.current?.negative || 0, neutral: data?.current?.neutral || 0 },
+    { name: 'Previous Period', positive: data?.previous?.positive || 0, negative: data?.previous?.negative || 0, neutral: data?.previous?.neutral || 0 },
   ];
 
   return (
@@ -60,9 +60,9 @@ export default function ComparePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-12">
         {[
-          { label: 'Growth', value: `${data.total_growth.toFixed(1)}%`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Positive Delta', value: data.delta_positive, icon: Zap, color: 'text-brand', bg: 'bg-brand/5' },
-          { label: 'Negative Delta', value: data.delta_negative, icon: ShieldCheck, color: 'text-red-600', bg: 'bg-red-50' },
+          { label: 'Growth', value: `${(data?.total_growth || 0).toFixed(1)}%`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Positive Delta', value: data?.delta_positive || 0, icon: Zap, color: 'text-brand', bg: 'bg-brand/5' },
+          { label: 'Negative Delta', value: data?.delta_negative || 0, icon: ShieldCheck, color: 'text-red-600', bg: 'bg-red-50' },
           { label: 'Accuracy', value: '94.2%', icon: Target, color: 'text-blue-600', bg: 'bg-blue-50' },
         ].map((item, i) => (
           <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm transition-all hover:shadow-md">

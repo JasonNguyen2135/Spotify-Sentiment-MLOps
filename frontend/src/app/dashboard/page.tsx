@@ -74,9 +74,9 @@ export default function Home() {
   }
 
   const sentimentData = [
-    { name: 'Positive', value: monthlyData.reduce((acc, curr) => acc + (curr.positive || 0), 0), color: '#10b981' },
-    { name: 'Negative', value: monthlyData.reduce((acc, curr) => acc + (curr.negative || 0), 0), color: '#ef4444' },
-    { name: 'Neutral', value: monthlyData.reduce((acc, curr) => acc + (curr.neutral || 0), 0), color: '#6366f1' },
+    { name: 'Positive', value: (monthlyData || []).reduce((acc, curr) => acc + (curr?.positive || 0), 0), color: '#10b981' },
+    { name: 'Negative', value: (monthlyData || []).reduce((acc, curr) => acc + (curr?.negative || 0), 0), color: '#ef4444' },
+    { name: 'Neutral', value: (monthlyData || []).reduce((acc, curr) => acc + (curr?.neutral || 0), 0), color: '#6366f1' },
   ].filter(d => d.value > 0);
 
   return (
@@ -123,24 +123,24 @@ export default function Home() {
               <div className="text-center">
                 <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Total Volume</p>
                 <p className="text-3xl font-black text-white flex items-center justify-center gap-2">
-                  {comparison.total_growth >= 0 ? <ArrowUpRight className="text-emerald-400 w-6 h-6" /> : <ArrowDownRight className="text-red-400 w-6 h-6" />}
-                  {Math.abs(comparison.total_growth).toFixed(1)}%
+                  {(comparison?.total_growth || 0) >= 0 ? <ArrowUpRight className="text-emerald-400 w-6 h-6" /> : <ArrowDownRight className="text-red-400 w-6 h-6" />}
+                  {Math.abs(comparison?.total_growth || 0).toFixed(1)}%
                 </p>
               </div>
               <div className="text-center">
                 <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Positivity Shift</p>
                 <p className={clsx(
                   "text-3xl font-black flex items-center justify-center gap-2",
-                  comparison.delta_positive >= 0 ? "text-emerald-400" : "text-red-400"
+                  (comparison?.delta_positive || 0) >= 0 ? "text-emerald-400" : "text-red-400"
                 )}>
-                  {comparison.delta_positive >= 0 ? "+" : ""}{comparison.delta_positive}
+                  {(comparison?.delta_positive || 0) >= 0 ? "+" : ""}{comparison?.delta_positive || 0}
                 </p>
               </div>
             </div>
 
             <div className="max-w-xs bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
               <p className="text-xs text-slate-300 leading-relaxed italic italic">
-                "User sentiment is trending <strong>{comparison.delta_positive >= 0 ? 'upwards' : 'downwards'}</strong> this month. Primary drivers include increased engagement in key features."
+                "User sentiment is trending <strong>{(comparison?.delta_positive || 0) >= 0 ? 'upwards' : 'downwards'}</strong> this month. Primary drivers include increased engagement in key features."
               </p>
             </div>
           </div>

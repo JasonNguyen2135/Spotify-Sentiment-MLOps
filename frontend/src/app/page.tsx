@@ -229,9 +229,9 @@ export default function UniversalHub() {
   }
 
   const sentimentData = [
-    { name: 'Positive', value: monthlyData.reduce((acc, curr) => acc + (curr.positive || 0), 0), color: '#10b981' },
-    { name: 'Negative', value: monthlyData.reduce((acc, curr) => acc + (curr.negative || 0), 0), color: '#ef4444' },
-    { name: 'Neutral', value: monthlyData.reduce((acc, curr) => acc + (curr.neutral || 0), 0), color: '#6366f1' },
+    { name: 'Positive', value: (monthlyData || []).reduce((acc, curr) => acc + (curr?.positive || 0), 0), color: '#10b981' },
+    { name: 'Negative', value: (monthlyData || []).reduce((acc, curr) => acc + (curr?.negative || 0), 0), color: '#ef4444' },
+    { name: 'Neutral', value: (monthlyData || []).reduce((acc, curr) => acc + (curr?.neutral || 0), 0), color: '#6366f1' },
   ].filter(d => d.value > 0);
 
   return (
@@ -536,7 +536,7 @@ export default function UniversalHub() {
               <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col">
                 <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-10">Keyword Intelligence</h2>
                 <div className="flex-1 flex flex-wrap gap-3 content-start overflow-auto max-h-[280px] p-4 bg-slate-50/50 rounded-3xl border border-slate-100 shadow-inner">
-                  {keywords.length > 0 ? keywords.map((word, i) => (
+                  {Array.isArray(keywords) && keywords.length > 0 ? keywords.map((word, i) => (
                     <span 
                       key={i} 
                       className="px-5 py-2.5 bg-white text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-brand hover:text-white transition-all cursor-default border border-slate-200 shadow-sm hover:scale-110" 

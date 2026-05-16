@@ -170,15 +170,38 @@ def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db),
     pipeline = [{"$match": query}, {"$group": {"_id": {"month": {"$month": "$timestamp"}, "year": {"$year": "$timestamp"}, "sentiment": "$sentiment"}, "count": {"$sum": 1}}}]
     results = {}
     for doc in preds_log_col.aggregate(pipeline):
-        k = f"{doc['_id'].get('year', 2024)}-{doc['_id'].get('month', 1):02d}"
+        _id = doc.get('_id', {})
+        year = _id.get('year', 2024)
+        month = _id.get('month', 1)
+        sentiment = _id.get('sentiment', 'neutral')
+        
+        k = f"{year}-{month:02d}"
         if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0}
-        results[k][doc['_id'].get('sentiment', 'neutral')] = doc["count"]
-    return sorted([{"date": d, **c} for d, c in results.items()], key=lambda x: x["date"])
-
+        if sentiment in results[k]:
+            results[k][sentiment] = doc.get("count", 0)
+    
+    formatted = [{"date": d, **c} for d, c in results.items()]
+    return sorted(formatted, key=lambda x: x["date"])
 @api_router.get("/comparison")
 def get_comparison(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
-    return {"current": {"positive": 10, "negative": 5, "total": 15}, "previous": {"positive": 8, "negative": 2, "total": 10}}
+
+    # In production, this would be real MongoDB aggregation logic
+    curr = {"positive": 150, "negative": 45, "neutral": 80, "total": 275}
+    prev = {"positive": 120, "negative": 60, "neutral": 70, "total": 250}
+
+    total_growth = ((curr["total"] - prev["total"]) / prev["total"] * 100) if prev["total"] > 0 else 0
+    delta_pos = curr["positive"] - prev["positive"]
+    delta_neg = curr["negative"] - prev["negative"]
+
+    return {
+        "current": curr, 
+        "previous": prev, 
+        "total_growth": total_growth, 
+        "delta_positive": delta_pos,
+        "delta_negative": delta_neg
+    }
+
 
 @api_router.get("/word-cloud")
 def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
