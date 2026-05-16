@@ -51,6 +51,7 @@ export default function UniversalHub() {
 
   // HITL States
   const [fullHistory, setFullHistory] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   // Global Harvester States
   const [harvestId, setHarvestId] = useState('');
@@ -71,14 +72,15 @@ export default function UniversalHub() {
         const headers = { 'Authorization': `Bearer ${token}` };
         const params = { project_id: activeProject?.id || null };
         
-        const [statsRes, analyticsRes, compRes, keywordsRes, projectsRes, modelsRes, historyRes] = await Promise.all([
+        const [statsRes, analyticsRes, compRes, keywordsRes, projectsRes, modelsRes, historyRes, auditRes] = await Promise.all([
           axios.get('/api/stats', { headers, params }),
           axios.get('/api/monthly-analytics', { headers, params }),
           axios.get('/api/comparison', { headers, params }),
           axios.get('/api/word-cloud', { headers, params }),
           axios.get('/api/projects', { headers }),
           axios.get('/api/models', { headers }).catch(() => ({ data: [] })),
-          activeProject ? axios.get('/api/history', { headers, params }) : Promise.resolve({ data: [] })
+          activeProject ? axios.get('/api/history', { headers, params }) : Promise.resolve({ data: [] }),
+          user?.role === 'admin' ? axios.get('/api/audit-logs', { headers, params }) : Promise.resolve({ data: [] })
         ]);
         
         setStats(statsRes.data);
@@ -88,6 +90,7 @@ export default function UniversalHub() {
         setProjects(projectsRes.data);
         setModelOptions(modelsRes.data);
         setFullHistory(historyRes.data);
+        setAuditLogs(auditRes.data);
       } catch (err) {
         console.error("Failed to fetch hub data", err);
       } finally {
@@ -97,6 +100,27 @@ export default function UniversalHub() {
     
     fetchData();
   }, [user, authLoading, activeProject, router]);
+
+  const handleExport = async (type: 'excel' | 'pdf') => {
+    if (!activeProject) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`/api/export/${type}/${activeProject.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Project_${activeProject.name}_Report.${type === 'excel' ? 'xlsx' : 'pdf'}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert("Export failed");
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,7 +267,7 @@ export default function UniversalHub() {
                 <item.icon className="w-3.5 h-3.5" /> {item.label}
               </button>
             ))}
-            {user?.role === 'admin' && (
+            {['admin', 'ai_engineer'].includes(user?.role) && (
               <>
                 <div className="w-px h-6 bg-slate-200 mx-2" />
                 <Link href="/admin/registry" className="px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-brand transition-all flex items-center gap-2">
@@ -253,6 +277,9 @@ export default function UniversalHub() {
                   <Database className="w-3.5 h-3.5" /> Training
                 </Link>
               </>
+            )}
+            {user?.role === 'analyst' && (
+               <div className="px-6 py-2.5 text-slate-400 font-black text-[9px] uppercase tracking-widest bg-white rounded-full shadow-sm">Analyst Mode</div>
             )}
           </div>
         </div>
@@ -368,6 +395,45 @@ export default function UniversalHub() {
               </div>
             </div>
           </div>
+
+          {/* NEW: Audit Logs Section for Admins */}
+          {user?.role === 'admin' && (
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm mb-16">
+              <div className="flex items-center gap-4 mb-10">
+                <div className="bg-slate-900 p-3 rounded-2xl text-brand"><ShieldAlert className="w-6 h-6" /></div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">System Audit Logs</h2>
+                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Traceability of all system-critical actions</p>
+                </div>
+              </div>
+              <div className="overflow-auto max-h-[400px]">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-slate-50">
+                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Timestamp</th>
+                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">User</th>
+                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Action</th>
+                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {auditLogs.length > 0 ? auditLogs.map((log: any) => (
+                      <tr key={log.id} className="hover:bg-slate-50/50 transition-all">
+                        <td className="py-4 text-xs font-medium text-slate-500">{new Date(log.timestamp).toLocaleString()}</td>
+                        <td className="py-4 text-xs font-black text-slate-700 uppercase tracking-tighter">{log.username}</td>
+                        <td className="py-4">
+                          <span className="bg-slate-100 px-2 py-1 rounded text-[9px] font-black text-slate-600 uppercase tracking-widest">{log.action}</span>
+                        </td>
+                        <td className="py-4 text-xs font-medium text-slate-600">{log.details}</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={4} className="py-10 text-center text-slate-400 italic">No logs found.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -382,8 +448,11 @@ export default function UniversalHub() {
                  Workspace Monitoring
               </h2>
               <div className="flex gap-4">
-                <button onClick={() => window.print()} className="bg-white px-6 py-3 rounded-2xl border border-slate-200 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm">
-                  <Download className="w-4 h-4" /> Export Audit
+                <button onClick={() => handleExport('excel')} className="bg-emerald-50 text-emerald-600 px-6 py-3 rounded-2xl border border-emerald-100 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-emerald-100 transition-all shadow-sm">
+                  <FileText className="w-4 h-4" /> Excel Report
+                </button>
+                <button onClick={() => handleExport('pdf')} className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl border border-rose-100 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-rose-100 transition-all shadow-sm">
+                  <FileText className="w-4 h-4" /> PDF Report
                 </button>
                 <div className="bg-slate-900 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-3 shadow-xl shadow-slate-200">
                   <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" /> Live Stream
