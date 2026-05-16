@@ -18,7 +18,7 @@ export default function ConnectorsPage() {
   const { activeProject } = useProject();
   const router = useRouter();
   
-  const [activeTab, setActiveTab] = useState<'crawlers' | 'webhooks' | 'alerts' | 'extension'>('crawlers');
+  const [activeTab, setActiveTab] = useState<'crawlers' | 'webhooks' | 'alerts'>('crawlers');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [status, setStats] = useState<{type: 'success' | 'error', msg: string} | null>(null);
@@ -40,14 +40,6 @@ export default function ConnectorsPage() {
   const [destination, setDestination] = useState('');
 
   const webhookUrl = activeProject ? `${window.location.protocol}//${window.location.host}/api/collect/${activeProject.id}` : '';
-  const extensionCode = `// Manifest v3 snippet
-{
-  "name": "SentimentAI Scraper",
-  "version": "1.0",
-  "permissions": ["activeTab", "storage"],
-  "host_permissions": ["*://*.shopee.vn/*", "*://*.google.com/*"],
-  "action": { "default_popup": "popup.html" }
-}`;
 
   const webhookExample = JSON.stringify({
     "review_text": "Sản phẩm tuyệt vời, giao hàng nhanh!",
@@ -244,8 +236,7 @@ export default function ConnectorsPage() {
             ...(currentMode === 'CRAWLER' ? [{ id: 'crawlers', label: 'Auto-Crawlers', icon: Smartphone }] : []),
             ...(!activeProject ? [{ id: 'alerts', label: 'Smart Alerts', icon: Zap }] : []),
             ...(currentMode === 'API' ? [
-              { id: 'webhooks', label: 'Webhooks', icon: Code },
-              { id: 'extension', label: 'Browser Ext', icon: Globe }
+              { id: 'webhooks', label: 'Webhooks', icon: Code }
             ] : []),
           ].map((tab) => (
             <button
@@ -372,117 +363,6 @@ export default function ConnectorsPage() {
         </div>
       )}
 
-      {activeTab === 'alerts' && !activeProject && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          <div className="lg:col-span-1">
-             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <Zap className="w-5 h-5 text-brand" /> Monitor Condition
-              </h2>
-              <form onSubmit={handleAddAlert} className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Rule Name</label>
-                  <input 
-                    type="text"
-                    value={ruleName}
-                    onChange={(e) => setRuleName(e.target.value)}
-                    placeholder="Crisis Alert"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Negative Threshold (%)</label>
-                  <input 
-                    type="number"
-                    value={threshold}
-                    onChange={(e) => setThreshold(parseInt(e.target.value))}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Notification Channel</label>
-                  <select 
-                    value={channel}
-                    onChange={(e) => setChannel(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
-                  >
-                    <option>Telegram</option>
-                    <option>Email</option>
-                    <option>Slack</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Destination Address</label>
-                  <input 
-                    type="text"
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    placeholder="Chat ID or Email"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
-                    required
-                  />
-                </div>
-                <button 
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-brand text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-xl shadow-brand/20"
-                >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
-                  Activate Rule
-                </button>
-              </form>
-            </div>
-          </div>
-
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden h-full">
-               <div className="p-8 border-b border-slate-50">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-brand" /> Active Monitoring Rules
-                </h2>
-              </div>
-              <div className="p-8">
-                {alerts.length > 0 ? (
-                  <div className="space-y-4">
-                    {alerts.map((a) => (
-                      <div key={a.id} className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-center justify-between group">
-                        <div className="flex gap-6">
-                          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm text-brand border border-slate-100">
-                            {a.channel === 'Telegram' ? <MessageCircle className="w-7 h-7" /> : a.channel === 'Email' ? <Mail className="w-7 h-7" /> : <Zap className="w-7 h-7" />}
-                          </div>
-                          <div>
-                            <p className="text-lg font-black text-slate-900">{a.name}</p>
-                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Send to: <span className="text-brand">{a.destination}</span></p>
-                            <div className="mt-3 flex items-center gap-2">
-                              <span className="px-3 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg uppercase tracking-tighter">
-                                Trigger: Negative {'>'} {a.threshold}%
-                              </span>
-                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-tighter">
-                                Live
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => handleDelete('alerts', a.id)}
-                          className="p-3 text-slate-300 hover:text-red-500 hover:bg-white rounded-2xl transition-all shadow-sm"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-20 text-center text-slate-400 font-medium italic">No alert rules configured for this project.</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {activeTab === 'webhooks' && currentMode === 'API' && (
         <div className="space-y-8">
           <div className="bg-slate-900 p-12 rounded-[3rem] text-white relative overflow-hidden shadow-2xl">
@@ -548,79 +428,6 @@ export default function ConnectorsPage() {
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {activeTab === 'extension' && currentMode === 'API' && (
-        <div className="animate-in slide-in-from-right duration-500">
-           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-             <div className="lg:col-span-2 space-y-8">
-                <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-                  <div className="flex items-center gap-4 mb-8">
-                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center"><Globe className="w-8 h-8" /></div>
-                    <div>
-                      <h2 className="text-3xl font-black text-slate-900">Data Harvester</h2>
-                      <p className="text-slate-400 font-medium italic">Scrape famous platforms and export to CSV.</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    <p className="text-slate-600 leading-relaxed font-medium">
-                      The **SentimentAI Harvester** extension is a specialized tool to extract reviews from <strong>Google Play</strong> and <strong>App Store</strong> web versions. It generates a standardized CSV file ready for bulk analysis.
-                    </p>
-
-                    <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100">
-                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">Harvester Features</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {[
-                          "One-click scraping from Stores.",
-                          "Auto-detection of Review Text.",
-                          "ID, Content, & Timestamp extraction.",
-                          "Standard CSV format output."
-                        ].map((feat, i) => (
-                          <div key={i} className="flex items-center gap-3">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            <span className="text-xs text-slate-600 font-bold">{feat}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-10 pt-10 border-t border-slate-50 flex gap-4">
-                    <button className="flex-1 bg-slate-900 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-2">
-                      <Download className="w-5 h-5" /> Download Package
-                    </button>
-                    <button 
-                      onClick={() => copyToClipboard(activeProject?.id?.toString() || '')}
-                      className="px-8 bg-white border border-slate-200 text-slate-900 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Copy className="w-5 h-5" /> Copy Project Key
-                    </button>
-                  </div>
-                </div>
-             </div>
-
-             <div className="lg:col-span-1">
-                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl sticky top-24">
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <Code className="w-5 h-5 text-brand" /> Manifest config
-                  </h3>
-                  <div className="bg-black/40 p-6 rounded-2xl font-mono text-[10px] text-emerald-400 border border-white/5 overflow-x-auto mb-6">
-                    {extensionCode}
-                  </div>
-                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
-                     <div className="flex items-center gap-2 mb-2 text-brand">
-                        <Info className="w-4 h-4" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Extension Status</span>
-                     </div>
-                     <p className="text-xs text-slate-400 leading-relaxed">
-                       Currently optimized for Chromium-based browsers. Safari support coming soon.
-                     </p>
-                  </div>
-                </div>
-             </div>
-           </div>
         </div>
       )}
     </div>

@@ -76,32 +76,6 @@ export default function Navbar() {
               </Link>
             )}
 
-            {/* Admin specific Control split */}
-            {user?.role === 'admin' && (
-              <>
-                <Link 
-                  href="/admin/training"
-                  className={clsx(
-                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                    pathname === '/admin/training' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                  )}
-                >
-                  <Activity className="w-4 h-4 text-emerald-500" />
-                  Training
-                </Link>
-                <Link 
-                  href="/admin/registry"
-                  className={clsx(
-                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                    pathname === '/admin/registry' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                  )}
-                >
-                  <Settings className="w-4 h-4 text-blue-500" />
-                  Registry
-                </Link>
-              </>
-            )}
-
             {/* Toolkit items only shown in Global View (no activeProject) */}
             {!activeProject && (
               <>

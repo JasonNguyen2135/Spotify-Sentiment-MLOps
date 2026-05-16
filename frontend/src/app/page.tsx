@@ -203,17 +203,6 @@ export default function UniversalHub() {
               : 'Global sentiment analysis & platform-wide toolkit.'}
           </p>
         </div>
-        <div className="flex gap-3">
-          <button 
-            onClick={handlePrintReport}
-            className="bg-white px-5 py-2.5 rounded-xl border border-slate-200 font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
-          >
-            <Download className="w-4 h-4" /> Export Report
-          </button>
-          <div className="bg-slate-900 px-5 py-2.5 rounded-xl font-bold text-sm text-white flex items-center gap-2 shadow-lg shadow-slate-200">
-            <Activity className="w-4 h-4 text-emerald-400" /> Live
-          </div>
-        </div>
       </div>
 
       {/* Toolkit Sections - HIDDEN WHEN IN PROJECT */}
@@ -312,91 +301,9 @@ export default function UniversalHub() {
                 )}
               </div>
             </div>
-            <div className="flex flex-col gap-4">
-              <Link href="/analyze" className="flex-1 group">
-                <div className="h-full bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all flex flex-col justify-center">
-                  <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors"><FileText className="w-6 h-6" /></div>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Bulk Analysis</h3>
-                  <p className="text-xs text-slate-400 mt-1 font-medium">Large-scale dataset processing.</p>
-                </div>
-              </Link>
-              <Link href="/compare" className="flex-1 group">
-                <div className="h-full bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all flex flex-col justify-center">
-                  <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 mb-4 group-hover:bg-purple-600 group-hover:text-white transition-colors"><ArrowLeftRight className="w-6 h-6" /></div>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Model Compare</h3>
-                  <p className="text-xs text-slate-400 mt-1 font-medium">Cross-benchmark performance.</p>
-                </div>
-              </Link>
-            </div>
           </div>
         </>
       )}
-
-      {/* Charts Grid - ALWAYS SHOWN */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-        <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <h2 className="text-xl font-black text-slate-800 tracking-tight mb-8">Historical Intelligence</h2>
-          <div className="h-[350px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyData}>
-                <defs>
-                  <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="colorNeg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)'}} />
-                <Area type="monotone" dataKey="positive" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorPos)" />
-                <Area type="monotone" dataKey="negative" stroke="#ef4444" strokeWidth={4} fillOpacity={1} fill="url(#colorNeg)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col">
-          <h2 className="text-xl font-black text-slate-800 tracking-tight mb-8">Sentiment Split</h2>
-          <div className="flex-1 h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={sentimentData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={8} dataKey="value">
-                  {sentimentData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} stroke="none" />))}
-                </Pie>
-                <Tooltip />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-8 pt-8 border-t border-slate-50 text-center">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Verified Samples</p>
-            <p className="text-3xl font-black text-brand tracking-tighter">{sentimentData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-           <h2 className="text-xl font-black text-slate-800 tracking-tight mb-8">Review Dynamics</h2>
-          <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                <Tooltip />
-                <Bar dataKey="positive" stackId="a" fill="#10b981" /><Bar dataKey="negative" stackId="a" fill="#ef4444" /><Bar dataKey="neutral" stackId="a" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col">
-          <h2 className="text-xl font-black text-slate-800 tracking-tight mb-8">Topic Intelligence</h2>
-          <div className="flex-1 flex flex-wrap gap-2 content-start overflow-auto max-h-[250px] p-2">
-            {keywords.length > 0 ? keywords.map((word, i) => (
-              <span key={i} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-wider hover:bg-brand hover:text-white transition-all cursor-default border border-slate-100" style={{ fontSize: Math.max(9, Math.min(18, 9 + word.value / 2)) }}>{word.text}</span>
-            )) : <div className="w-full h-full flex items-center justify-center text-slate-300 italic text-sm text-center">Insufficient data.</div>}
-          </div>
-        </div>
-      </div>
 
       {/* Projects Grid */}
       <div className="border-t border-slate-100 pt-16">
