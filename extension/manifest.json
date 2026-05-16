@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "SentimentAI Scraper",
+  "version": "1.0",
+  "description": "Scrapes comments and analyzes sentiment with SentimentAI.",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "host_permissions": ["*://*/*"]
+}
