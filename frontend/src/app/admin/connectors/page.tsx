@@ -6,7 +6,7 @@ import {
   Smartphone, Globe, Mail, MessageCircle,
   CheckCircle2, AlertCircle, Loader2, RefreshCw,
   Code, Copy, Terminal, Link as LinkIcon, Info,
-  Send, Download
+  Send, Download, ArrowRight
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';
@@ -27,7 +27,12 @@ export default function ConnectorsPage() {
   const [sources, setSources] = useState<any[]>([]);
   const [newAppId, setNewAppId] = useState('');
   const [newPlatform, setNewPlatform] = useState('Google Play');
-  
+
+  // Monitoring Strategy Lock
+  const isCrawlerMode = sources.length > 0;
+  const [forceApiMode, setForceApiMode] = useState(false); 
+  const currentMode = isCrawlerMode ? 'CRAWLER' : (forceApiMode ? 'API' : 'NONE');
+
   const [alerts, setAlerts] = useState<any[]>([]);
   const [ruleName, setRuleName] = useState('');
   const [threshold, setThreshold] = useState(25);
@@ -169,23 +174,79 @@ export default function ConnectorsPage() {
     );
   }
 
+  // If No Mode Selected Yet
+  if (currentMode === 'NONE') {
+    return (
+      <div className="max-w-4xl mx-auto py-20 px-4 animate-in fade-in duration-700">
+        <div className="text-center mb-16">
+          <h1 className="text-5xl font-black text-slate-900 mb-4 tracking-tight">Select Monitoring Strategy</h1>
+          <p className="text-slate-500 text-lg font-medium">How should we collect intelligence for <span className="text-brand font-bold">"{activeProject?.name}"</span>?</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <button 
+            onClick={() => { setActiveTab('crawlers'); }}
+            className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl hover:scale-[1.02]"
+          >
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-colors">
+              <Smartphone className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-3">Public App</h3>
+            <p className="text-slate-500 text-sm leading-relaxed mb-8">
+              Automatic monitoring for apps on <strong>Google Play, App Store, or Shopee</strong>. No code required.
+            </p>
+            <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">
+              Setup Crawler <ArrowRight className="w-4 h-4" />
+            </div>
+          </button>
+
+          <button 
+            onClick={() => { setForceApiMode(true); setActiveTab('webhooks'); }}
+            className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl hover:scale-[1.02]"
+          >
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-colors">
+              <Code className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-3">Custom / API</h3>
+            <p className="text-slate-500 text-sm leading-relaxed mb-8">
+              For <strong>private apps or unique websites</strong>. We provide a webhook API for you to send comments.
+            </p>
+            <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">
+              Setup Webhook <ArrowRight className="w-4 h-4" />
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20 px-4">
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
+          <div className="flex items-center gap-3 mb-2">
+             <span className={clsx(
+               "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
+               currentMode === 'CRAWLER' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+             )}>
+               {currentMode} MODE ACTIVE
+             </span>
+             <button onClick={() => { if(confirm("Reset monitoring strategy? This won't delete data but will let you choose a new mode.")) { setForceApiMode(false); if(sources.length) sources.forEach(s => handleDelete('connectors', s.id)); } }} className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest">Change Mode</button>
+          </div>
           <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3">
             <RefreshCw className="text-brand w-10 h-10" />
             Automation <span className="text-brand">Hub</span>
           </h1>
-          <p className="text-gray-500 mt-2 text-lg">Configure dynamic data ingestion and real-time monitoring rules.</p>
         </div>
         
         <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
           {[
-            { id: 'crawlers', label: 'Auto-Crawlers', icon: Smartphone },
+            ...(currentMode === 'CRAWLER' ? [{ id: 'crawlers', label: 'Auto-Crawlers', icon: Smartphone }] : []),
             ...(!activeProject ? [{ id: 'alerts', label: 'Smart Alerts', icon: Zap }] : []),
-            { id: 'webhooks', label: 'Webhooks', icon: Code },
-            { id: 'extension', label: 'Browser Ext', icon: Globe },
+            ...(currentMode === 'API' ? [
+              { id: 'webhooks', label: 'Webhooks', icon: Code },
+              { id: 'extension', label: 'Browser Ext', icon: Globe }
+            ] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -215,7 +276,7 @@ export default function ConnectorsPage() {
         </div>
       )}
 
-      {activeTab === 'crawlers' && (
+      {activeTab === 'crawlers' && currentMode === 'CRAWLER' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
@@ -313,11 +374,116 @@ export default function ConnectorsPage() {
 
       {activeTab === 'alerts' && !activeProject && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* (Alerts code remains the same as before) */}
+          <div className="lg:col-span-1">
+             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <Zap className="w-5 h-5 text-brand" /> Monitor Condition
+              </h2>
+              <form onSubmit={handleAddAlert} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Rule Name</label>
+                  <input 
+                    type="text"
+                    value={ruleName}
+                    onChange={(e) => setRuleName(e.target.value)}
+                    placeholder="Crisis Alert"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Negative Threshold (%)</label>
+                  <input 
+                    type="number"
+                    value={threshold}
+                    onChange={(e) => setThreshold(parseInt(e.target.value))}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Notification Channel</label>
+                  <select 
+                    value={channel}
+                    onChange={(e) => setChannel(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
+                  >
+                    <option>Telegram</option>
+                    <option>Email</option>
+                    <option>Slack</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Destination Address</label>
+                  <input 
+                    type="text"
+                    value={destination}
+                    onChange={(e) => setDestination(e.target.value)}
+                    placeholder="Chat ID or Email"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
+                    required
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full bg-brand text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-xl shadow-brand/20"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                  Activate Rule
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden h-full">
+               <div className="p-8 border-b border-slate-50">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-brand" /> Active Monitoring Rules
+                </h2>
+              </div>
+              <div className="p-8">
+                {alerts.length > 0 ? (
+                  <div className="space-y-4">
+                    {alerts.map((a) => (
+                      <div key={a.id} className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-center justify-between group">
+                        <div className="flex gap-6">
+                          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm text-brand border border-slate-100">
+                            {a.channel === 'Telegram' ? <MessageCircle className="w-7 h-7" /> : a.channel === 'Email' ? <Mail className="w-7 h-7" /> : <Zap className="w-7 h-7" />}
+                          </div>
+                          <div>
+                            <p className="text-lg font-black text-slate-900">{a.name}</p>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Send to: <span className="text-brand">{a.destination}</span></p>
+                            <div className="mt-3 flex items-center gap-2">
+                              <span className="px-3 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg uppercase tracking-tighter">
+                                Trigger: Negative {'>'} {a.threshold}%
+                              </span>
+                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-tighter">
+                                Live
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => handleDelete('alerts', a.id)}
+                          className="p-3 text-slate-300 hover:text-red-500 hover:bg-white rounded-2xl transition-all shadow-sm"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-20 text-center text-slate-400 font-medium italic">No alert rules configured for this project.</div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {activeTab === 'webhooks' && (
+      {activeTab === 'webhooks' && currentMode === 'API' && (
         <div className="space-y-8">
           <div className="bg-slate-900 p-12 rounded-[3rem] text-white relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 right-0 -mt-20 -mr-20 w-96 h-96 bg-brand opacity-10 blur-[120px]"></div>
@@ -395,7 +561,7 @@ export default function ConnectorsPage() {
         </div>
       )}
 
-      {activeTab === 'extension' && (
+      {activeTab === 'extension' && currentMode === 'API' && (
         <div className="animate-in slide-in-from-right duration-500">
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
              <div className="lg:col-span-2 space-y-8">
