@@ -1,11 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "SentimentAI Scraper",
-  "version": "1.0",
-  "description": "Scrapes comments and analyzes sentiment with SentimentAI.",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "name": "SentimentAI Harvester",
+  "version": "1.1",
+  "description": "Scrape reviews from Google Play & App Store to CSV.",
+  "permissions": ["activeTab", "scripting"],
   "action": {
     "default_popup": "popup.html"
   },
-  "host_permissions": ["*://*/*"]
+  "host_permissions": [
+    "https://play.google.com/*",
+    "https://apps.apple.com/*"
+  ]
 }

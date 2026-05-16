@@ -537,25 +537,15 @@ export default function ConnectorsPage() {
 
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <Zap className="w-5 h-5 text-brand" /> Live Testing
+                <Info className="w-5 h-5 text-brand" /> Integration Note
               </h3>
-              <p className="text-sm text-slate-500 mb-6 leading-relaxed">Send a test packet to verify your integration is functioning correctly.</p>
-              <button 
-                onClick={async () => {
-                   try {
-                     const token = localStorage.getItem('token');
-                     await axios.post(webhookUrl, JSON.parse(webhookExample), {
-                       headers: { 'Authorization': `Bearer ${token}` }
-                     });
-                     setStats({ type: 'success', msg: 'Test packet delivered!' });
-                   } catch (err) {
-                     setStats({ type: 'error', msg: 'Delivery failed.' });
-                   }
-                }}
-                className="w-full py-4 border-2 border-slate-100 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 hover:border-brand hover:text-brand transition-all flex items-center justify-center gap-2"
-              >
-                <Send className="w-4 h-4" /> Send Test Request
-              </button>
+              <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                Your application should send a POST request to the unique endpoint whenever a new user comment is submitted. 
+                Ensure your headers include the Authorization bearer token if you've enabled security.
+              </p>
+              <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-blue-700 text-xs font-medium">
+                Tip: Use this for real-time monitoring of internal apps or private feedback forms.
+              </div>
             </div>
           </div>
         </div>
@@ -569,28 +559,28 @@ export default function ConnectorsPage() {
                   <div className="flex items-center gap-4 mb-8">
                     <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center"><Globe className="w-8 h-8" /></div>
                     <div>
-                      <h2 className="text-3xl font-black text-slate-900">Chrome Extension</h2>
-                      <p className="text-slate-400 font-medium italic">Collect feedback directly from your browser.</p>
+                      <h2 className="text-3xl font-black text-slate-900">Data Harvester</h2>
+                      <p className="text-slate-400 font-medium italic">Scrape famous platforms and export to CSV.</p>
                     </div>
                   </div>
                   
                   <div className="space-y-6">
                     <p className="text-slate-600 leading-relaxed font-medium">
-                      The **SentimentAI Scraper** extension allows you to analyze comments on any website (Shopee, YouTube, Google Maps) with a single click. It automatically detects text blocks and sends them to this workspace.
+                      The **SentimentAI Harvester** extension is a specialized tool to extract reviews from <strong>Google Play</strong> and <strong>App Store</strong> web versions. It generates a standardized CSV file ready for bulk analysis.
                     </p>
 
                     <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100">
-                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">Quick Setup Guide</h4>
-                      <div className="space-y-4">
+                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">Harvester Features</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {[
-                          "Download the extension source package below.",
-                          "Open Chrome and navigate to `chrome://extensions`.",
-                          "Enable 'Developer mode' in the top right.",
-                          "Click 'Load unpacked' and select the downloaded folder."
-                        ].map((step, i) => (
-                          <div key={i} className="flex items-start gap-4">
-                            <div className="w-6 h-6 bg-white border border-slate-100 rounded-lg flex items-center justify-center text-[10px] font-black text-brand flex-shrink-0 mt-0.5">{i+1}</div>
-                            <p className="text-sm text-slate-500 font-medium">{step}</p>
+                          "One-click scraping from Stores.",
+                          "Auto-detection of Review Text.",
+                          "ID, Content, & Timestamp extraction.",
+                          "Standard CSV format output."
+                        ].map((feat, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            <span className="text-xs text-slate-600 font-bold">{feat}</span>
                           </div>
                         ))}
                       </div>
