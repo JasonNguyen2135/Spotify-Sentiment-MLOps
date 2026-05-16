@@ -86,16 +86,13 @@ Base.metadata.create_all(bind=engine)
 def migrate_db():
     db = SessionLocal()
     try:
-        # Columns
         for table, col in [("projects", "owner_id"), ("data_sources", "project_id"), ("alert_rules", "project_id")]:
             try: db.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} INTEGER")); db.commit()
             except: db.rollback()
-        
         admin = db.query(User).filter(User.username == "admin").first()
         if not admin:
             admin = User(username="admin", hashed_password=CryptContext(schemes=["bcrypt"]).hash("admin123"), role="admin")
             db.add(admin); db.commit(); db.refresh(admin)
-
         if not db.query(Project).first():
             p = Project(name="Default Workspace", description="Auto-created.", owner_id=admin.id)
             db.add(p); db.commit(); db.refresh(p)
@@ -104,8 +101,7 @@ def migrate_db():
 
 # Helpers
 def log_audit(db: Session, user: User, action: str, details: str, project_id: int = None):
-    db.add(AuditLog(user_id=user.id, username=user.username, action=action, details=details, project_id=project_id))
-    db.commit()
+    db.add(AuditLog(user_id=user.id, username=user.username, action=action, details=details, project_id=project_id)); db.commit()
 
 def verify_project_access(project_id: int, user: User, db: Session):
     project = db.query(Project).filter(Project.id == project_id).first()
@@ -122,13 +118,10 @@ reviews_col = mongo_db["raw_reviews"]
 
 pwd_context = CryptContext(schemes=["bcrypt"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
 def get_db():
     db = SessionLocal(); yield db; db.close()
-
 def create_access_token(data: dict):
     return jwt.encode({**data, "exp": datetime.utcnow() + timedelta(days=1)}, SECRET_KEY, algorithm=ALGORITHM)
-
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -140,12 +133,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 app = FastAPI(); app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 api_router = APIRouter()
 
-# --- Auth ---
+# --- API Endpoints ---
 @api_router.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first(): raise HTTPException(status_code=400)
-    db.add(User(username=username, hashed_password=pwd_context.hash(password), role=role)); db.commit()
-    return {"message": "Success"}
+    db.add(User(username=username, hashed_password=pwd_context.hash(password), role=role)); db.commit(); return {"message": "Success"}
 
 @api_router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -153,7 +145,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not pwd_context.verify(form_data.password, user.hashed_password): raise HTTPException(status_code=400)
     return {"access_token": create_access_token({"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
 
-# --- Projects ---
 @api_router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role in ["admin", "ai_engineer", "analyst"]: return db.query(Project).all()
@@ -162,11 +153,8 @@ def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get
 @api_router.post("/projects")
 def create_project(name: str, description: str = "", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = Project(name=name, description=description, owner_id=current_user.id)
-    db.add(p); db.commit(); db.refresh(p)
-    log_audit(db, current_user, "CREATE_PROJECT", f"Created {name}", p.id)
-    return p
+    db.add(p); db.commit(); db.refresh(p); log_audit(db, current_user, "CREATE_PROJECT", f"Created {name}", p.id); return p
 
-# --- Analytics ---
 @api_router.get("/stats")
 def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
@@ -182,9 +170,9 @@ def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db),
     pipeline = [{"$match": query}, {"$group": {"_id": {"month": {"$month": "$timestamp"}, "year": {"$year": "$timestamp"}, "sentiment": "$sentiment"}, "count": {"$sum": 1}}}]
     results = {}
     for doc in preds_log_col.aggregate(pipeline):
-        k = f"{doc['_id']['year']}-{doc['_id']['month']:02d}"
+        k = f"{doc['_id'].get('year', 2024)}-{doc['_id'].get('month', 1):02d}"
         if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0}
-        results[k][doc['_id']['sentiment']] = doc["count"]
+        results[k][doc['_id'].get('sentiment', 'neutral')] = doc["count"]
     return sorted([{"date": d, **c} for d, c in results.items()], key=lambda x: x["date"])
 
 @api_router.get("/comparison")
@@ -197,7 +185,6 @@ def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), curren
     if project_id: verify_project_access(project_id, current_user, db)
     return [{"text": "demo", "value": 10}]
 
-# --- Predictions & HITL ---
 @api_router.post("/predict")
 async def predict(review_text: str, project_id: int, model_version: str = "Production", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
@@ -208,6 +195,7 @@ async def predict(review_text: str, project_id: int, model_version: str = "Produ
     return res
 
 @api_router.get("/history")
+@api_router.get("/user-history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
     if project_id: verify_project_access(project_id, current_user, db); query["project_id"] = project_id
@@ -223,7 +211,13 @@ def correction(prediction_id: str, text: str, corrected_sentiment: str, project_
     except: pass
     return {"status": "success"}
 
-# --- MLOps (Models, Training) ---
+@api_router.post("/analyze-csv")
+async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if project_id: verify_project_access(project_id, current_user, db)
+    content = await file.read(); df = pd.read_csv(io.BytesIO(content))
+    log_audit(db, current_user, "UPLOAD_DATA", f"Uploaded {len(df)} rows", project_id); return {"total": len(df), "status": "processed"}
+
+# --- MLOps ---
 @api_router.get("/models")
 def get_models(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
@@ -242,8 +236,7 @@ def train(dataset: str, project_id: int, current_user: User = Depends(get_curren
     if not tk: return {"status": "error"}
     url = f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches"
     requests.post(url, json={"ref": "main", "inputs": {"data_source": dataset, "project_id": str(project_id)}}, headers={"Authorization": f"token {tk}"}, timeout=10)
-    log_audit(db, current_user, "TRIGGER_TRAIN", f"Training {dataset}", project_id)
-    return {"status": "success"}
+    log_audit(db, current_user, "TRIGGER_TRAIN", f"Training {dataset}", project_id); return {"status": "success"}
 
 @api_router.get("/airflow/runs")
 def airflow_runs(current_user: User = Depends(get_current_user)):
@@ -260,7 +253,6 @@ def github_runs(current_user: User = Depends(get_current_user)):
     try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 5}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
-# --- Infrastructure ---
 @api_router.get("/connectors")
 def get_connectors(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     q = db.query(DataSource)
@@ -286,15 +278,14 @@ def get_audit_logs(project_id: int = None, db: Session = Depends(get_db), curren
     if project_id: q = q.filter(AuditLog.project_id == project_id)
     return q.order_by(AuditLog.timestamp.desc()).limit(100).all()
 
-# --- Reporting ---
 @api_router.get("/export/excel/{project_id}")
 def export_excel(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
     df = pd.DataFrame(list(preds_log_col.find({"project_id": project_id}).limit(1000)))
     if not df.empty: df['_id'] = df['_id'].astype(str)
     output = io.BytesIO(); df.to_excel(output, index=False); output.seek(0)
+    from fastapi.responses import StreamingResponse
     return StreamingResponse(output, media_type="application/vnd.ms-excel", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.xlsx"})
 
-from fastapi.responses import StreamingResponse
 app.include_router(api_router); app.include_router(api_router, prefix="/api")
 migrate_db()
