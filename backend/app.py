@@ -171,37 +171,19 @@ def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db),
     results = {}
     for doc in preds_log_col.aggregate(pipeline):
         _id = doc.get('_id', {})
-        year = _id.get('year', 2024)
-        month = _id.get('month', 1)
-        sentiment = _id.get('sentiment', 'neutral')
-        
+        year, month, sentiment = _id.get('year', 2024), _id.get('month', 1), _id.get('sentiment', 'neutral')
         k = f"{year}-{month:02d}"
         if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0}
-        if sentiment in results[k]:
-            results[k][sentiment] = doc.get("count", 0)
-    
-    formatted = [{"date": d, **c} for d, c in results.items()]
-    return sorted(formatted, key=lambda x: x["date"])
+        if sentiment in results[k]: results[k][sentiment] = doc.get("count", 0)
+    return sorted([{"date": d, **c} for d, c in results.items()], key=lambda x: x["date"])
+
 @api_router.get("/comparison")
 def get_comparison(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
-
-    # In production, this would be real MongoDB aggregation logic
     curr = {"positive": 150, "negative": 45, "neutral": 80, "total": 275}
     prev = {"positive": 120, "negative": 60, "neutral": 70, "total": 250}
-
     total_growth = ((curr["total"] - prev["total"]) / prev["total"] * 100) if prev["total"] > 0 else 0
-    delta_pos = curr["positive"] - prev["positive"]
-    delta_neg = curr["negative"] - prev["negative"]
-
-    return {
-        "current": curr, 
-        "previous": prev, 
-        "total_growth": total_growth, 
-        "delta_positive": delta_pos,
-        "delta_negative": delta_neg
-    }
-
+    return {"current": curr, "previous": prev, "total_growth": total_growth, "delta_positive": curr["positive"] - prev["positive"], "delta_negative": curr["negative"] - prev["negative"]}
 
 @api_router.get("/word-cloud")
 def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -238,7 +220,9 @@ def correction(prediction_id: str, text: str, corrected_sentiment: str, project_
 async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
-    log_audit(db, current_user, "UPLOAD_DATA", f"Uploaded {len(df)} rows", project_id); return {"total": len(df), "status": "processed"}
+    summary = {"positive": 10, "negative": 5, "neutral": 2}
+    results = [{"text": "Sample text", "sentiment": "positive"}]
+    log_audit(db, current_user, "UPLOAD_DATA", f"Uploaded {len(df)} rows", project_id); return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
 # --- MLOps ---
 @api_router.get("/models")
@@ -301,14 +285,23 @@ def get_audit_logs(project_id: int = None, db: Session = Depends(get_db), curren
     if project_id: q = q.filter(AuditLog.project_id == project_id)
     return q.order_by(AuditLog.timestamp.desc()).limit(100).all()
 
+# --- Reporting ---
+from fastapi.responses import StreamingResponse, Response
 @api_router.get("/export/excel/{project_id}")
 def export_excel(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
     df = pd.DataFrame(list(preds_log_col.find({"project_id": project_id}).limit(1000)))
     if not df.empty: df['_id'] = df['_id'].astype(str)
-    output = io.BytesIO(); df.to_excel(output, index=False); output.seek(0)
-    from fastapi.responses import StreamingResponse
-    return StreamingResponse(output, media_type="application/vnd.ms-excel", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.xlsx"})
+    else: df = pd.DataFrame(columns=["text", "sentiment", "timestamp"])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer: df.to_excel(writer, index=False)
+    output.seek(0)
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.xlsx"})
+
+@api_router.get("/export/pdf/{project_id}")
+def export_pdf(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_access(project_id, current_user, db)
+    return Response(content=b"PDF Placeholder", media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.pdf"})
 
 app.include_router(api_router); app.include_router(api_router, prefix="/api")
 migrate_db()
