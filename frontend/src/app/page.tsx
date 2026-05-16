@@ -7,7 +7,7 @@ import {
   BarChart3, PieChart as PieChartIcon, ArrowUpRight, 
   ArrowDownRight, Info, Download, Calendar, Sparkles,
   MessageSquare, LayoutGrid, Plus, FolderPlus, ArrowRight,
-  FileText, ArrowLeftRight, ChevronRight, BellRing, Ticket as TicketIcon
+  FileText, ArrowLeftRight, ChevronRight, BellRing, Ticket as TicketIcon, Settings
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';
