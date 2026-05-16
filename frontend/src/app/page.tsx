@@ -212,17 +212,49 @@ export default function UniversalHub() {
 
   return (
     <div className="animate-in fade-in duration-700 pb-20 print:p-0 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4 print:hidden">
-        <div>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tight mb-2">
-            {activeProject ? activeProject.name : 'Universal Hub'}
-          </h1>
-          <p className="text-slate-500 text-lg font-medium">
-            {activeProject 
-              ? `Real-time intelligence monitoring.` 
-              : 'Global sentiment analysis & platform-wide toolkit.'}
-          </p>
+      {/* Header & Navigation */}
+      <div className="mb-12 print:hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+          <div>
+            <h1 className="text-5xl font-black text-slate-900 tracking-tight mb-2">
+              {activeProject ? activeProject.name : 'Universal Hub'}
+            </h1>
+            <p className="text-slate-500 text-lg font-medium">
+              {activeProject 
+                ? `Enterprise sentiment intelligence monitoring.` 
+                : 'Global sentiment analysis & platform-wide toolkit.'}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 bg-slate-100/50 p-1.5 rounded-[2rem] border border-slate-200 shadow-inner">
+            {[
+              { label: 'Dashboard', active: !activeProject, onClick: () => setActiveProject(null), icon: LayoutGrid },
+              { label: 'Analysis', icon: Activity },
+              { label: 'Compare', icon: ArrowLeftRight },
+              { label: 'History', icon: FileText },
+            ].map((item) => (
+              <button 
+                key={item.label}
+                onClick={item.onClick}
+                className={clsx(
+                  "px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2",
+                  item.active ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                <item.icon className="w-3.5 h-3.5" /> {item.label}
+              </button>
+            ))}
+            {user?.role === 'admin' && (
+              <>
+                <div className="w-px h-6 bg-slate-200 mx-2" />
+                <Link href="/admin/registry" className="px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-brand transition-all flex items-center gap-2">
+                  <Settings className="w-3.5 h-3.5" /> Model Hub
+                </Link>
+                <Link href="/admin/training" className="px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-emerald-500 transition-all flex items-center gap-2">
+                  <Database className="w-3.5 h-3.5" /> Training
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -230,46 +262,46 @@ export default function UniversalHub() {
       {!activeProject && (
         <>
           {/* Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10 no-print">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 no-print">
             {[
               { name: 'Model Health', value: stats?.accuracy || '94.2%', icon: Target, trend: '+0.5%', up: true, color: 'text-emerald-600', bg: 'bg-emerald-50' },
               { name: 'Total Insights', value: stats?.total_predictions?.toLocaleString() || '0', icon: Activity, trend: '+12%', up: true, color: 'text-blue-600', bg: 'bg-blue-50' },
               { name: 'Data Drift', value: stats?.drift_score || '0.2%', icon: Zap, trend: '-0.1%', up: false, color: 'text-amber-600', bg: 'bg-amber-50' },
               { name: 'Dataset Scale', value: stats?.dataset_size || '0 records', icon: Database, trend: 'Updated', up: true, color: 'text-purple-600', bg: 'bg-purple-50' },
             ].map((item) => (
-              <div key={item.name} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm transition-all hover:shadow-md group">
-                <div className="flex justify-between items-start mb-4">
-                  <div className={`${item.bg} ${item.color} p-3 rounded-2xl`}>
+              <div key={item.name} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl group">
+                <div className="flex justify-between items-start mb-6">
+                  <div className={`${item.bg} ${item.color} p-4 rounded-2xl group-hover:scale-110 transition-transform`}>
                     <item.icon className="w-6 h-6" />
                   </div>
                   <div className={clsx(
-                    "flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-widest",
-                    item.up ? "bg-green-50 text-green-600" : "bg-red-50 text-red-700"
+                    "flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest",
+                    item.up ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-700"
                   )}>
                     {item.up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                     {item.trend}
                   </div>
                 </div>
-                <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">{item.name}</h3>
-                <p className="text-3xl font-black text-slate-900 mt-1 tracking-tight">{item.value}</p>
+                <h3 className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mb-1">{item.name}</h3>
+                <p className="text-3xl font-black text-slate-900 tracking-tight">{item.value}</p>
               </div>
             ))}
           </div>
 
-          {/* Ad-hoc & Quick Actions */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-            <div className="lg:col-span-1 bg-slate-900 p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col group">
+          {/* Ad-hoc Actions */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
+            <div className="lg:col-span-1 bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col group">
               <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-emerald-500 opacity-10 blur-[100px] group-hover:opacity-20 transition-opacity"></div>
               <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-emerald-500/20 p-2 rounded-lg text-emerald-400"><Database className="w-5 h-5" /></div>
-                  <h2 className="text-2xl font-black text-white tracking-tight">Intelligence Harvester</h2>
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="bg-emerald-500/20 p-2.5 rounded-xl text-emerald-400"><Database className="w-5 h-5" /></div>
+                  <h2 className="text-2xl font-black text-white tracking-tight">Harvester</h2>
                 </div>
                 <form onSubmit={handleHarvest} className="space-y-4">
                   <select 
                     value={harvestPlatform}
                     onChange={(e) => setHarvestPlatform(e.target.value)}
-                    className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all font-bold text-sm"
+                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all font-bold text-sm appearance-none"
                   >
                     <option className="bg-slate-900">Google Play</option>
                     <option className="bg-slate-900">App Store</option>
@@ -279,58 +311,57 @@ export default function UniversalHub() {
                     value={harvestId}
                     onChange={(e) => setHarvestId(e.target.value)}
                     placeholder="Application ID (e.g. com.spotify.music)"
-                    className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all placeholder:text-slate-500 font-medium text-sm"
+                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all placeholder:text-slate-500 font-medium text-sm"
                   />
-                  <button type="submit" disabled={harvesting || !harvestId.trim()} className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 disabled:bg-slate-700 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
+                  <button type="submit" disabled={harvesting || !harvestId.trim()} className="w-full bg-emerald-500 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 disabled:bg-slate-800 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
                     {harvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    Harvest 1,000 Items
+                    Scrape 1K Samples
                   </button>
                 </form>
-                <p className="text-[10px] text-slate-500 mt-6 font-black uppercase tracking-widest text-center italic">Exports standard CSV for Bulk Analysis</p>
               </div>
             </div>
 
-            <div className="lg:col-span-2 bg-slate-900 p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col justify-center group">
-              <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-brand opacity-20 blur-[100px] group-hover:opacity-30 transition-opacity"></div>
+            <div className="lg:col-span-2 bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col justify-center group border border-white/5">
+              <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-brand opacity-20 blur-[120px] group-hover:opacity-30 transition-opacity"></div>
               <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-brand/20 p-2 rounded-lg text-brand"><Sparkles className="w-5 h-5 fill-brand" /></div>
-                  <h2 className="text-2xl font-black text-white tracking-tight">Instant Intelligence</h2>
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="bg-brand/20 p-2.5 rounded-xl text-brand"><Sparkles className="w-5 h-5 fill-brand" /></div>
+                  <h2 className="text-2xl font-black text-white tracking-tight">Instant Analysis</h2>
                   {user?.role === 'admin' && (
                     <select 
                       value={selectedVersion}
                       onChange={(e) => setSelectedVersion(e.target.value)}
                       className="ml-auto bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-brand outline-none focus:ring-1 focus:ring-brand"
                     >
-                      <option className="bg-slate-900" value="Production">Production (Stable)</option>
+                      <option className="bg-slate-900" value="Production">Prod (v1.2)</option>
                       {modelOptions.map((m: any) => (
-                        <option key={m.version} className="bg-slate-900" value={m.version}>v{m.version} - {m.current_stage}</option>
+                        <option key={m.version} className="bg-slate-900" value={m.version}>v{m.version}</option>
                       ))}
-                      <option className="bg-slate-900" value="BERT">BERT-base-uncased</option>
-                      <option className="bg-slate-900" value="LSTM">Bi-LSTM v2</option>
+                      <option className="bg-slate-900" value="BERT">BERT Transformer</option>
+                      <option className="bg-slate-900" value="LSTM">Bi-LSTM</option>
                     </select>
                   )}
                 </div>
-                <form onSubmit={handlePredict} className="relative mb-6">
+                <form onSubmit={handlePredict} className="relative mb-8">
                   <input 
                     type="text"
                     value={review}
                     onChange={(e) => setReview(e.target.value)}
-                    placeholder="Paste any feedback for immediate sentiment scoring..."
-                    className="w-full pl-6 pr-32 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-brand text-white transition-all placeholder:text-slate-500 font-medium"
+                    placeholder="Enter customer feedback for deep sentiment extraction..."
+                    className="w-full pl-8 pr-40 py-6 bg-white/5 border border-white/10 rounded-[2rem] outline-none focus:ring-2 focus:ring-brand text-white transition-all placeholder:text-slate-500 font-medium"
                   />
-                  <button type="submit" disabled={predicting || !review.trim()} className="absolute right-2 top-2 bottom-2 bg-brand text-white px-8 rounded-xl font-black text-xs uppercase tracking-widest hover:opacity-90 disabled:bg-slate-700 transition-all shadow-lg shadow-brand/20">
-                    {predicting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Score"}
+                  <button type="submit" disabled={predicting || !review.trim()} className="absolute right-3 top-3 bottom-3 bg-brand text-white px-10 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:opacity-90 disabled:bg-slate-800 transition-all shadow-lg shadow-brand/20">
+                    {predicting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Extract Sentiment"}
                   </button>
                 </form>
                 {prediction && (
-                  <div className="p-5 bg-white/5 rounded-2xl border border-white/10 animate-in slide-in-from-top flex items-center gap-6">
-                    <div className={clsx("p-4 rounded-2xl", prediction.sentiment === "positive" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400")}>
-                      {prediction.sentiment === "positive" ? <CheckCircle2 className="w-8 h-8" /> : <ShieldAlert className="w-8 h-8" />}
+                  <div className="p-6 bg-white/5 rounded-[2rem] border border-white/10 animate-in slide-in-from-top flex items-center gap-8">
+                    <div className={clsx("p-6 rounded-[1.5rem] shadow-xl", prediction.sentiment === "positive" ? "bg-emerald-500/20 text-emerald-400 shadow-emerald-500/10" : "bg-rose-500/20 text-rose-400 shadow-rose-500/10")}>
+                      {prediction.sentiment === "positive" ? <CheckCircle2 className="w-10 h-10" /> : <ShieldAlert className="w-10 h-10" />}
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1">AI Classification</p>
-                      <p className="text-3xl font-black text-white uppercase tracking-tight">{prediction.sentiment}</p>
+                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mb-1">AI Classification Result</p>
+                      <p className="text-4xl font-black text-white uppercase tracking-tighter">{prediction.sentiment}</p>
                     </div>
                   </div>
                 )}
@@ -340,141 +371,111 @@ export default function UniversalHub() {
         </>
       )}
 
-      {/* NEW: Admin Orchestration Hub - RESTORED */}
-      {!activeProject && user?.role === 'admin' && (
-        <div className="mb-16 animate-in slide-in-from-bottom duration-1000">
-          <div className="flex items-center gap-4 mb-8">
-             <div className="bg-slate-900 p-3 rounded-2xl text-brand"><ShieldAlert className="w-6 h-6" /></div>
-             <div>
-               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Admin Orchestration</h2>
-               <p className="text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em] mt-1">Full-cycle MLOps control center</p>
-             </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <Link href="/admin/registry" className="group bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all relative overflow-hidden">
-               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-brand opacity-0 group-hover:opacity-10 blur-[50px] transition-opacity"></div>
-               <div className="bg-brand/5 text-brand w-14 h-14 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-brand group-hover:text-white transition-all"><Settings className="w-7 h-7" /></div>
-               <h3 className="text-xl font-black text-slate-900 mb-2">Model Hub</h3>
-               <p className="text-slate-500 text-xs font-medium leading-relaxed mb-8">Manage MLflow versions, compare metrics, and promote to production.</p>
-               <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">Open Registry <ArrowRight className="w-4 h-4" /></div>
-            </Link>
-
-            <Link href="/admin/training" className="group bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all relative overflow-hidden">
-               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-emerald-500 opacity-0 group-hover:opacity-10 blur-[50px] transition-opacity"></div>
-               <div className="bg-emerald-50 text-emerald-600 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-emerald-500 group-hover:text-white transition-all"><Database className="w-7 h-7" /></div>
-               <h3 className="text-xl font-black text-slate-900 mb-2">Training Hub</h3>
-               <p className="text-slate-500 text-xs font-medium leading-relaxed mb-8">Trigger automated retraining via Airflow & GitHub Actions.</p>
-               <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-widest">Manage Pipelines <ArrowRight className="w-4 h-4" /></div>
-            </Link>
-
-            <div className="group bg-slate-900 p-8 rounded-[3rem] shadow-2xl relative overflow-hidden border border-white/5">
-               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-brand opacity-20 blur-[50px]"></div>
-               <div className="bg-brand/20 text-brand w-14 h-14 rounded-2xl flex items-center justify-center mb-6"><Zap className="w-7 h-7" /></div>
-               <h3 className="text-xl font-black text-white mb-2">Quick Retrain</h3>
-               <p className="text-slate-400 text-xs font-medium leading-relaxed mb-6">Instantly trigger V2 training using current project data.</p>
-               <button 
-                  onClick={async () => {
-                    if (confirm("Trigger production retraining on GitHub Actions?")) {
-                      try {
-                        const token = localStorage.getItem('token');
-                        await axios.post('/api/train', null, {
-                          params: { dataset_source: 'mongodb', project_id: activeProject?.id || 1 },
-                          headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        alert("Training triggered! Monitor progress in GitHub Actions.");
-                      } catch (err) { alert("Failed to trigger training."); }
-                    }
-                  }}
-                  className="w-full bg-brand text-white py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all"
-               >
-                 Trigger V2 Pipeline
-               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Workspace View - CHARTS RESTORED HERE */}
-      <div className="border-t border-slate-100 pt-16">
+      {/* Workspace View */}
+      <div className="pt-8">
         {activeProject ? (
           <div className="animate-in fade-in slide-in-from-bottom duration-700">
             {/* Header for Workspace inside Hub */}
-            <div className="flex justify-between items-center mb-10">
-              <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-4">
-                 <LayoutGrid className="text-brand w-10 h-10" /> Workspace Insights
+            <div className="flex justify-between items-center mb-12">
+              <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-5">
+                 <div className="bg-brand p-3 rounded-2xl text-white shadow-lg shadow-brand/20"><LayoutGrid className="w-7 h-7" /></div>
+                 Workspace Monitoring
               </h2>
-              <div className="flex gap-3">
-                <button onClick={() => window.print()} className="bg-white px-5 py-2.5 rounded-xl border border-slate-200 font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
-                  <Download className="w-4 h-4" /> Export Report
+              <div className="flex gap-4">
+                <button onClick={() => window.print()} className="bg-white px-6 py-3 rounded-2xl border border-slate-200 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm">
+                  <Download className="w-4 h-4" /> Export Audit
                 </button>
-                <div className="bg-slate-900 px-5 py-2.5 rounded-xl font-bold text-sm text-white flex items-center gap-2 shadow-lg shadow-slate-200">
-                  <Activity className="w-4 h-4 text-emerald-400" /> Live
+                <div className="bg-slate-900 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-3 shadow-xl shadow-slate-200">
+                  <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" /> Live Stream
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-              <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                <h2 className="text-xl font-black text-slate-800 tracking-tight mb-8">Historical Intelligence</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
+              <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group">
+                <div className="flex justify-between items-center mb-10">
+                  <h2 className="text-2xl font-black text-slate-800 tracking-tight">Historical Intelligence</h2>
+                  <div className="flex gap-2">
+                    <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Positive</span>
+                    <span className="flex items-center gap-1.5 text-[9px] font-black text-rose-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-rose-500 rounded-full" /> Negative</span>
+                  </div>
+                </div>
                 <div className="h-[350px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={monthlyData}>
                       <defs>
-                        <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                        <linearGradient id="colorNeg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
+                        <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
+                        <linearGradient id="colorNeg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                      <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)'}} />
-                      <Area type="monotone" dataKey="positive" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorPos)" />
-                      <Area type="monotone" dataKey="negative" stroke="#ef4444" strokeWidth={4} fillOpacity={1} fill="url(#colorNeg)" />
+                      <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} dy={15} />
+                      <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
+                      <Tooltip 
+                        contentStyle={{borderRadius: '2rem', border: 'none', padding: '1.5rem', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)'}}
+                        itemStyle={{fontWeight: 900, textTransform: 'uppercase', fontSize: '10px'}}
+                      />
+                      <Area type="monotone" dataKey="positive" stroke="#10b981" strokeWidth={5} fillOpacity={1} fill="url(#colorPos)" />
+                      <Area type="monotone" dataKey="negative" stroke="#ef4444" strokeWidth={5} fillOpacity={1} fill="url(#colorNeg)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               </div>
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col">
-                <h2 className="text-xl font-bold text-slate-800 tracking-tight mb-8">Sentiment Split</h2>
-                <div className="flex-1 h-[250px] w-full">
+              <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center">
+                <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-10 w-full">Sentiment Split</h2>
+                <div className="flex-1 h-[280px] w-full relative">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={sentimentData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={8} dataKey="value">
-                        {sentimentData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} stroke="none" />))}
+                      <Pie data={sentimentData} cx="50%" cy="50%" innerRadius={85} outerRadius={110} paddingAngle={10} dataKey="value" stroke="none">
+                        {sentimentData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
                       </Pie>
                       <Tooltip />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }} />
                     </PieChart>
                   </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aggregate</p>
+                    <p className="text-4xl font-black text-slate-900 tracking-tighter">{sentimentData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}</p>
+                  </div>
                 </div>
-                <div className="mt-8 pt-8 border-t border-slate-50 text-center">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Verified Samples</p>
-                  <p className="text-3xl font-black text-brand tracking-tighter">{sentimentData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}</p>
+                <div className="grid grid-cols-3 gap-6 w-full mt-8 border-t border-slate-50 pt-8">
+                  {sentimentData.map(s => (
+                    <div key={s.name} className="text-center">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{s.name}</p>
+                      <p className="text-lg font-black text-slate-900" style={{color: s.color}}>{s.value}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                 <h2 className="text-xl font-black text-slate-800 tracking-tight mb-8">Review Dynamics</h2>
-                <div className="h-[250px] w-full">
+              <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm group">
+                <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-10">Volume Dynamics</h2>
+                <div className="h-[280px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                      <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                      <Tooltip />
-                      <Bar dataKey="positive" stackId="a" fill="#10b981" /><Bar dataKey="negative" stackId="a" fill="#ef4444" /><Bar dataKey="neutral" stackId="a" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
+                      <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 40px -10px rgb(0 0 0 / 0.1)'}} />
+                      <Bar dataKey="positive" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="negative" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="neutral" stackId="a" fill="#6366f1" radius={[10, 10, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col">
-                <h2 className="text-xl font-black text-slate-800 tracking-tight mb-8">Topic Intelligence</h2>
-                <div className="flex-1 flex flex-wrap gap-2 content-start overflow-auto max-h-[250px] p-2">
+              <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col">
+                <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-10">Keyword Intelligence</h2>
+                <div className="flex-1 flex flex-wrap gap-3 content-start overflow-auto max-h-[280px] p-4 bg-slate-50/50 rounded-3xl border border-slate-100 shadow-inner">
                   {keywords.length > 0 ? keywords.map((word, i) => (
-                    <span key={i} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-wider hover:bg-brand hover:text-white transition-all cursor-default border border-slate-100" style={{ fontSize: Math.max(9, Math.min(18, 9 + word.value / 2)) }}>{word.text}</span>
-                  )) : <div className="w-full h-full flex items-center justify-center text-slate-300 italic text-sm text-center">Insufficient data.</div>}
+                    <span 
+                      key={i} 
+                      className="px-5 py-2.5 bg-white text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-brand hover:text-white transition-all cursor-default border border-slate-200 shadow-sm hover:scale-110" 
+                      style={{ fontSize: Math.max(9, Math.min(22, 10 + word.value / 1.5)) }}
+                    >
+                      {word.text}
+                    </span>
+                  )) : <div className="w-full h-full flex items-center justify-center text-slate-300 italic text-sm text-center">Harvesting intelligence...</div>}
                 </div>
               </div>
             </div>
