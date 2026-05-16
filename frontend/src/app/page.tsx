@@ -52,6 +52,11 @@ export default function UniversalHub() {
   // HITL States
   const [fullHistory, setFullHistory] = useState<any[]>([]);
 
+  // Global Harvester States
+  const [harvestId, setHarvestId] = useState('');
+  const [harvestPlatform, setHarvestPlatform] = useState('Google Play');
+  const [harvesting, setHarvesting] = useState(false);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
