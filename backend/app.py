@@ -65,6 +65,16 @@ class AlertRule(Base):
     channel = Column(String) # Telegram, Email, Slack
     destination = Column(String) # Chat ID or Email
 
+class Ticket(Base):
+    __tablename__ = "tickets"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, index=True)
+    review_text = Column(String)
+    sentiment_score = Column(String)
+    status = Column(String, default="Open") # Open, In Progress, Resolved
+    created_at = Column(DateTime, default=datetime.utcnow)
+    assigned_to = Column(String, nullable=True)
+
 Base.metadata.create_all(bind=engine)
 
 def migrate_db():
@@ -129,6 +139,63 @@ def migrate_db():
         db.close()
 
 migrate_db()
+
+# Notification Helpers
+def send_telegram_alert(token: str, chat_id: str, message: str):
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        requests.post(url, json={"chat_id": chat_id, "text": message}, timeout=5)
+    except Exception as e:
+        print(f"Telegram alert error: {e}")
+
+def send_slack_alert(webhook_url: str, message: str):
+    try:
+        requests.post(webhook_url, json={"text": message}, timeout=5)
+    except Exception as e:
+        print(f"Slack alert error: {e}")
+
+def send_email_alert(recipient: str, message: str):
+    # Mock email sending
+    print(f"EMAIL ALERT to {recipient}: {message}")
+
+def check_and_trigger_alerts(project_id: int, db: Session):
+    rules = db.query(AlertRule).filter(AlertRule.project_id == project_id).all()
+    if not rules: return
+
+    # Get recent sentiment (last 50 reviews)
+    cursor = preds_log_col.find({"project_id": project_id}).sort("timestamp", -1).limit(50)
+    recent = list(cursor)
+    if not recent: return
+
+    neg_count = sum(1 for r in recent if r.get("sentiment") == "negative")
+    neg_percentage = (neg_count / len(recent)) * 100
+
+    for rule in rules:
+        if neg_percentage >= rule.threshold:
+            msg = f"🚨 SMART ALERT: Project '{project_id}' detected {neg_percentage:.1f}% negative sentiment in recent data. (Threshold: {rule.threshold}%)"
+            if rule.channel == "Telegram":
+                # Assuming destination is chat_id, use a global bot token or encoded in destination
+                bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN")
+                send_telegram_alert(bot_token, rule.destination, msg)
+            elif rule.channel == "Slack":
+                send_slack_alert(rule.destination, msg)
+            elif rule.channel == "Email":
+                send_email_alert(rule.destination, msg)
+
+def process_sentiment_result(project_id: int, review_text: str, sentiment: str, db: Session):
+    # 1. Create Ticket for Negative Sentiment
+    if sentiment == "negative":
+        new_ticket = Ticket(
+            project_id=project_id,
+            review_text=review_text,
+            sentiment_score=sentiment,
+            status="Open"
+        )
+        db.add(new_ticket)
+        db.commit()
+
+    # 2. Check and trigger Smart Alerts
+    check_and_trigger_alerts(project_id, db)
 
 # ... (rest of setup)
 mongo_client = MongoClient(MONGO_URL)
@@ -505,6 +572,23 @@ def get_user_history(project_id: int = None, db: Session = Depends(get_db), curr
         })
     return history
 
+@api_router.get("/tickets")
+def get_tickets(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = db.query(Ticket)
+    if project_id:
+        verify_project_owner(project_id, current_user.id, db)
+        query = query.filter(Ticket.project_id == project_id)
+    return query.all()
+
+@api_router.post("/tickets/{ticket_id}/status")
+def update_ticket_status(ticket_id: int, status: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket: raise HTTPException(status_code=404)
+    verify_project_owner(ticket.project_id, current_user.id, db)
+    ticket.status = status
+    db.commit()
+    return {"message": "Ticket updated"}
+
 @api_router.get("/alerts")
 def get_alert_rules(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = db.query(AlertRule)
@@ -645,6 +729,7 @@ def get_word_cloud(sentiment: str = None, project_id: int = None, monitor_only: 
 def submit_correction(prediction_id: str = None, text: str = None, corrected_sentiment: str = None, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id is None: raise HTTPException(status_code=400, detail="project_id required")
     verify_project_owner(project_id, current_user.id, db)
+    
     # Store user feedback for future retraining
     entry = {
         "text": text,
@@ -652,29 +737,71 @@ def submit_correction(prediction_id: str = None, text: str = None, corrected_sen
         "user": current_user.username,
         "timestamp": datetime.utcnow(),
         "original_id": prediction_id,
-        "project_id": project_id
+        "project_id": project_id,
+        "status": "pending_retrain"
     }
     feedback_col.insert_one(entry)
-    return {"status": "success", "message": "Feedback recorded. Thank you!"}
+    
+    # Update the original prediction in log if prediction_id exists
+    if prediction_id:
+        from bson import ObjectId
+        try:
+            preds_log_col.update_one(
+                {"_id": ObjectId(prediction_id)},
+                {"$set": {"sentiment_corrected": corrected_sentiment, "corrected_by": current_user.username}}
+            )
+        except: pass
+
+    return {"status": "success", "message": "Feedback recorded. This will be used to improve the model!"}
+
+@api_router.get("/history")
+def get_full_history(project_id: int = None, limit: int = 50, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if project_id is None: return []
+    verify_project_owner(project_id, current_user.id, db)
+    query = {"project_id": project_id}
+    
+    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(limit)
+    history = []
+    for doc in cursor:
+        history.append({
+            "id": str(doc.get("_id")),
+            "text": doc.get("text"),
+            "sentiment": doc.get("sentiment"),
+            "sentiment_corrected": doc.get("sentiment_corrected"),
+            "timestamp": doc.get("timestamp").isoformat() if doc.get("timestamp") else None,
+            "model_version": doc.get("model_version", "v1.2.0")
+        })
+    return history
 
 @api_router.post("/predict")
-async def predict_single(review_text: str, project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def predict_single(review_text: str, project_id: int = None, model_version: str = "Production", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # If project_id is provided, verify ownership and log it
     if project_id is not None:
         verify_project_owner(project_id, current_user.id, db)
     
+    # Restrict non-production model selection to admins
+    if model_version != "Production" and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only administrators can select custom model versions")
+
     try:
-        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text, "project_id": project_id}, timeout=10)
+        # Pass model_version to Model Service
+        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text, "project_id": project_id, "version": model_version}, timeout=10)
         result = res.json()
+        sentiment = result.get("sentiment")
+        actual_version = result.get("version", model_version)
         
         # Only log to DB if project context exists
         if project_id is not None:
             preds_log_col.insert_one({
-                "text": review_text, "sentiment": result.get("sentiment"),
+                "text": review_text, "sentiment": sentiment,
                 "user": current_user.username, "timestamp": datetime.utcnow(),
-                "project_id": project_id
+                "project_id": project_id,
+                "model_version": actual_version
             })
-        return result
+            # Trigger Alerts and Tickets
+            process_sentiment_result(project_id, review_text, sentiment, db)
+
+        return {**result, "version": actual_version}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
 
@@ -699,7 +826,7 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
     
     # Process up to 1000 rows for analysis
     for i, row in df.head(1000).iterrows():
-        text = str(row[col])
+        text_val = str(row[col])
         timestamp = datetime.utcnow()
         
         if date_col:
@@ -710,25 +837,31 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
             except: pass
                 
         try:
-            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text, "project_id": project_id}, timeout=5)
+            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_val, "project_id": project_id}, timeout=5)
             sentiment = res.json().get("sentiment", "neutral")
         except:
             sentiment = "neutral"
             
         summary[sentiment] += 1
-        results.append({"text": text, "sentiment": sentiment, "timestamp": timestamp.isoformat()})
+        results.append({"text": text_val, "sentiment": sentiment, "timestamp": timestamp.isoformat()})
         
         if project_id is not None:
             log_entries.append({
-                "text": text, 
+                "text": text_val, 
                 "sentiment": sentiment, 
                 "user": current_user.username, 
                 "timestamp": timestamp,
                 "project_id": project_id
             })
+            # Create Ticket for Negative Sentiment
+            if sentiment == "negative":
+                db.add(Ticket(project_id=project_id, review_text=text_val, sentiment_score=sentiment))
         
     if log_entries and project_id is not None:
         preds_log_col.insert_many(log_entries)
+        db.commit()
+        # Trigger Alerts once per batch
+        check_and_trigger_alerts(project_id, db)
         
     return {
         "summary": summary,
@@ -744,22 +877,22 @@ async def collect_webhook(project_id: int, data: dict, db: Session = Depends(get
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    text = data.get("text")
+    text_val = data.get("text")
     source = data.get("source", "webhook_integration")
     
-    if not text:
+    if not text_val:
         raise HTTPException(status_code=400, detail="Missing 'text' field in JSON payload")
 
     # 2. Predict sentiment
     try:
-        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text, "project_id": project_id}, timeout=5)
+        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_val, "project_id": project_id}, timeout=5)
         sentiment = res.json().get("sentiment", "neutral")
     except:
         sentiment = "neutral"
 
     # 3. Log to MongoDB
     entry = {
-        "text": text,
+        "text": text_val,
         "sentiment": sentiment,
         "source": source,
         "project_id": project_id,
@@ -767,6 +900,9 @@ async def collect_webhook(project_id: int, data: dict, db: Session = Depends(get
         "timestamp": datetime.utcnow()
     }
     preds_log_col.insert_one(entry)
+
+    # 4. Trigger Alerts and Tickets
+    process_sentiment_result(project_id, text_val, sentiment, db)
 
     return {
         "status": "success",
@@ -837,9 +973,15 @@ async def sync_connector(connector_id: int, db: Session = Depends(get_db), curre
                     "user": "system_sync",
                     "timestamp": item['at'] or datetime.utcnow()
                 })
+                # Create Ticket for Negative Sentiment
+                if sentiment == "negative":
+                    db.add(Ticket(project_id=source.project_id, review_text=text_content, sentiment_score=sentiment))
             
             if batch:
                 preds_log_col.insert_many(batch)
+                db.commit()
+                # Trigger Alerts once per sync
+                check_and_trigger_alerts(source.project_id, db)
             
             return {"status": "success", "synced_count": len(batch)}
         else:

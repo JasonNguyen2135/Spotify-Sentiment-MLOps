@@ -7,7 +7,7 @@ import {
   BarChart3, PieChart as PieChartIcon, ArrowUpRight, 
   ArrowDownRight, Info, Download, Calendar, Sparkles,
   MessageSquare, LayoutGrid, Plus, FolderPlus, ArrowRight,
-  FileText, ArrowLeftRight, ChevronRight
+  FileText, ArrowLeftRight, ChevronRight, BellRing, Ticket as TicketIcon
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';
@@ -46,11 +46,11 @@ export default function UniversalHub() {
   const [review, setReview] = useState('');
   const [prediction, setPrediction] = useState<any>(null);
   const [predicting, setPredicting] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState('Production');
+  const [modelOptions, setModelOptions] = useState<any[]>([]);
 
-  // Global Harvester States
-  const [harvestId, setHarvestId] = useState('');
-  const [harvestPlatform, setHarvestPlatform] = useState('Google Play');
-  const [harvesting, setHarvesting] = useState(false);
+  // HITL States
+  const [fullHistory, setFullHistory] = useState<any[]>([]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -66,12 +66,14 @@ export default function UniversalHub() {
         const headers = { 'Authorization': `Bearer ${token}` };
         const params = { project_id: activeProject?.id || null };
         
-        const [statsRes, analyticsRes, compRes, keywordsRes, projectsRes] = await Promise.all([
+        const [statsRes, analyticsRes, compRes, keywordsRes, projectsRes, modelsRes, historyRes] = await Promise.all([
           axios.get('/api/stats', { headers, params }),
           axios.get('/api/monthly-analytics', { headers, params }),
           axios.get('/api/comparison', { headers, params }),
           axios.get('/api/word-cloud', { headers, params }),
-          axios.get('/api/projects', { headers })
+          axios.get('/api/projects', { headers }),
+          axios.get('/api/models', { headers }).catch(() => ({ data: [] })),
+          activeProject ? axios.get('/api/history', { headers, params }) : Promise.resolve({ data: [] })
         ]);
         
         setStats(statsRes.data);
@@ -79,6 +81,8 @@ export default function UniversalHub() {
         setComparison(compRes.data);
         setKeywords(keywordsRes.data);
         setProjects(projectsRes.data);
+        setModelOptions(modelsRes.data);
+        setFullHistory(historyRes.data);
       } catch (err) {
         console.error("Failed to fetch hub data", err);
       } finally {
@@ -124,7 +128,7 @@ export default function UniversalHub() {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.post(`/api/predict`, null, {
-          params: { review_text: review, project_id: activeProject?.id || projects[0]?.id },
+          params: { review_text: review, project_id: activeProject?.id || projects[0]?.id, model_version: selectedVersion },
           headers: { 'Authorization': `Bearer ${token}` }
       });
       setPrediction(response.data);
@@ -132,6 +136,24 @@ export default function UniversalHub() {
       console.error("Prediction failed", err);
     } finally {
       setPredicting(false);
+    }
+  };
+
+  const handleCorrection = async (id: string, text: string, corrected: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('/api/correction', null, {
+        params: { prediction_id: id, text, corrected_sentiment: corrected, project_id: activeProject.id },
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      // Refresh history
+      const res = await axios.get('/api/history', { 
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: { project_id: activeProject.id }
+      });
+      setFullHistory(res.data);
+    } catch (err) {
+      alert("Failed to submit correction");
     }
   };
 
@@ -269,6 +291,20 @@ export default function UniversalHub() {
                 <div className="flex items-center gap-3 mb-6">
                   <div className="bg-brand/20 p-2 rounded-lg text-brand"><Sparkles className="w-5 h-5 fill-brand" /></div>
                   <h2 className="text-2xl font-black text-white tracking-tight">Instant Intelligence</h2>
+                  {user?.role === 'admin' && (
+                    <select 
+                      value={selectedVersion}
+                      onChange={(e) => setSelectedVersion(e.target.value)}
+                      className="ml-auto bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-brand outline-none focus:ring-1 focus:ring-brand"
+                    >
+                      <option className="bg-slate-900" value="Production">Production (Stable)</option>
+                      {modelOptions.map((m: any) => (
+                        <option key={m.version} className="bg-slate-900" value={m.version}>v{m.version} - {m.current_stage}</option>
+                      ))}
+                      <option className="bg-slate-900" value="BERT">BERT-base-uncased</option>
+                      <option className="bg-slate-900" value="LSTM">Bi-LSTM v2</option>
+                    </select>
+                  )}
                 </div>
                 <form onSubmit={handlePredict} className="relative mb-6">
                   <input 
@@ -297,6 +333,61 @@ export default function UniversalHub() {
             </div>
           </div>
         </>
+      )}
+
+      {/* NEW: Admin Orchestration Hub - RESTORED */}
+      {!activeProject && user?.role === 'admin' && (
+        <div className="mb-16 animate-in slide-in-from-bottom duration-1000">
+          <div className="flex items-center gap-4 mb-8">
+             <div className="bg-slate-900 p-3 rounded-2xl text-brand"><ShieldAlert className="w-6 h-6" /></div>
+             <div>
+               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Admin Orchestration</h2>
+               <p className="text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em] mt-1">Full-cycle MLOps control center</p>
+             </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <Link href="/admin/registry" className="group bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all relative overflow-hidden">
+               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-brand opacity-0 group-hover:opacity-10 blur-[50px] transition-opacity"></div>
+               <div className="bg-brand/5 text-brand w-14 h-14 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-brand group-hover:text-white transition-all"><Settings className="w-7 h-7" /></div>
+               <h3 className="text-xl font-black text-slate-900 mb-2">Model Hub</h3>
+               <p className="text-slate-500 text-xs font-medium leading-relaxed mb-8">Manage MLflow versions, compare metrics, and promote to production.</p>
+               <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">Open Registry <ArrowRight className="w-4 h-4" /></div>
+            </Link>
+
+            <Link href="/admin/training" className="group bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:scale-[1.02] transition-all relative overflow-hidden">
+               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-emerald-500 opacity-0 group-hover:opacity-10 blur-[50px] transition-opacity"></div>
+               <div className="bg-emerald-50 text-emerald-600 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-emerald-500 group-hover:text-white transition-all"><Database className="w-7 h-7" /></div>
+               <h3 className="text-xl font-black text-slate-900 mb-2">Training Hub</h3>
+               <p className="text-slate-500 text-xs font-medium leading-relaxed mb-8">Trigger automated retraining via Airflow & GitHub Actions.</p>
+               <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-widest">Manage Pipelines <ArrowRight className="w-4 h-4" /></div>
+            </Link>
+
+            <div className="group bg-slate-900 p-8 rounded-[3rem] shadow-2xl relative overflow-hidden border border-white/5">
+               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-brand opacity-20 blur-[50px]"></div>
+               <div className="bg-brand/20 text-brand w-14 h-14 rounded-2xl flex items-center justify-center mb-6"><Zap className="w-7 h-7" /></div>
+               <h3 className="text-xl font-black text-white mb-2">Quick Retrain</h3>
+               <p className="text-slate-400 text-xs font-medium leading-relaxed mb-6">Instantly trigger V2 training using current project data.</p>
+               <button 
+                  onClick={async () => {
+                    if (confirm("Trigger production retraining on GitHub Actions?")) {
+                      try {
+                        const token = localStorage.getItem('token');
+                        await axios.post('/api/train', null, {
+                          params: { dataset_source: 'mongodb', project_id: activeProject?.id || 1 },
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        alert("Training triggered! Monitor progress in GitHub Actions.");
+                      } catch (err) { alert("Failed to trigger training."); }
+                    }
+                  }}
+                  className="w-full bg-brand text-white py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all"
+               >
+                 Trigger V2 Pipeline
+               </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Workspace View - CHARTS RESTORED HERE */}
@@ -380,6 +471,124 @@ export default function UniversalHub() {
                     <span key={i} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-wider hover:bg-brand hover:text-white transition-all cursor-default border border-slate-100" style={{ fontSize: Math.max(9, Math.min(18, 9 + word.value / 2)) }}>{word.text}</span>
                   )) : <div className="w-full h-full flex items-center justify-center text-slate-300 italic text-sm text-center">Insufficient data.</div>}
                 </div>
+              </div>
+            </div>
+
+            {/* NEW: Smart Alerts & Ticket System Sections */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
+              {/* Smart Alerts Configuration */}
+              <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl text-white">
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-xl font-black tracking-tight flex items-center gap-3">
+                    <BellRing className="w-6 h-6 text-brand" /> Smart Alerts
+                  </h2>
+                  <button className="bg-brand text-slate-900 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider">Add Rule</button>
+                </div>
+                <div className="space-y-4">
+                  <div className="p-5 bg-white/5 rounded-2xl border border-white/10 flex justify-between items-center">
+                    <div>
+                      <p className="font-black text-sm mb-1">Negative Storm Alert</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Trigger: {">"}25% Negative Reviews</p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-black">Telegram</div>
+                  </div>
+                  <div className="p-5 bg-white/5 rounded-2xl border border-white/10 flex justify-between items-center">
+                    <div>
+                      <p className="font-black text-sm mb-1">Sentiment Drop Alert</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Trigger: Avg Score drop 15%</p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-[10px] font-black">Email</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ticket System Overview */}
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                    <TicketIcon className="w-6 h-6 text-brand" /> CSKH Ticket System
+                  </h2>
+                  <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-black">3 Open</span>
+                </div>
+                <div className="space-y-4 overflow-auto max-h-[300px] pr-2">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="flex justify-between mb-2">
+                      <span className="text-[10px] font-black text-slate-400 uppercase">#TK-8821</span>
+                      <span className="text-[10px] font-black text-rose-500 uppercase">High Priority</span>
+                    </div>
+                    <p className="text-xs font-bold text-slate-700 mb-3 line-clamp-2">"The latest update is crashing constantly on my iPhone. Very frustrated."</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">2h ago</span>
+                      <button className="text-[9px] font-black text-brand uppercase tracking-widest hover:underline">Assign Staff</button>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="flex justify-between mb-2">
+                      <span className="text-[10px] font-black text-slate-400 uppercase">#TK-8819</span>
+                      <span className="text-[10px] font-black text-amber-500 uppercase">Medium</span>
+                    </div>
+                    <p className="text-xs font-bold text-slate-700 mb-3 line-clamp-2">"Can't find the lyrics feature anymore. Why was it moved?"</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">5h ago</span>
+                      <button className="text-[9px] font-black text-brand uppercase tracking-widest hover:underline">Assign Staff</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* NEW: Human-in-the-loop (HITL) Correction Section */}
+            <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm mb-16">
+              <div className="flex items-center gap-4 mb-10">
+                <div className="bg-slate-900 p-3 rounded-2xl text-brand"><Users className="w-6 h-6" /></div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Human-in-the-Loop Correction</h2>
+                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Audit AI predictions and improve model accuracy</p>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-slate-50">
+                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Feedback Text</th>
+                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Sentiment</th>
+                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Correct Sentiment?</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {fullHistory.length > 0 ? fullHistory.map((item) => (
+                      <tr key={item.id} className="group hover:bg-slate-50/50 transition-all">
+                        <td className="py-6 pr-8">
+                          <p className="text-sm font-bold text-slate-700 leading-relaxed">{item.text}</p>
+                          <p className="text-[9px] font-black text-slate-400 mt-2 uppercase tracking-tighter">Model: {item.model_version} • {new Date(item.timestamp).toLocaleString()}</p>
+                        </td>
+                        <td className="py-6">
+                          <span className={clsx(
+                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                            item.sentiment === "positive" ? "bg-emerald-50 text-emerald-600" : (item.sentiment === "negative" ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600")
+                          )}>{item.sentiment}</span>
+                          {item.sentiment_corrected && (
+                            <div className="mt-2 flex items-center gap-1 text-[9px] font-black text-brand uppercase tracking-widest">
+                              <CheckCircle2 className="w-3 h-3" /> Fixed to {item.sentiment_corrected}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-6">
+                          {!item.sentiment_corrected && (
+                            <div className="flex justify-center gap-2">
+                              <button onClick={() => handleCorrection(item.id, item.text, 'positive')} className="p-2 hover:bg-emerald-50 text-slate-300 hover:text-emerald-500 rounded-xl transition-all border border-transparent hover:border-emerald-100" title="Correct to Positive"><TrendingUp className="w-4 h-4" /></button>
+                              <button onClick={() => handleCorrection(item.id, item.text, 'negative')} className="p-2 hover:bg-rose-50 text-slate-300 hover:text-rose-500 rounded-xl transition-all border border-transparent hover:border-rose-100" title="Correct to Negative"><TrendingUp className="w-4 h-4 rotate-180" /></button>
+                              <button onClick={() => handleCorrection(item.id, item.text, 'neutral')} className="p-2 hover:bg-slate-100 text-slate-300 hover:text-slate-600 rounded-xl transition-all border border-transparent hover:border-slate-200" title="Correct to Neutral"><Activity className="w-4 h-4" /></button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={3} className="py-10 text-center text-slate-400 italic font-medium">No recent predictions found for this workspace.</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
