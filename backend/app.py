@@ -220,9 +220,25 @@ def correction(prediction_id: str, text: str, corrected_sentiment: str, project_
 async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
-    summary = {"positive": 10, "negative": 5, "neutral": 2}
-    results = [{"text": "Sample text", "sentiment": "positive"}]
-    log_audit(db, current_user, "UPLOAD_DATA", f"Uploaded {len(df)} rows", project_id); return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
+    
+    col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
+    
+    summary = {"positive": 0, "negative": 0, "neutral": 0}
+    results = []
+    
+    for i, row in df.head(100).iterrows():
+        text_val = str(row[col])
+        try:
+            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_val, "project_id": project_id}, timeout=5)
+            sentiment = res.json().get("sentiment", "neutral")
+        except:
+            sentiment = "neutral"
+            
+        summary[sentiment] += 1
+        results.append({"text": text_val, "sentiment": sentiment})
+        
+    log_audit(db, current_user, "UPLOAD_DATA", f"Analyzed {len(results)} rows from CSV", project_id)
+    return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
 # --- MLOps ---
 @api_router.get("/models")
