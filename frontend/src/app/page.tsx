@@ -528,21 +528,39 @@ export default function UniversalHub() {
                   {fullHistory.length === 0 && (
                     <tr><td colSpan={3} className="py-20 text-center text-slate-300 italic font-medium">No workspace predictions to audit yet.</td></tr>
                   )}
-                  </tbody>
-                  </table>
-                  </div>
-                  </div>
-                  <div className="flex justify-center pt-12 border-t border-slate-100">
-                  <button 
-                  onClick={() => handleDeleteProject(activeProject.id)}
-                  className="flex items-center gap-2 text-rose-500 font-black text-xs uppercase tracking-[0.2em] hover:text-rose-600 transition-colors group"
-                  >
-                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" /> Delete Workspace
-                  </button>
-                  </div>
-                  </div>
-                  ) : (
-
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="flex justify-center pt-12 border-t border-slate-100">
+             <button 
+               onClick={() => handleDeleteProject(activeProject.id)}
+               className="flex items-center gap-2 text-rose-500 font-black text-xs uppercase tracking-[0.2em] hover:text-rose-600 transition-colors group"
+             >
+               <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" /> Delete Workspace
+             </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex justify-between items-center mb-10">
+            <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-4"><LayoutGrid className="text-brand w-10 h-10" /> Workspaces</h2>
+            <button onClick={() => setShowCreate(true)} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200"><Plus className="w-5 h-5" /> New Workspace</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {projects.map((p) => (
+              <div key={p.id} onClick={() => setActiveProject(p)} className="group p-8 rounded-[3rem] border bg-white border-slate-100 shadow-sm hover:shadow-2xl transition-all cursor-pointer relative overflow-hidden hover:scale-[1.02]">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6 bg-brand/5 text-brand group-hover:bg-brand group-hover:text-white transition-colors"><FolderPlus className="w-7 h-7" /></div>
+                <h3 className="text-2xl font-black text-slate-900 mb-2">{p.name}</h3>
+                <div className="flex items-center justify-between pt-8 border-t border-slate-50 mt-10">
+                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest"><Calendar className="w-4 h-4" />{new Date(p.created_at).toLocaleDateString()}</div>
+                  <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">Enter <ArrowRight className="w-4 h-4" /></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {showCreate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] flex items-center justify-center p-6">

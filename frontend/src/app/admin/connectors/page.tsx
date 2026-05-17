@@ -160,6 +160,8 @@ export default function ConnectorsPage() {
         </div>
       </div>
     );
+  }
+
   const handleChangeMode = async () => {
     if (!confirm("Are you sure you want to change monitoring strategy? This will delete current connector configurations and reset your tracking mode.")) return;
 
