@@ -188,7 +188,7 @@ export default function TrainingPage() {
                       <Database className={clsx("w-5 h-5", selectedDataset === ds.source && !customDataset ? "text-brand" : "text-slate-400")} />
                       <div>
                         <p className="text-xs font-bold text-slate-900">{ds.name}</p>
-                        <p className="text-[10px] text-brand-600 font-black mt-0.5">{ds.count.toLocaleString()} records</p>
+                        <p className="text-[10px] text-brand-600 font-black mt-0.5">{(ds.count || 0).toLocaleString()} records</p>
                       </div>
                     </div>
                   </div>
@@ -231,7 +231,7 @@ export default function TrainingPage() {
                         </span>
                       </td>
                       <td className="px-8 py-5 text-xs font-bold text-slate-400">
-                        {new Date(run.time).toLocaleString()}
+                        {new Date(run.time || Date.now()).toLocaleString()}
                       </td>
                       <td className="px-8 py-5 text-right">
                         <button onClick={() => handleFetchLogs(run)} className="text-brand hover:underline font-black text-[10px] uppercase">

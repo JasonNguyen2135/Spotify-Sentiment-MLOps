@@ -159,6 +159,13 @@ def redis_worker():
                 text_val = data["text"]
                 username = data.get("user_id", "system_worker")
                 
+                # Parse timestamp from message or use current
+                raw_ts = data.get("timestamp")
+                try:
+                    msg_ts = datetime.fromisoformat(raw_ts) if raw_ts else datetime.utcnow()
+                except:
+                    msg_ts = datetime.utcnow()
+
                 # Predict
                 try:
                     res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_val}, timeout=10).json()
@@ -166,13 +173,13 @@ def redis_worker():
                 except:
                     sentiment = "neutral"
                 
-                # Log to Mongo
+                # Log to Mongo with original timestamp
                 preds_log_col.insert_one({
                     "text": text_val, 
                     "sentiment": sentiment, 
                     "project_id": project_id,
                     "user": username, 
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": msg_ts,
                     "source": data.get("source", "webhook_async")
                 })
                 
@@ -328,14 +335,14 @@ def train(dataset: str, project_id: int, current_user: User = Depends(get_curren
 
 @api_router.get("/airflow/runs")
 def airflow_runs(current_user: User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
+    if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
     import base64; auth = base64.b64encode(AIRFLOW_AUTH.encode()).decode()
     try: return requests.get(f"{AIRFLOW_URL}/api/v1/dags/spotify_sentiment_train_k8s_native/dagRuns", headers={"Authorization": f"Basic {auth}"}, timeout=5).json().get("dag_runs", [])
     except: return []
 
 @api_router.get("/github/runs")
 def github_runs(current_user: User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
+    if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
     if not tk: return []
     try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 5}, timeout=5).json().get("workflow_runs", [])

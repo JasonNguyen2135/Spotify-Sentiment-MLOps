@@ -209,7 +209,7 @@ export default function RegistryPage() {
                       </span>
                     </td>
                     <td className="px-8 py-5 text-xs font-bold text-slate-400">
-                      {new Date(run.time).toLocaleString()}
+                      {new Date(run.time || Date.now()).toLocaleString()}
                     </td>
                     <td className="px-8 py-5 text-right">
                       <a href={run.raw.html_url} target="_blank" className="text-brand hover:underline font-black text-[10px] uppercase">View on GitHub</a>

@@ -91,7 +91,7 @@ export default function HistoryPage() {
                   <td className="px-10 py-6">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
                       <Calendar className="w-4 h-4" />
-                      {new Date(item.timestamp).toLocaleString()}
+                      {new Date(item.timestamp || Date.now()).toLocaleString()}
                     </div>
                   </td>
                   <td className="px-10 py-6 text-right font-black text-slate-900 text-sm">

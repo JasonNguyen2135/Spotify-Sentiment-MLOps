@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 import redis
 import json
 import os
+from datetime import datetime
 
 app = FastAPI(title="Sentiment Collector Gateway")
 
@@ -20,26 +21,29 @@ def health():
 @app.post("/collect/{project_id}")
 async def collect_comment(project_id: int, data: dict):
     """
-    Lightweight endpoint to receive comments and push to MQ.
+    Receive comment with optional timestamp and push to MQ.
     """
-    comment_text = data.get("review_text") or data.get("text")
+    comment_text = data.get("text") or data.get("review_text")
     if not comment_text:
-        raise HTTPException(status_code=400, detail="Missing text field")
+        raise HTTPException(status_code=400, detail="Missing 'text' field")
+
+    # Capture timestamp from client or use current UTC time
+    timestamp = data.get("timestamp") or datetime.utcnow().isoformat()
 
     payload = {
         "project_id": project_id,
         "text": comment_text,
         "user_id": data.get("user_id", "anonymous"),
+        "timestamp": timestamp,
         "source": data.get("source", "webhook_v2")
     }
 
     try:
-        # Push to Redis List (acting as a simple queue)
         r.lpush(QUEUE_NAME, json.dumps(payload))
         return {
             "status": "Accepted", 
-            "message": "Data queued for processing",
-            "project_id": project_id
+            "message": "Data queued",
+            "metadata": {"project_id": project_id, "timestamp": timestamp}
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"MQ Error: {str(e)}")
