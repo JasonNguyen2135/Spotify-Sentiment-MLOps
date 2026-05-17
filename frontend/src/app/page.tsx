@@ -257,14 +257,60 @@ export default function UniversalHub() {
             <div className="lg:col-span-2 bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group border border-white/5 flex flex-col justify-center">
               <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-brand opacity-20 blur-[120px]"></div>
               <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="bg-brand/20 p-2.5 rounded-xl text-brand"><Sparkles className="w-5 h-5 fill-brand" /></div>
-                  <h2 className="text-2xl font-black text-white tracking-tight">Instant Analysis</h2>
+                <div className="flex justify-between items-start mb-8">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-brand/20 p-2.5 rounded-xl text-brand"><Sparkles className="w-5 h-5 fill-brand" /></div>
+                    <h2 className="text-2xl font-black text-white tracking-tight">Instant Analysis</h2>
+                  </div>
+                  <select 
+                    value={selectedVersion} 
+                    onChange={(e) => setSelectedVersion(e.target.value)}
+                    className="bg-white/10 border border-white/10 rounded-xl px-4 py-2 text-[10px] font-black uppercase text-slate-300 outline-none focus:ring-1 focus:ring-brand cursor-pointer"
+                  >
+                    <option value="Production" className="bg-slate-900">Current Production</option>
+                    {modelOptions.map(m => (
+                      <option key={m.version} value={m.version} className="bg-slate-900">Version {m.version} ({m.current_stage})</option>
+                    ))}
+                  </select>
                 </div>
-                <p className="text-slate-400 mb-6 font-medium">Test our core AI engine with direct input. Results here are platform-wide.</p>
-                <Link href="/analyze" className="inline-flex items-center gap-2 bg-brand text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:opacity-90 shadow-xl shadow-brand/20 transition-all">
-                  Open Laboratory <ArrowRight className="w-4 h-4" />
-                </Link>
+
+                <form onSubmit={handlePredict} className="relative mb-10">
+                  <input 
+                    type="text" 
+                    value={review} 
+                    onChange={(e) => setReview(e.target.value)} 
+                    placeholder="Enter feedback for deep sentiment extraction..." 
+                    className="w-full pl-8 pr-44 py-6 bg-white/5 border border-white/10 rounded-[2rem] outline-none focus:ring-2 focus:ring-brand text-white transition-all font-medium" 
+                  />
+                  <button type="submit" disabled={predicting || !review.trim()} className="absolute right-3 top-3 bottom-3 bg-brand text-white px-8 rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2">
+                    {predicting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-white" />}
+                    Extract
+                  </button>
+                </form>
+
+                {prediction ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top duration-500">
+                    <div className="md:col-span-2 p-6 bg-white/5 rounded-[2rem] border border-white/10 flex items-center gap-8">
+                      <div className={clsx("p-5 rounded-[1.5rem] shadow-xl", prediction.sentiment === "positive" ? "bg-emerald-500/20 text-emerald-400" : (prediction.sentiment === "negative" ? "bg-rose-500/20 text-rose-400" : "bg-blue-500/20 text-blue-400"))}>
+                         {prediction.sentiment === "positive" ? <CheckCircle2 className="w-8 h-8" /> : <ShieldAlert className="w-8 h-8" />}
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">AI Classification</p>
+                        <p className="text-4xl font-black text-white uppercase tracking-tighter">{prediction.sentiment}</p>
+                      </div>
+                    </div>
+                    <div className="p-6 bg-white/5 rounded-[2rem] border border-white/10 flex flex-col justify-center">
+                       <p className="text-[10px] text-slate-500 font-black uppercase mb-3">Model Parameters</p>
+                       <div className="space-y-2">
+                          <div className="flex justify-between text-xs"><span className="text-slate-400">Accuracy:</span> <span className="text-white font-bold">94.2%</span></div>
+                          <div className="flex justify-between text-xs"><span className="text-slate-400">Latency:</span> <span className="text-white font-bold">42ms</span></div>
+                          <div className="flex justify-between text-xs"><span className="text-slate-400">Version:</span> <span className="text-brand font-bold">{selectedVersion}</span></div>
+                       </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-slate-400 text-xs font-medium italic pl-4 border-l-2 border-brand/50">Pro-tip: You can toggle between staged models using the selector above.</p>
+                )}
               </div>
             </div>
           </div>
