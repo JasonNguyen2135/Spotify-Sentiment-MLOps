@@ -248,13 +248,13 @@ export default function ConnectorsPage() {
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Project Secret Key (api_key)</label>
                   <div className="flex items-center gap-4">
                     <div className="flex-1 bg-black/40 px-6 py-4 rounded-2xl font-mono text-sm text-brand border border-white/5 overflow-x-auto whitespace-nowrap">
-                        {showApiKey ? (activeProject as any)?.api_key : '••••••••••••••••••••••••••••••••'}
+                        {showApiKey ? fullProject?.api_key : '••••••••••••••••••••••••••••••••'}
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => setShowApiKey(!showApiKey)} className="p-4 bg-white/5 text-slate-400 rounded-2xl hover:bg-white/10 transition-all">
                             {showApiKey ? <EyeOff className="w-6 h-6" /> : <Eye className="w-6 h-6" />}
                         </button>
-                        <button onClick={() => copyToClipboard((activeProject as any)?.api_key)} className="p-4 bg-white/5 text-slate-400 rounded-2xl hover:bg-white/10 transition-all"><Copy className="w-6 h-6" /></button>
+                        <button onClick={() => copyToClipboard(fullProject?.api_key)} className="p-4 bg-white/5 text-slate-400 rounded-2xl hover:bg-white/10 transition-all"><Copy className="w-6 h-6" /></button>
                     </div>
                   </div>
                 </div>
@@ -280,10 +280,11 @@ export default function ConnectorsPage() {
                       const txt = (document.getElementById('sim-text') as HTMLInputElement).value;
                       const date = (document.getElementById('sim-date') as HTMLInputElement).value;
                       if(!txt) return alert("Enter text");
+                      if(!fullProject?.uuid) return alert("Project data not loaded yet.");
                       try {
                         const token = localStorage.getItem('token');
-                        await axios.post(`/api/collect/${activeProject?.uuid}`, { 
-                          api_key: (activeProject as any)?.api_key,
+                        await axios.post(`/api/collect/${fullProject.uuid}`, { 
+                          api_key: fullProject.api_key,
                           text: txt, 
                           timestamp: date ? new Date(date).toISOString() : new Date().toISOString() 
                         }, { headers: { 'Authorization': `Bearer ${token}` }});

@@ -304,7 +304,7 @@ async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(g
     if not txt: raise HTTPException(status_code=400)
     payload = {"project_id": project.id, "text": txt, "user_id": data.get("user_id", "anon"), "timestamp": data.get("timestamp") or datetime.utcnow().isoformat(), "source": "webhook_v2"}
     try:
-        r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT_VAL, db=0)
+        r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
         r_client.lpush(QUEUE_NAME, json.dumps(payload)); return {"status": "Accepted"}
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
