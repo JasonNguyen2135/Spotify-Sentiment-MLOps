@@ -17,7 +17,7 @@ spec:
         - name: harbor-secret
       containers:
       - name: collector
-        image: registry.ntdevopsregistry.io.vn/mlops/collector:f759cb0ad08be920bab4f607ccc5baff54fe6fb6
+        image: registry.ntdevopsregistry.io.vn/mlops/collector:fb312d7c8271cfa2963e6e55ff9d5c871f14ef54
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
