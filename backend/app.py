@@ -200,11 +200,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role in ["admin", "ai_engineer", "analyst"]: projects = db.query(Project).all()
     else: projects = db.query(Project).filter(Project.owner_id == current_user.id).all()
-    return projects
+    return [{"id": p.id, "uuid": p.uuid, "name": p.name, "description": p.description, "api_key": p.api_key} for p in projects]
 
 @api_router.get("/projects/{project_id}")
 def get_project_details(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return verify_project_access(project_id, current_user, db)
+    p = verify_project_access(project_id, current_user, db)
+    return {"id": p.id, "uuid": p.uuid, "name": p.name, "api_key": p.api_key, "slack_webhook": p.slack_webhook, "support_email": p.support_email}
 
 @api_router.post("/projects")
 def create_project(name: str, description: str = "", monitor_type: str = "crawler", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -214,7 +215,8 @@ def create_project(name: str, description: str = "", monitor_type: str = "crawle
     db.add(p); db.commit(); db.refresh(p)
     if monitor_type == "webhook":
         db.add(DataSource(project_id=p.id, platform="Webhook", app_id=p.uuid, status="active"))
-    db.commit(); return p
+    db.commit(); 
+    return {"id": p.id, "uuid": p.uuid, "name": p.name, "description": p.description, "api_key": p.api_key}
 
 @api_router.delete("/projects/{project_id}")
 def delete_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
