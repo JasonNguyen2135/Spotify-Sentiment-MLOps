@@ -182,7 +182,7 @@ worker_thread = threading.Thread(target=redis_worker, daemon=True); worker_threa
 app = FastAPI(); app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 api_router = APIRouter()
 
-# --- Auth ---
+# --- API Endpoints ---
 @api_router.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first(): raise HTTPException(status_code=400)
@@ -194,7 +194,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not pwd_context.verify(form_data.password, user.hashed_password): raise HTTPException(status_code=400)
     return {"access_token": create_access_token({"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
 
-# --- Projects ---
 @api_router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role in ["admin", "ai_engineer", "analyst"]: 
@@ -213,7 +212,6 @@ def create_project(name: str, description: str = "", db: Session = Depends(get_d
     p = Project(name=name, description=description, owner_id=current_user.id, uuid=str(uuid.uuid4())[:8], api_key=secrets.token_hex(16))
     db.add(p); db.commit(); db.refresh(p); log_audit(db, current_user, "CREATE_PROJECT", f"Created {name}", p.id); return p
 
-# --- Analytics ---
 @api_router.get("/stats")
 def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
@@ -247,10 +245,18 @@ def compare_models(v1: str, v2: str, current_user: User = Depends(get_current_us
         try:
             v_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/get", params={"name": "Spotify_Production_Model", "version": version}, timeout=5).json()
             run_id = v_res.get("model_version", {}).get("run_id")
-            if not run_id: return {"version": version, "accuracy": 0.94, "f1": 0.92, "precision": 0.91, "latency": "40ms"}
+            if not run_id: 
+                import hashlib; h = int(hashlib.md5(version.encode()).hexdigest(), 16)
+                return {"version": version, "accuracy": 0.94, "f1": 0.92, "precision": 0.91, "latency": "40ms"}
             r_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/runs/get", params={"run_id": run_id}, timeout=5).json()
-            m = {met["key"]: round(met["value"], 3) for met in r_res.get("run", {}).get("data", {}).get("metrics", [])}
-            return {"version": version, "accuracy": m.get("accuracy", m.get("val_accuracy", 0.94)), "f1": m.get("f1_score", m.get("f1", 0.92)), "precision": m.get("precision", 0.91), "latency": f"{m.get('latency', 40)}ms"}
+            m = {met["key"].lower(): round(met["value"], 3) for met in r_res.get("run", {}).get("data", {}).get("metrics", [])}
+            return {
+                "version": version,
+                "accuracy": m.get("accuracy", m.get("val_accuracy", m.get("acc", 0.94))),
+                "f1": m.get("f1_score", m.get("f1", m.get("weighted f1", 0.92))),
+                "precision": m.get("precision", m.get("precision_score", 0.91)),
+                "latency": f"{m.get('latency', m.get('inference_time', 40))}ms"
+            }
         except: return {"version": version, "accuracy": 0.94, "f1": 0.92, "precision": 0.91, "latency": "40ms"}
     return {"model1": get_mlflow_metrics(v1), "model2": get_mlflow_metrics(v2)}
 
@@ -326,14 +332,14 @@ def build_deploy(version: str, current_user: User = Depends(get_current_user)):
 @api_router.get("/datasets")
 def get_datasets(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
-    return [{"name": "MongoDB Data", "source": "mongodb", "count": preds_log_col.count_documents({"project_id": project_id} if project_id else {})}]
+    return [{"name": "MongoDB Data", "source": "mongodb", "count": preds_log_col.count_documents({"project_id": project_id} if project_id else {})} ]
 
 @api_router.post("/train")
 def train(dataset_source: str, project_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
     requests.post(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", json={"ref": "main", "inputs": {"data_source": dataset_source, "project_id": str(project_id)}}, headers={"Authorization": f"token {tk}"}, timeout=10)
-    return {"status": "success"}
+    log_audit(db, current_user, "TRIGGER_TRAIN", f"Training {dataset_source}", project_id); return {"status": "success"}
 
 @api_router.get("/airflow/runs")
 def airflow_runs(current_user: User = Depends(get_current_user)):
@@ -349,6 +355,7 @@ def github_runs(current_user: User = Depends(get_current_user)):
     try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 15}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
+# --- Infrastructure ---
 @api_router.get("/connectors")
 def get_connectors(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     q = db.query(DataSource)
@@ -378,7 +385,6 @@ def get_audit_logs(project_id: int = None, db: Session = Depends(get_db), curren
 from fastapi.responses import StreamingResponse, Response
 @api_router.get("/export/logs/{project_id}")
 def export_logs(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Special case: project_id 0 means global logs for admin/tech roles
     query = {}
     if project_id != 0:
         verify_project_access(project_id, current_user, db)
@@ -390,17 +396,10 @@ def export_logs(project_id: int, db: Session = Depends(get_db), current_user: Us
     data = []
     for d in cursor:
         ts = d.get("timestamp")
-        data.append({
-            "id": str(d["_id"]), 
-            "text": d.get("text"), 
-            "sentiment": d.get("sentiment"), 
-            "corrected": d.get("sentiment_corrected", ""), 
-            "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", 
-            "model": d.get("model_version", "Production")
-        })
+        data.append({"id": str(d["_id"]), "text": d.get("text"), "sentiment": d.get("sentiment"), "corrected": d.get("sentiment_corrected", ""), "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", "model": d.get("model_version", "Production")})
     df = pd.DataFrame(data, columns=["id", "text", "sentiment", "corrected", "timestamp", "model"])
     output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
-    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=logs_project_{project_id}.csv"})
+    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=sentiment_logs.csv"})
 
 @api_router.post("/collect/{project_uuid}")
 async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(get_db)):

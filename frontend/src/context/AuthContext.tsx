@@ -30,8 +30,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('token', token);
     localStorage.setItem('role', role);
     localStorage.setItem('username', username);
+    localStorage.removeItem('activeProject'); // Clear project to land on Universal Hub
     setUser({ username, role });
-    router.push('/dashboard');
+    router.push('/');
   };
 
   const logout = () => {

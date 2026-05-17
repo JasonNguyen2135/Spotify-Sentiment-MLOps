@@ -13,9 +13,10 @@ import { clsx } from 'clsx';
 
 export default function RegistryPage() {
   const { user, loading: authLoading } = useAuth();
-  const { activeProject } = useProject();
+  const { activeProject, setActiveProject } = useProject();
   const router = useRouter();
   const [models, setModels] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [runs, setRuns] = useState<any[]>([]);
   const [deploying, setDeploying] = useState<string | null>(null);
   const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
@@ -27,12 +28,14 @@ export default function RegistryPage() {
       const headers = { 'Authorization': `Bearer ${token}` };
       const params = { project_id: activeProject?.id || null };
       
-      const [modelsRes, githubRunsRes] = await Promise.all([
+      const [modelsRes, githubRunsRes, projectsRes] = await Promise.all([
         axios.get('/api/models', { headers, params }),
-        axios.get('/api/github/runs', { headers })
+        axios.get('/api/github/runs', { headers }),
+        axios.get('/api/projects', { headers })
       ]);
       
-      setModels(modelsRes.data);
+      setModels(modelsRes.data || []);
+      setProjects(projectsRes.data || []);
       
       const githubRuns = (githubRunsRes.data || [])
         .filter((r: any) => r.workflow_filename !== 'manual_train.yml')
@@ -67,19 +70,19 @@ export default function RegistryPage() {
 
   const handleDeploy = async (version: string, modelName: string) => {
     const projectId = activeProject?.id;
-    if (!projectId) return alert("Please select a workspace first from the Dashboard.");
+    if (!projectId) return alert("Please select a workspace first using the selector above.");
     
     setDeploying(version);
     setStatus(null);
     try {
       const token = localStorage.getItem('token');
       await axios.post('/api/deploy-model', null, {
-        params: { version, model_name: modelName, project_id: projectId },
+        params: { version, model_name: modelName },
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       const buildRes = await axios.post('/api/build-deploy', null, {
-        params: { version, project_id: projectId },
+        params: { version },
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -104,40 +107,52 @@ export default function RegistryPage() {
   );
 
   return (
-    <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
-      <div className="flex justify-between items-end mb-10">
+    <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20 px-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
         <div>
           <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3">
             <Layers className="text-brand w-10 h-10" />
             Model <span className="text-brand">Registry</span>
           </h1>
-          <p className="text-gray-500 mt-2">Manage model versions, stages, and production deployments.</p>
+          <div className="flex items-center gap-4 mt-6 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 w-fit">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4">Context:</p>
+            <select 
+              value={activeProject?.id || ''} 
+              onChange={(e) => {
+                const p = projects.find(p => p.id === parseInt(e.target.value));
+                setActiveProject(p || null);
+              }}
+              className="bg-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest outline-none shadow-sm cursor-pointer border-none text-slate-700"
+            >
+              <option value="">Global / Select Workspace</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
         </div>
         <div className="flex gap-3">
-          <a href="http://localhost:31453/" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
+          <a href="http://localhost:31453/" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
             <Activity className="w-4 h-4 text-emerald-500" /> Evidently
           </a>
-          <a href="https://github.com/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_build_deploy_model_service.yml" target="_blank" rel="noopener noreferrer" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-all">
+          <a href="https://github.com/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_build_deploy_model_service.yml" target="_blank" rel="noopener noreferrer" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200">
             <Zap className="w-4 h-4 text-brand" /> Deploy Service
           </a>
-
-          <a href="http://mlflow.ntdevopsmlflow.io.vn" target="_blank" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2">
+          <a href="http://mlflow.ntdevopsmlflow.io.vn" target="_blank" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
             <Settings className="w-4 h-4" /> MLflow UI
           </a>
         </div>
       </div>
 
       {status && (
-        <div className={clsx("mb-10 p-6 rounded-2xl flex items-center justify-between border", status.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100')}>
+        <div className={clsx("mb-10 p-6 rounded-2xl flex items-center justify-between border animate-in slide-in-from-top", status.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100')}>
           <div className="flex items-center gap-4">
             {status.type === 'success' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
             <span className="font-bold">{status.msg}</span>
           </div>
-          <button onClick={() => setStatus(null)} className="text-sm opacity-50 font-black">Close</button>
+          <button onClick={() => setStatus(null)} className="text-sm opacity-50 font-black uppercase">Dismiss</button>
         </div>
       )}
 
-      <div className="space-y-10">
+      <div className="space-y-12">
         <section className="space-y-6">
           <div className="flex items-center gap-2 px-2">
             <ShieldCheck className="w-5 h-5 text-brand" />
@@ -147,38 +162,38 @@ export default function RegistryPage() {
             <table className="w-full text-left">
               <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
                 <tr>
-                  <th className="px-8 py-4">Version / Model Name</th>
-                  <th className="px-8 py-4">Stage</th>
-                  <th className="px-8 py-4 text-right">Deployment</th>
+                  <th className="px-10 py-6">Version / Model Name</th>
+                  <th className="px-10 py-6">Stage</th>
+                  <th className="px-10 py-6 text-right">Deployment</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {models.map((model) => (
                   <tr key={`${model.name}-${model.version}`} className="hover:bg-slate-50/30 transition-colors">
-                    <td className="px-8 py-5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-black text-slate-500">v{model.version}</div>
+                    <td className="px-10 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-xs font-black text-slate-500 shadow-inner">v{model.version}</div>
                         <div>
                           <p className="text-sm font-bold text-slate-900">{model.name}</p>
-                          <a href={model.mlflow_url} target="_blank" className="text-[10px] text-brand hover:underline font-black flex items-center gap-1 mt-1 uppercase">
+                          <a href={model.mlflow_url} target="_blank" className="text-[10px] text-brand hover:underline font-black flex items-center gap-1 mt-1 uppercase tracking-tighter">
                             <ExternalLink className="w-2.5 h-2.5" /> MLflow Details
                           </a>
                         </div>
                       </div>
                     </td>
-                    <td className="px-8 py-5">
-                      <span className={clsx("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider", model.current_stage === "Production" ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : model.current_stage === "Staging" ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-slate-100 text-slate-500")}>
+                    <td className="px-10 py-6">
+                      <span className={clsx("px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border", model.current_stage === "Production" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : model.current_stage === "Staging" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-slate-100 text-slate-500 border-slate-200")}>
                         {model.current_stage}
                       </span>
                     </td>
-                    <td className="px-8 py-5 text-right">
+                    <td className="px-10 py-6 text-right">
                       {model.current_stage === "Production" ? (
-                        <div className="flex items-center justify-end gap-2 text-emerald-600 font-bold text-[10px] tracking-widest">
-                          <ShieldCheck className="w-4 h-4" /> SERVING (PROD)
+                        <div className="flex items-center justify-end gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em]">
+                          <ShieldCheck className="w-4 h-4" /> Served in Prod
                         </div>
                       ) : (
-                        <button onClick={() => handleDeploy(model.version, model.name)} disabled={!!deploying} className="bg-brand text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center gap-2 ml-auto disabled:bg-slate-100 disabled:text-slate-300">
-                          {deploying === model.version ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-white" />}
+                        <button onClick={() => handleDeploy(model.version, model.name)} disabled={!!deploying} className="bg-brand text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center gap-2 ml-auto disabled:bg-slate-100 disabled:text-slate-300 shadow-lg shadow-brand/20">
+                          {deploying === model.version ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-white" />}
                           PROMPT & DEPLOY
                         </button>
                       )}
@@ -199,32 +214,34 @@ export default function RegistryPage() {
             <table className="w-full text-left">
               <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
                 <tr>
-                  <th className="px-8 py-4">Pipeline Run</th>
-                  <th className="px-8 py-4">Status</th>
-                  <th className="px-8 py-4">Timestamp</th>
-                  <th className="px-8 py-4 text-right">Action</th>
+                  <th className="px-10 py-6">Pipeline Run</th>
+                  <th className="px-10 py-6">Status</th>
+                  <th className="px-10 py-6">Timestamp</th>
+                  <th className="px-10 py-6 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {runs.map((run) => (
-                  <tr key={run.id} className="hover:bg-slate-50/30 transition-colors">
-                    <td className="px-8 py-5">
+                {runs.length > 0 ? runs.map((run) => (
+                  <tr key={run.id} className="hover:bg-slate-50/30 transition-colors group">
+                    <td className="px-10 py-6">
                       <p className="text-sm font-bold text-slate-900">{run.type}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{run.details}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 font-medium">{run.details}</p>
                     </td>
-                    <td className="px-8 py-5">
-                      <span className={clsx("px-3 py-1 rounded-full text-[10px] font-black uppercase", run.status === "success" || run.status === "completed" ? "bg-emerald-100 text-emerald-700" : run.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
+                    <td className="px-10 py-6">
+                      <span className={clsx("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest", run.status === "success" || run.status === "completed" ? "bg-emerald-100 text-emerald-700" : run.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
                         {run.status}
                       </span>
                     </td>
-                    <td className="px-8 py-5 text-xs font-bold text-slate-400">
+                    <td className="px-10 py-6 text-xs font-bold text-slate-400">
                       {new Date(run.time || Date.now()).toLocaleString()}
                     </td>
-                    <td className="px-8 py-5 text-right">
-                      <a href={run.raw.html_url} target="_blank" className="text-brand hover:underline font-black text-[10px] uppercase">View on GitHub</a>
+                    <td className="px-10 py-6 text-right">
+                      <a href={run.raw?.html_url} target="_blank" className="text-brand hover:underline font-black text-[10px] uppercase tracking-widest">View on GitHub</a>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr><td colSpan={4} className="py-20 text-center text-slate-300 italic font-medium">No deployment history found.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
