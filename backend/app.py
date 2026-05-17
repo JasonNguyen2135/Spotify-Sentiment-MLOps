@@ -105,7 +105,7 @@ def migrate_db():
                 db.commit()
             except: db.rollback()
         
-        # Initialize unique credentials for projects
+        # Initialize unique credentials
         projects = db.query(Project).all()
         for p in projects:
             if not p.uuid: p.uuid = str(uuid.uuid4())[:8]
@@ -115,11 +115,7 @@ def migrate_db():
         admin = db.query(User).filter(User.username == "admin").first()
         if not admin:
             admin = User(username="admin", hashed_password=CryptContext(schemes=["bcrypt"]).hash("admin123"), role="admin")
-            db.add(admin); db.commit(); db.refresh(admin)
-        if not db.query(Project).first():
-            p = Project(name="Default Workspace", description="Auto-created.", owner_id=admin.id, uuid=str(uuid.uuid4())[:8], api_key=secrets.token_hex(16))
-            db.add(p); db.commit(); db.refresh(p)
-            db.query(DataSource).update({DataSource.project_id: p.id}); db.query(AlertRule).update({AlertRule.project_id: p.id}); db.commit()
+            db.add(admin); db.commit()
     finally: db.close()
 
 # Helpers
@@ -128,9 +124,9 @@ def log_audit(db: Session, user: User, action: str, details: str, project_id: in
 
 def verify_project_access(project_id: int, user: User, db: Session):
     project = db.query(Project).filter(Project.id == project_id).first()
-    if not project: raise HTTPException(status_code=404)
+    if not project: raise HTTPException(status_code=404, detail="Project not found")
     if user.role in ["admin", "analyst", "ai_engineer"] or project.owner_id == user.id: return project
-    raise HTTPException(status_code=403)
+    raise HTTPException(status_code=403, detail="Access denied")
 
 # MongoDB
 mongo_client = MongoClient(MONGO_URL)
@@ -197,16 +193,19 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 # --- Projects ---
 @api_router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role in ["admin", "ai_engineer", "analyst"]: 
-        projects = db.query(Project).all()
-    else:
-        projects = db.query(Project).filter(Project.owner_id == current_user.id).all()
+    if current_user.role in ["admin", "ai_engineer", "analyst"]: projects = db.query(Project).all()
+    else: projects = db.query(Project).filter(Project.owner_id == current_user.id).all()
     return [{"id": p.id, "uuid": p.uuid, "name": p.name, "description": p.description, "api_key": p.api_key} for p in projects]
 
 @api_router.get("/projects/{project_id}")
 def get_project_details(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = verify_project_access(project_id, current_user, db)
     return {"id": p.id, "uuid": p.uuid, "name": p.name, "api_key": p.api_key}
+
+@api_router.post("/projects")
+def create_project(name: str, description: str = "", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = Project(name=name, description=description, owner_id=current_user.id, uuid=str(uuid.uuid4())[:8], api_key=secrets.token_hex(16))
+    db.add(p); db.commit(); db.refresh(p); log_audit(db, current_user, "CREATE_PROJECT", f"Created {name}", p.id); return p
 
 # --- Analytics ---
 @api_router.get("/stats")
@@ -224,10 +223,10 @@ def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db),
     pipeline = [{"$match": query}, {"$group": {"_id": {"month": {"$month": "$timestamp"}, "year": {"$year": "$timestamp"}, "sentiment": "$sentiment"}, "count": {"$sum": 1}}}]
     results = {}
     for doc in preds_log_col.aggregate(pipeline):
-        _id = doc.get('_id', {}); year, month, sentiment = _id.get('year', 2024), _id.get('month', 1), _id.get('sentiment', 'neutral')
+        _id = doc.get('_id', {}); year, month, sent = _id.get('year', 2024), _id.get('month', 1), _id.get('sentiment', 'neutral')
         k = f"{year}-{month:02d}"
         if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0}
-        if sentiment in results[k]: results[k][sentiment] = doc.get("count", 0)
+        if sent in results[k]: results[k][sent] = doc.get("count", 0)
     return sorted([{"date": d, **c} for d, c in results.items()], key=lambda x: x["date"])
 
 @api_router.get("/comparison")
@@ -249,7 +248,13 @@ def compare_models(v1: str, v2: str, current_user: User = Depends(get_current_us
         except: return {"version": version, "accuracy": 0.94, "f1": 0.92, "precision": 0.91, "latency": "40ms"}
     return {"model1": get_mlflow_metrics(v1), "model2": get_mlflow_metrics(v2)}
 
+@api_router.get("/word-cloud")
+def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if project_id: verify_project_access(project_id, current_user, db)
+    return [{"text": "demo", "value": 10}]
+
 # --- History & HITL ---
+@api_router.get("/history")
 @api_router.get("/user-history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
@@ -259,13 +264,31 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
     history = []
     for d in cursor:
         ts = d.get("timestamp")
-        history.append({"id": str(d["_id"]), "text": d.get("text", ""), "sentiment": d.get("sentiment", "neutral"), "sentiment_corrected": d.get("sentiment_corrected"), "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else datetime.utcnow().isoformat(), "model_version": d.get("model_version", "Production")})
+        history.append({"id": str(d["_id"]), "text": d.get("text", ""), "sentiment": d.get("sentiment", "neutral"), "sentiment_corrected": d.get("sentiment_corrected"), "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", "model_version": d.get("model_version", "Production")})
     return history
+
+@api_router.post("/predict")
+async def predict(review_text: str, project_id: int, model_version: str = "Production", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_access(project_id, current_user, db)
+    if model_version != "Production" and current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
+    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text, "version": model_version}, timeout=10).json()
+    preds_log_col.insert_one({"text": review_text, "sentiment": res["sentiment"], "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), "model_version": model_version})
+    if res["sentiment"] == "negative": db.add(Ticket(project_id=project_id, review_text=review_text, sentiment_score="negative")); db.commit()
+    return res
+
+@api_router.post("/correction")
+def correction(prediction_id: str, text: str, corrected_sentiment: str, project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_access(project_id, current_user, db)
+    feedback_col.insert_one({"text": text, "corrected_sentiment": corrected_sentiment, "user": current_user.username, "timestamp": datetime.utcnow(), "original_id": prediction_id, "project_id": project_id})
+    from bson import ObjectId
+    try: preds_log_col.update_one({"_id": ObjectId(prediction_id)}, {"$set": {"sentiment_corrected": corrected_sentiment}})
+    except: pass
+    return {"status": "success"}
 
 @api_router.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
-    df = pd.read_csv(io.BytesIO(await file.read()))
+    content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     summary, results = {"positive": 0, "negative": 0, "neutral": 0}, []
     col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
     for i, row in df.head(100).iterrows():
@@ -305,7 +328,7 @@ def train(dataset: str, project_id: int, current_user: User = Depends(get_curren
     if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
     requests.post(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", json={"ref": "main", "inputs": {"data_source": dataset, "project_id": str(project_id)}}, headers={"Authorization": f"token {tk}"}, timeout=10)
-    log_audit(db, current_user, "TRIGGER_TRAIN", f"Training {dataset}", project_id); return {"status": "success"}
+    return {"status": "success"}
 
 @api_router.get("/airflow/runs")
 def airflow_runs(current_user: User = Depends(get_current_user)):
@@ -317,9 +340,26 @@ def airflow_runs(current_user: User = Depends(get_current_user)):
 @api_router.get("/github/runs")
 def github_runs(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
-    tk = os.getenv("GITHUB_TOKEN")
-    try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 15}, timeout=5).json().get("workflow_runs", [])
+    try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {os.getenv('GITHUB_TOKEN')}"}, params={"per_page": 15}, timeout=5).json().get("workflow_runs", [])
     except: return []
+
+@api_router.get("/connectors")
+def get_connectors(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    q = db.query(DataSource)
+    if project_id: verify_project_access(project_id, current_user, db); q = q.filter(DataSource.project_id == project_id)
+    return q.all()
+
+@api_router.get("/alerts")
+def get_alerts(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    q = db.query(AlertRule)
+    if project_id: verify_project_access(project_id, current_user, db); q = q.filter(AlertRule.project_id == project_id)
+    return q.all()
+
+@api_router.get("/tickets")
+def get_tickets(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    q = db.query(Ticket)
+    if project_id: verify_project_access(project_id, current_user, db); q = q.filter(Ticket.project_id == project_id)
+    return q.all()
 
 @api_router.get("/audit-logs")
 def get_audit_logs(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -338,8 +378,7 @@ def export_logs(project_id: int, db: Session = Depends(get_db), current_user: Us
     for d in cursor:
         ts = d.get("timestamp")
         data.append({"id": str(d["_id"]), "text": d.get("text"), "sentiment": d.get("sentiment"), "corrected": d.get("sentiment_corrected", ""), "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", "model": d.get("model_version", "Production")})
-    cols = ["id", "text", "sentiment", "corrected", "timestamp", "model"]
-    df = pd.DataFrame(data, columns=cols)
+    df = pd.DataFrame(data, columns=["id", "text", "sentiment", "corrected", "timestamp", "model"])
     output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
     return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=logs_project_{project_id}.csv"})
 
