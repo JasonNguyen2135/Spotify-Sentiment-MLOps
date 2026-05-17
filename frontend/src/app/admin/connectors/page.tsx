@@ -15,7 +15,7 @@ import { clsx } from 'clsx';
 
 export default function ConnectorsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { activeProject } = useProject();
+  const { activeProject, setActiveProject } = useProject();
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -48,7 +48,7 @@ export default function ConnectorsPage() {
   }, null, 2);
 
   const copyToClipboard = (text: string) => {
-    if(!text || text.includes('•')) return;
+    if(!text || text.includes('•') || text.includes('Loading')) return;
     navigator.clipboard.writeText(text);
     setStats({ type: 'success', msg: 'Copied to clipboard!' });
     setTimeout(() => setStats(null), 3000);
@@ -59,23 +59,37 @@ export default function ConnectorsPage() {
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
-      const params = { project_id: activeProject?.id || null };
+      
+      const queryId = searchParams.get('id');
+      const pid = activeProject?.id || (queryId ? parseInt(queryId) : null);
+      
+      if (!pid) {
+        setLoading(false);
+        return;
+      }
+
+      const params = { project_id: pid };
       
       const [sourcesRes, alertsRes, projectRes] = await Promise.all([
         axios.get('/api/connectors', { headers, params }),
         axios.get('/api/alerts', { headers, params }),
-        activeProject ? axios.get(`/api/projects/${activeProject.id}`, { headers }) : Promise.resolve({ data: null })
+        axios.get(`/api/projects/${pid}`, { headers })
       ]);
       
-      setSources(sourcesRes.data);
+      setSources(sourcesRes.data || []);
       setAlerts(alertsRes.data || []);
-      if (projectRes.data) setFullProject(projectRes.data);
+      if (projectRes.data) {
+        setFullProject(projectRes.data);
+        if (!activeProject || activeProject.id !== projectRes.data.id) {
+          setActiveProject(projectRes.data);
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch settings", err);
     } finally {
       setLoading(false);
     }
-  }, [activeProject]);
+  }, [activeProject, searchParams, setActiveProject]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -168,6 +182,13 @@ export default function ConnectorsPage() {
         </div>
       </div>
 
+      {status && (
+        <div className={clsx("mb-10 p-6 rounded-2xl flex items-center justify-between border animate-in slide-in-from-top", status.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100')}>
+          <div className="flex items-center gap-4">{status.type === 'success' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}<span className="font-bold">{status.msg}</span></div>
+          <button onClick={() => setStats(null)} className="text-sm opacity-50 hover:opacity-100 uppercase font-black">Dismiss</button>
+        </div>
+      )}
+
       {activeTab === 'crawlers' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           <div className="lg:col-span-1">
@@ -207,31 +228,56 @@ export default function ConnectorsPage() {
           <div className="bg-slate-900 p-12 rounded-[3rem] text-white relative overflow-hidden shadow-2xl">
             <div className="relative z-10">
               <h2 className="text-4xl font-black mb-4">API Credentials</h2>
-              <p className="text-slate-400 text-lg mb-10">Unique UUID and Secret Key for **{activeProject?.name}**.</p>
+              <p className="text-slate-400 text-lg mb-10">Unique UUID and Secret Key for <strong className="text-white">{fullProject?.name || activeProject?.name}</strong>.</p>
               <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8 space-y-6">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Webhook Endpoint</label>
                   <div className="flex gap-4">
-                    <div className="flex-1 bg-black/40 px-6 py-4 rounded-xl font-mono text-sm text-emerald-400 border border-white/5 overflow-x-auto">{webhookUrl}</div>
-                    <button onClick={() => copyToClipboard(webhookUrl)} className="p-4 bg-brand rounded-xl"><Copy className="w-5 h-5" /></button>
+                    <div className="flex-1 bg-black/40 px-6 py-4 rounded-xl font-mono text-sm text-emerald-400 border border-white/5 overflow-x-auto whitespace-nowrap">
+                      {fullProject?.uuid ? `${window.location.protocol}//${window.location.host}/api/collect/${fullProject.uuid}` : 'Generating...'}
+                    </div>
+                    <button onClick={() => copyToClipboard(fullProject?.uuid ? `${window.location.protocol}//${window.location.host}/api/collect/${fullProject.uuid}` : '')} className="p-4 bg-brand rounded-xl hover:opacity-90 transition-all"><Copy className="w-5 h-5" /></button>
                   </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Secret api_key</label>
                   <div className="flex gap-4">
-                    <div className="flex-1 bg-black/40 px-6 py-4 rounded-xl font-mono text-sm text-brand border border-white/5 overflow-x-auto">
+                    <div className="flex-1 bg-black/40 px-6 py-4 rounded-xl font-mono text-sm text-brand border border-white/5 overflow-x-auto whitespace-nowrap">
                        {showApiKey ? fullProject?.api_key : '••••••••••••••••••••••••••••••••'}
                     </div>
-                    <button onClick={() => setShowApiKey(!showApiKey)} className="p-4 bg-white/5 rounded-xl">{showApiKey ? <EyeOff /> : <Eye />}</button>
-                    <button onClick={() => copyToClipboard(fullProject?.api_key)} className="p-4 bg-white/5 rounded-xl"><Copy /></button>
+                    <button onClick={() => setShowApiKey(!showApiKey)} className="p-4 bg-white/5 rounded-xl hover:bg-white/10 transition-all">{showApiKey ? <EyeOff /> : <Eye />}</button>
+                    <button onClick={() => copyToClipboard(fullProject?.api_key)} className="p-4 bg-white/5 rounded-xl hover:bg-white/10 transition-all"><Copy /></button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-             <h3 className="text-xl font-bold mb-6">Payload Specification</h3>
-             <pre className="bg-slate-50 p-6 rounded-2xl text-xs font-mono text-slate-600">{webhookExample}</pre>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
+               <h3 className="text-xl font-bold mb-6">Payload Specification</h3>
+               <pre className="bg-slate-50 p-6 rounded-2xl text-xs font-mono text-slate-600 overflow-x-auto whitespace-pre-wrap">{webhookExample}</pre>
+            </div>
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
+              <h3 className="text-xl font-bold mb-6">Webhook Simulator</h3>
+              <div className="space-y-4">
+                <input type="text" id="sim-text" placeholder="Enter test comment..." className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm" />
+                <button onClick={async () => {
+                      const txt = (document.getElementById('sim-text') as HTMLInputElement).value;
+                      if(!txt) return alert("Enter text");
+                      if(!fullProject?.uuid) return alert("Credentials not ready.");
+                      try {
+                        const token = localStorage.getItem('token');
+                        await axios.post(`/api/collect/${fullProject.uuid}`, { 
+                          api_key: fullProject.api_key,
+                          text: txt, 
+                          timestamp: new Date().toISOString() 
+                        }, { headers: { 'Authorization': `Bearer ${token}` }});
+                        alert("Data sent! This project will now have activity.");
+                        (document.getElementById('sim-text') as HTMLInputElement).value = '';
+                      } catch(err) { alert("Test failed."); }
+                    }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-slate-200">Send Test Payload</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

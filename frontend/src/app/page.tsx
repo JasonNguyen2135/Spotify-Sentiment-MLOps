@@ -147,7 +147,7 @@ export default function UniversalHub() {
       setShowCreate(false);
       setName(''); setDesc(''); setAppId('');
       setActiveProject(res.data);
-      router.push(`/admin/connectors?mode=${monitorType}`);
+      router.push(`/admin/connectors?mode=${monitorType}&id=${res.data.id}`);
     } catch (err: any) {
       alert(err.response?.data?.detail || "Failed to create project");
     } finally { setCreating(false); }
