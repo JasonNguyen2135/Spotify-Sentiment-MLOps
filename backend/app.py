@@ -207,6 +207,15 @@ def create_project(name: str, description: str = "", db: Session = Depends(get_d
     p = Project(name=name, description=description, owner_id=current_user.id, uuid=str(uuid.uuid4())[:8], api_key=secrets.token_hex(16))
     db.add(p); db.commit(); db.refresh(p); log_audit(db, current_user, "CREATE_PROJECT", f"Created {name}", p.id); return p
 
+@api_router.get("/projects/{project_id}")
+def get_project_details(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = verify_project_access(project_id, current_user, db)
+    return {
+        "id": p.id, "uuid": p.uuid, "name": p.name, 
+        "description": p.description, "api_key": p.api_key, 
+        "owner_id": p.owner_id, "created_at": p.created_at
+    }
+
 @api_router.get("/stats")
 def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}

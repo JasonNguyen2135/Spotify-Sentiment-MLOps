@@ -39,18 +39,20 @@ export default function ConnectorsPage() {
   const [threshold, setThreshold] = useState(25);
   const [channel, setChannel] = useState('Telegram');
   const [destination, setDestination] = useState('');
+  const [fullProject, setFullProject] = useState<any>(null);
 
-  const webhookUrl = activeProject?.uuid ? `${window.location.protocol}//${window.location.host}/api/collect/${activeProject.uuid}` : 'Loading...';
-  const apiKey = (activeProject as any)?.api_key || '••••••••••••••••';
+  const webhookUrl = fullProject?.uuid ? `${window.location.protocol}//${window.location.host}/api/collect/${fullProject.uuid}` : 'Loading...';
+  const apiKey = fullProject?.api_key || '••••••••••••••••';
 
   const webhookExample = JSON.stringify({
-    "api_key": (activeProject as any)?.api_key || "YOUR_API_KEY",
+    "api_key": fullProject?.api_key || "YOUR_API_KEY",
     "text": "Sản phẩm tuyệt vời, giao hàng nhanh!",
     "user_id": "customer_123",
     "timestamp": new Date().toISOString()
   }, null, 2);
 
   const copyToClipboard = (text: string) => {
+    if(!text || text.includes('•')) return;
     navigator.clipboard.writeText(text);
     setStats({ type: 'success', msg: 'Copied to clipboard!' });
     setTimeout(() => setStats(null), 3000);
@@ -62,12 +64,16 @@ export default function ConnectorsPage() {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
       const params = { project_id: activeProject?.id || null };
-      const [sourcesRes, alertsRes] = await Promise.all([
+      
+      const [sourcesRes, alertsRes, projectRes] = await Promise.all([
         axios.get('/api/connectors', { headers, params }),
-        axios.get('/api/alerts', { headers, params })
+        axios.get('/api/alerts', { headers, params }),
+        activeProject ? axios.get(`/api/projects/${activeProject.id}`, { headers }) : Promise.resolve({ data: null })
       ]);
+      
       setSources(sourcesRes.data);
       setAlerts(alertsRes.data || []);
+      if (projectRes.data) setFullProject(projectRes.data);
     } catch (err) {
       console.error("Failed to fetch settings", err);
     } finally {
