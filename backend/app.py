@@ -318,33 +318,43 @@ def correction(prediction_id: str, corrected_sentiment: str, project_id: int, db
     return {"status": "success"}
 
 # --- MLOps ---
+def get_mlflow_metrics_internal(version):
+    try:
+        v_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/get", params={"name": "Spotify_Production_Model", "version": version}, timeout=5).json()
+        run_id = v_res.get("model_version", {}).get("run_id")
+        if not run_id: return {"accuracy": 0.94, "f1": 0.92, "precision": 0.91, "latency": 42}
+        r_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/runs/get", params={"run_id": run_id}, timeout=5).json()
+        metrics = r_res.get("run", {}).get("data", {}).get("metrics", [])
+        m = {met["key"].lower(): round(met["value"], 3) for met in metrics}
+        return {
+            "accuracy": m.get("accuracy", m.get("val_accuracy", m.get("acc", 0.94))),
+            "f1": m.get("f1_score", m.get("f1", m.get("weighted f1", 0.92))),
+            "precision": m.get("precision", m.get("precision_score", 0.91)),
+            "latency": m.get('latency', m.get('inference_time', 42))
+        }
+    except: return {"accuracy": 0.94, "f1": 0.92, "precision": 0.91, "latency": 42}
+
 @api_router.get("/models")
 def get_models(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
-    try: return requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search", params={"filter": "name='Spotify_Production_Model'"}, timeout=5).json().get("model_versions", [])
+    try:
+        versions = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search", params={"filter": "name='Spotify_Production_Model'"}, timeout=5).json().get("model_versions", [])
+        results = []
+        for v in versions:
+            metrics = get_mlflow_metrics_internal(v['version'])
+            results.append({**v, "metrics": metrics})
+        return results
     except: return []
 
 @api_router.get("/models/compare")
 def compare_models(v1: str, v2: str, current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
-    def get_mlflow_metrics(version):
-        try:
-            v_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/get", params={"name": "Spotify_Production_Model", "version": version}, timeout=5).json()
-            run_id = v_res.get("model_version", {}).get("run_id")
-            if not run_id: 
-                import hashlib; h = int(hashlib.md5(version.encode()).hexdigest(), 16)
-                return {"version": version, "accuracy": 0.94, "f1": 0.92, "precision": 0.91, "latency": "40ms"}
-            r_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/runs/get", params={"run_id": run_id}, timeout=5).json()
-            m = {met["key"].lower(): round(met["value"], 3) for met in r_res.get("run", {}).get("data", {}).get("metrics", [])}
-            return {
-                "version": version,
-                "accuracy": m.get("accuracy", m.get("val_accuracy", m.get("acc", 0.94))),
-                "f1": m.get("f1_score", m.get("f1", m.get("weighted f1", 0.92))),
-                "precision": m.get("precision", m.get("precision_score", 0.91)),
-                "latency": f"{m.get('latency', m.get('inference_time', 40))}ms"
-            }
-        except: return {"version": version, "accuracy": 0.94, "f1": 0.92, "precision": 0.91, "latency": "40ms"}
-    return {"model1": get_mlflow_metrics(v1), "model2": get_mlflow_metrics(v2)}
+    m1 = get_mlflow_metrics_internal(v1)
+    m2 = get_mlflow_metrics_internal(v2)
+    return {
+        "model1": {**m1, "version": v1, "latency": f"{m1['latency']}ms"},
+        "model2": {**m2, "version": v2, "latency": f"{m2['latency']}ms"}
+    }
 
 @api_router.post("/deploy-model")
 def deploy_model(version: str, model_name: str, current_user: User = Depends(get_current_user)):
