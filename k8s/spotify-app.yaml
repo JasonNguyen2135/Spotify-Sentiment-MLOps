@@ -230,6 +230,8 @@ spec:
               value: "mongodb://mongodb:27017"
             - name: REDIS_HOST
               value: "redis"
+            - name: REDIS_PORT_VAL
+              value: "6379"
             - name: DATABASE_URL
               value: "postgresql://admin:admin123@postgres:5432/mlops_auth"
             - name: JWT_SECRET

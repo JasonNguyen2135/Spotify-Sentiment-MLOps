@@ -7,7 +7,7 @@ app = FastAPI(title="Sentiment Collector Gateway")
 
 # Configuration
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_PORT = int(os.getenv("REDIS_PORT_VAL", 6379))
 QUEUE_NAME = "sentiment_webhook_queue"
 
 # Init Redis

@@ -18,6 +18,7 @@ services:
       - redis
     environment:
       - REDIS_HOST=redis
+      - REDIS_PORT_VAL=6379
     restart: always
 
   # --- 2. MONGODB ---

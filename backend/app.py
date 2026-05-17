@@ -28,7 +28,7 @@ SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-key")
 ALGORITHM = "HS256"
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_PORT = int(os.getenv("REDIS_PORT_VAL", 6379))
 QUEUE_NAME = "sentiment_webhook_queue"
 
 # ====== DATABASE SETUP ======
