@@ -219,7 +219,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: backend
-          image: registry.ntdevopsregistry.io.vn/mlops/backend:8d336a916599b6f8724d03f5a35e109481cd5cc8
+          image: registry.ntdevopsregistry.io.vn/mlops/backend:f759cb0ad08be920bab4f607ccc5baff54fe6fb6
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -230,6 +230,8 @@ spec:
               value: "mongodb://mongodb:27017"
             - name: REDIS_HOST
               value: "redis"
+            - name: REDIS_PORT_VAL
+              value: "6379"
             - name: DATABASE_URL
               value: "postgresql://admin:admin123@postgres:5432/mlops_auth"
             - name: JWT_SECRET
