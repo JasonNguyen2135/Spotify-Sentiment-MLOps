@@ -251,21 +251,31 @@ export default function UniversalHub() {
           </div>
           <div className="flex flex-wrap items-center gap-2 bg-slate-100/50 p-1.5 rounded-[2rem] border border-slate-200 shadow-inner">
             {[
-              { label: 'Dashboard', active: !activeProject, onClick: () => setActiveProject(null), icon: LayoutGrid },
-              { label: 'Analysis', icon: Activity },
-              { label: 'Compare', icon: ArrowLeftRight },
-              { label: 'History', icon: FileText },
+              { label: 'Dashboard', active: !activeProject, onClick: () => setActiveProject(null), icon: LayoutGrid, href: null },
+              { label: 'Analysis', icon: Activity, href: '/analyze' },
+              { label: 'Compare', icon: ArrowLeftRight, href: '/compare' },
+              { label: 'History', icon: FileText, href: '/history' },
             ].map((item) => (
-              <button 
-                key={item.label}
-                onClick={item.onClick}
-                className={clsx(
-                  "px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2",
-                  item.active ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-800"
-                )}
-              >
-                <item.icon className="w-3.5 h-3.5" /> {item.label}
-              </button>
+              item.href ? (
+                <Link 
+                  key={item.label}
+                  href={item.href}
+                  className="px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 text-slate-500 hover:text-slate-800"
+                >
+                  <item.icon className="w-3.5 h-3.5" /> {item.label}
+                </Link>
+              ) : (
+                <button 
+                  key={item.label}
+                  onClick={item.onClick}
+                  className={clsx(
+                    "px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2",
+                    item.active ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  <item.icon className="w-3.5 h-3.5" /> {item.label}
+                </button>
+              )
             ))}
             {['admin', 'ai_engineer'].includes(user?.role) && (
               <>
@@ -279,7 +289,7 @@ export default function UniversalHub() {
               </>
             )}
             {user?.role === 'analyst' && (
-               <div className="px-6 py-2.5 text-slate-400 font-black text-[9px] uppercase tracking-widest bg-white rounded-full shadow-sm">Analyst Mode</div>
+               <div className="px-6 py-2.5 text-slate-400 font-black text-[9px] uppercase tracking-widest bg-white rounded-full shadow-sm ml-2">Analyst Mode</div>
             )}
           </div>
         </div>
@@ -288,65 +298,76 @@ export default function UniversalHub() {
       {/* Toolkit Sections - HIDDEN WHEN IN PROJECT */}
       {!activeProject && (
         <>
-          {/* Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 no-print">
-            {[
-              { name: 'Model Health', value: stats?.accuracy || '94.2%', icon: Target, trend: '+0.5%', up: true, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-              { name: 'Total Insights', value: stats?.total_predictions?.toLocaleString() || '0', icon: Activity, trend: '+12%', up: true, color: 'text-blue-600', bg: 'bg-blue-50' },
-              { name: 'Data Drift', value: stats?.drift_score || '0.2%', icon: Zap, trend: '-0.1%', up: false, color: 'text-amber-600', bg: 'bg-amber-50' },
-              { name: 'Dataset Scale', value: stats?.dataset_size || '0 records', icon: Database, trend: 'Updated', up: true, color: 'text-purple-600', bg: 'bg-purple-50' },
-            ].map((item) => (
-              <div key={item.name} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl group">
-                <div className="flex justify-between items-start mb-6">
-                  <div className={`${item.bg} ${item.color} p-4 rounded-2xl group-hover:scale-110 transition-transform`}>
-                    <item.icon className="w-6 h-6" />
+          {/* Metrics Grid - ADMIN & AI_ENGINEER ONLY */}
+          {['admin', 'ai_engineer'].includes(user?.role) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 no-print">
+              {[
+                { name: 'Model Health', value: stats?.accuracy || '94.2%', icon: Target, trend: '+0.5%', up: true, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                { name: 'Total Insights', value: stats?.total_predictions?.toLocaleString() || '0', icon: Activity, trend: '+12%', up: true, color: 'text-blue-600', bg: 'bg-blue-50' },
+                { name: 'Data Drift', value: stats?.drift_score || '0.2%', icon: Zap, trend: '-0.1%', up: false, color: 'text-amber-600', bg: 'bg-amber-50' },
+                { name: 'Dataset Scale', value: stats?.dataset_size || '0 records', icon: Database, trend: 'Updated', up: true, color: 'text-purple-600', bg: 'bg-purple-50' },
+              ].map((item) => (
+                <div key={item.name} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl group">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className={`${item.bg} ${item.color} p-4 rounded-2xl group-hover:scale-110 transition-transform`}>
+                      <item.icon className="w-6 h-6" />
+                    </div>
+                    <div className={clsx(
+                      "flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest",
+                      item.up ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-700"
+                    )}>
+                      {item.up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                      {item.trend}
+                    </div>
                   </div>
-                  <div className={clsx(
-                    "flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest",
-                    item.up ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-700"
-                  )}>
-                    {item.up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                    {item.trend}
-                  </div>
+                  <h3 className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mb-1">{item.name}</h3>
+                  <p className="text-3xl font-black text-slate-900 tracking-tight">{item.value}</p>
                 </div>
-                <h3 className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mb-1">{item.name}</h3>
-                <p className="text-3xl font-black text-slate-900 tracking-tight">{item.value}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Ad-hoc Actions */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
-            <div className="lg:col-span-1 bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col group">
-              <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-emerald-500 opacity-10 blur-[100px] group-hover:opacity-20 transition-opacity"></div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="bg-emerald-500/20 p-2.5 rounded-xl text-emerald-400"><Database className="w-5 h-5" /></div>
-                  <h2 className="text-2xl font-black text-white tracking-tight">Harvester</h2>
+            {/* Harvester - ADMIN & AI_ENGINEER ONLY */}
+            {['admin', 'ai_engineer'].includes(user?.role) ? (
+              <div className="lg:col-span-1 bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col group">
+                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-emerald-500 opacity-10 blur-[100px] group-hover:opacity-20 transition-opacity"></div>
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-8">
+                    <div className="bg-emerald-500/20 p-2.5 rounded-xl text-emerald-400"><Database className="w-5 h-5" /></div>
+                    <h2 className="text-2xl font-black text-white tracking-tight">Harvester</h2>
+                  </div>
+                  <form onSubmit={handleHarvest} className="space-y-4">
+                    <select 
+                      value={harvestPlatform}
+                      onChange={(e) => setHarvestPlatform(e.target.value)}
+                      className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all font-bold text-sm appearance-none"
+                    >
+                      <option className="bg-slate-900">Google Play</option>
+                      <option className="bg-slate-900">App Store</option>
+                    </select>
+                    <input 
+                      type="text"
+                      value={harvestId}
+                      onChange={(e) => setHarvestId(e.target.value)}
+                      placeholder="Application ID (e.g. com.spotify.music)"
+                      className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all placeholder:text-slate-500 font-medium text-sm"
+                    />
+                    <button type="submit" disabled={harvesting || !harvestId.trim()} className="w-full bg-emerald-500 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 disabled:bg-slate-800 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
+                      {harvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Scrape 1K Samples
+                    </button>
+                  </form>
                 </div>
-                <form onSubmit={handleHarvest} className="space-y-4">
-                  <select 
-                    value={harvestPlatform}
-                    onChange={(e) => setHarvestPlatform(e.target.value)}
-                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all font-bold text-sm appearance-none"
-                  >
-                    <option className="bg-slate-900">Google Play</option>
-                    <option className="bg-slate-900">App Store</option>
-                  </select>
-                  <input 
-                    type="text"
-                    value={harvestId}
-                    onChange={(e) => setHarvestId(e.target.value)}
-                    placeholder="Application ID (e.g. com.spotify.music)"
-                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all placeholder:text-slate-500 font-medium text-sm"
-                  />
-                  <button type="submit" disabled={harvesting || !harvestId.trim()} className="w-full bg-emerald-500 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 disabled:bg-slate-800 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
-                    {harvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    Scrape 1K Samples
-                  </button>
-                </form>
               </div>
-            </div>
+            ) : (
+              <div className="lg:col-span-1 bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
+                 <ShieldAlert className="w-12 h-12 text-slate-200 mb-4" />
+                 <h3 className="text-lg font-black text-slate-900">Restricted Tool</h3>
+                 <p className="text-slate-400 text-xs font-medium">Harvester is reserved for AI Engineers.</p>
+              </div>
+            )}
 
             <div className="lg:col-span-2 bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col justify-center group border border-white/5">
               <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-brand opacity-20 blur-[120px] group-hover:opacity-30 transition-opacity"></div>
