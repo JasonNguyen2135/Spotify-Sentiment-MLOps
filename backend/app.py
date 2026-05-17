@@ -11,6 +11,10 @@ import pandas as pd
 import requests
 import os
 import io
+import json
+import threading
+import time
+import redis
 from pymongo import MongoClient
 
 # ====== CONFIG ======
@@ -22,6 +26,10 @@ AIRFLOW_URL = os.getenv("AIRFLOW_URL", "http://airflow-api-server.airflow:8080")
 AIRFLOW_AUTH = os.getenv("AIRFLOW_AUTH", "admin:admin")
 SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-key")
 ALGORITHM = "HS256"
+
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+QUEUE_NAME = "sentiment_webhook_queue"
 
 # ====== DATABASE SETUP ======
 engine = create_engine(DATABASE_URL)
@@ -129,6 +137,60 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         if not user: raise HTTPException(status_code=401)
         return user
     except: raise HTTPException(status_code=401)
+
+# Worker logic
+def redis_worker():
+    """
+    Background worker to consume messages from Redis and process them.
+    """
+    print("Starting MQ Consumer Worker...")
+    r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
+    db_session = SessionLocal()
+    
+    while True:
+        try:
+            # Block until a message is available (timeout 5s)
+            msg = r_client.brpop(QUEUE_NAME, timeout=5)
+            if msg:
+                _, data_json = msg
+                data = json.loads(data_json)
+                
+                project_id = data["project_id"]
+                text_val = data["text"]
+                username = data.get("user_id", "system_worker")
+                
+                # Predict
+                try:
+                    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_val}, timeout=10).json()
+                    sentiment = res["sentiment"]
+                except:
+                    sentiment = "neutral"
+                
+                # Log to Mongo
+                preds_log_col.insert_one({
+                    "text": text_val, 
+                    "sentiment": sentiment, 
+                    "project_id": project_id,
+                    "user": username, 
+                    "timestamp": datetime.utcnow(),
+                    "source": data.get("source", "webhook_async")
+                })
+                
+                # Create ticket if negative
+                if sentiment == "negative":
+                    db_add = Ticket(project_id=project_id, review_text=text_val, sentiment_score="negative")
+                    db_session.add(db_add)
+                    db_session.commit()
+                
+                print(f"Worker: Processed async comment for project {project_id}")
+                
+        except Exception as e:
+            print(f"Worker Error: {e}")
+            time.sleep(2)
+
+# Start worker in a separate thread
+worker_thread = threading.Thread(target=redis_worker, daemon=True)
+worker_thread.start()
 
 app = FastAPI(); app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 api_router = APIRouter()

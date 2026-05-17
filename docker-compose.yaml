@@ -1,7 +1,26 @@
 version: '3.8'
 
 services:
-  # --- 3. MONGODB ---
+  # --- 0. MESSAGE QUEUE ---
+  redis:
+    image: redis:alpine
+    container_name: sentiment_redis
+    ports:
+      - "6379:6379"
+
+  # --- 1. COLLECTOR POD (NEW) ---
+  collector:
+    build: ./collector
+    container_name: sentiment_collector
+    ports:
+      - "8002:8000"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+    restart: always
+
+  # --- 2. MONGODB ---
   mongodb:
     image: mongo:latest
     container_name: sentiment_mongo
@@ -10,7 +29,7 @@ services:
     volumes:
       - mongo_data:/data/db
 
-  # --- 4. LABEL STUDIO ---
+  # --- 3. LABEL STUDIO ---
   label-studio:
     image: heartexlabs/label-studio:latest
     container_name: sentiment_label_studio
@@ -18,17 +37,18 @@ services:
       - "8086:8080"
     volumes:
       - label_data:/label-studio/data
-  # 2. Service chứa Model (Chỉ có nhiệm vụ duy nhất là Predict)
+
+  # --- 4. MODEL SERVICE ---
   model-service:
     build: ./model
     container_name: sentiment_model_api
     ports:
-      - "8001:8000" # Expose ra 8001 để tránh trùng Backend
+      - "8001:8000"
     env_file: 
-      - .env # Chứa token DagsHub để kéo model về
+      - .env
     restart: always
 
-  # 3. Backend (Điều phối viên)
+  # --- 5. BACKEND (ORCHESTRATOR + WORKER) ---
   backend:
     build: ./backend
     container_name: sentiment_backend
@@ -37,13 +57,14 @@ services:
     depends_on:
       - model-service
       - mongodb
+      - redis
     environment:
-      # Thay vì IP, Backend gọi Model Service qua tên container
       - MODEL_API_URL=http://model-service:8000 
       - MONGO_URL=mongodb://mongodb:27017
+      - REDIS_HOST=redis
     restart: always
 
-  # 4. Frontend (Giao diện)
+  # --- 6. FRONTEND ---
   frontend:
     build: ./frontend
     container_name: sentiment_frontend
@@ -55,7 +76,7 @@ services:
       - BACKEND_API_URL=http://backend:8000
     restart: always
 
-  # 5. Crawler (Cào data tự động)
+  # --- 7. CRAWLER ---
   crawler:
     build: ./crawler
     container_name: sentiment_crawler
@@ -63,10 +84,8 @@ services:
       - mongodb
     environment:
       - MONGO_URL=mongodb://mongodb:27017
-    # Không cần expose port vì crawler chạy ngầm, không phục vụ API
     restart: always
 
-# --- KHAI BÁO NAMED VOLUMES ĐỂ DOCKER TỰ QUẢN LÝ ---
 volumes:
   db_data:
   mongo_data:
