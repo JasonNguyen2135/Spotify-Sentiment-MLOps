@@ -234,7 +234,6 @@ export default function UniversalHub() {
         headers: { 'Authorization': `Bearer ${token}` },
         responseType: 'blob'
       });
-      
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -359,7 +358,7 @@ export default function UniversalHub() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-slate-400 text-xs font-medium italic pl-4 border-l-2 border-brand/50">Pulling parameters directly from MLflow runs.</p>
+                  <p className="text-slate-400 text-xs font-medium italic pl-4 border-l-2 border-brand/50">Results here are platform-wide.</p>
                 )}
               </div>
             </div>
@@ -372,16 +371,16 @@ export default function UniversalHub() {
                 <Plus className="w-5 h-5" /> New Workspace
               </button>
             </div>
-            {/* Compact Workspace Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {/* Ultra-Compact Workspace Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {projects.map((p) => (
-                <div key={p.id} onClick={() => setActiveProject(p)} className="group p-6 rounded-[2.5rem] border bg-white border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer relative overflow-hidden hover:scale-[1.02]">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 bg-brand/5 text-brand group-hover:bg-brand group-hover:text-white transition-colors"><FolderPlus className="w-6 h-6" /></div>
-                  <h3 className="text-lg font-black text-slate-900 mb-1 truncate">{p.name}</h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase mb-6">{p.monitor_strategy || 'No Strategy'}</p>
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                    <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">{new Date(p.created_at).toLocaleDateString()}</div>
-                    <div className="text-brand"><ArrowRight className="w-4 h-4" /></div>
+                <div key={p.id} onClick={() => setActiveProject(p)} className="group p-4 rounded-2xl border bg-white border-slate-100 shadow-sm hover:shadow-lg transition-all cursor-pointer relative overflow-hidden hover:scale-[1.05]">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center mb-3 bg-brand/5 text-brand group-hover:bg-brand group-hover:text-white transition-colors"><FolderPlus className="w-5 h-5" /></div>
+                  <h3 className="text-sm font-black text-slate-900 mb-0.5 truncate">{p.name}</h3>
+                  <p className="text-[8px] text-slate-400 font-bold uppercase mb-4">{p.monitor_strategy || 'No Strategy'}</p>
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-50">
+                    <div className="text-[8px] font-black text-slate-300 uppercase tracking-widest">{new Date(p.created_at).toLocaleDateString()}</div>
+                    <div className="text-brand opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight className="w-3 h-3" /></div>
                   </div>
                 </div>
               ))}
@@ -396,7 +395,7 @@ export default function UniversalHub() {
             </h2>
             <div className="flex gap-4">
               <Link href="/admin/connectors" className="bg-white px-6 py-3 rounded-2xl border border-slate-200 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-slate-50 shadow-sm text-slate-600">
-                <RefreshCw className="w-4 h-4 text-brand" /> Change Mode
+                <RefreshCw className="w-4 h-4 text-brand" /> Change Strategy
               </Link>
               <button onClick={() => handleExport('excel')} className="bg-emerald-50 text-emerald-600 px-6 py-3 rounded-2xl border border-emerald-100 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-emerald-100 shadow-sm">
                 <FileText className="w-4 h-4" /> Download CSV
@@ -456,7 +455,7 @@ export default function UniversalHub() {
             <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl text-white">
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-xl font-black tracking-tight flex items-center gap-3"><BellRing className="w-6 h-6 text-brand" /> Smart Alerts</h2>
-                <button onClick={handleSaveConfig} disabled={savingConfig} className="bg-brand text-slate-900 px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all">{savingConfig ? 'Saving...' : 'Save Config'}</button>
+                <button onClick={handleSaveConfig} disabled={savingConfig} className="bg-brand text-slate-900 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all">{savingConfig ? 'Saving...' : 'Save Config'}</button>
               </div>
               <div className="space-y-6">
                 <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
@@ -518,19 +517,19 @@ export default function UniversalHub() {
               <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase tracking-tight">Human-in-the-Loop Audit</h2>
             </div>
             {/* Scrollable Audit Window */}
-            <div className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar border border-slate-50 rounded-[2rem]">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-50 sticky top-0 bg-white z-10">
-                    <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4">Feedback Intelligence</th>
-                    <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Status</th>
-                    <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Correct Sentiment</th>
+                    <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-6">Feedback Intelligence</th>
+                    <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Status</th>
+                    <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Correct Sentiment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {fullHistory.map((item) => (
                     <tr key={item.id} className="group hover:bg-slate-50/50 transition-all">
-                      <td className="py-8 pr-10 pl-4">
+                      <td className="py-8 pr-10 pl-6">
                         <p className="text-sm font-bold text-slate-700 leading-relaxed mb-1">{item.text}</p>
                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{new Date(item.timestamp).toLocaleString()} • {item.model_version}</p>
                       </td>

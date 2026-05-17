@@ -402,14 +402,17 @@ def github_runs(current_user: User = Depends(get_current_user)):
 async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
-    log_entries = []
+    summary, results, log_entries = {"positive": 0, "negative": 0, "neutral": 0}, [], []
+    col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
     for i, row in df.head(100).iterrows():
-        txt = str(row[next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])])
+        txt = str(row[col])
         try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
         except: sent = "neutral"
+        summary[sent] += 1
+        results.append({"id": i, "text": txt, "sentiment": sent, "time": datetime.utcnow().isoformat()})
         log_entries.append({"text": txt, "sentiment": sent, "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), "model_version": "Bulk Analysis", "source": "csv_upload"})
     if log_entries: preds_log_col.insert_many(log_entries)
-    return {"status": "success"}
+    return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
 # --- Infrastructure ---
 @api_router.get("/connectors")
