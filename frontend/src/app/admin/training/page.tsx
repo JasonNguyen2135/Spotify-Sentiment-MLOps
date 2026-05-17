@@ -149,10 +149,7 @@ export default function TrainingPage() {
           <a href="http://airflow.ntdevopsairflow.io.vn" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
              <Activity className="w-4 h-4 text-emerald-500" /> Airflow UI
           </a>
-        </div>
-      </div>
-
-          <a href="https://github.com/JasonNguyen2135/Spotify-Sentiment-MLOps/actions" target="_blank" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2">
+          <a href="https://github.com/JasonNguyen2135/Spotify-Sentiment-MLOps/actions" target="_blank" rel="noopener noreferrer" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200">
             <Github className="w-4 h-4" /> GitHub Actions
           </a>
         </div>
