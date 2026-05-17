@@ -125,6 +125,9 @@ def log_audit(db: Session, user: User, action: str, details: str, project_id: in
     db.add(AuditLog(user_id=user.id, username=user.username, action=action, details=details, project_id=project_id)); db.commit()
 
 def verify_project_access(project_id: int, user: User, db: Session):
+    if project_id == 0:
+        if user.role in ["admin", "analyst", "ai_engineer"]: return None
+        raise HTTPException(status_code=403, detail="Global access restricted")
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project: raise HTTPException(status_code=404, detail="Project not found")
     if user.role in ["admin", "analyst", "ai_engineer"] or project.owner_id == user.id: return project
