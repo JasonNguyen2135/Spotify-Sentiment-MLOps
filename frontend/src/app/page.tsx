@@ -56,18 +56,26 @@ export default function UniversalHub() {
   const [newRule, setNewRule] = useState({ name: '', threshold: 10 });
   const [tickets, setTickets] = useState<any[]>([]);
 
+  // Ad-hoc Analysis States
+  const [review, setReview] = useState('');
+  const [prediction, setPrediction] = useState<any>(null);
+  const [predicting, setPredicting] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState('Production');
+  const [modelOptions, setModelOptions] = useState<any[]>([]);
+
   const fetchData = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
       const params = { project_id: activeProject?.id || null };
       
-      const [statsRes, analyticsRes, projectsRes, historyRes, auditRes] = await Promise.all([
+      const [statsRes, analyticsRes, projectsRes, historyRes, auditRes, modelsRes] = await Promise.all([
         axios.get('/api/stats', { headers, params }),
         axios.get('/api/monthly-analytics', { headers, params }),
         axios.get('/api/projects', { headers }),
         axios.get('/api/history', { headers, params }),
-        user?.role === 'admin' ? axios.get('/api/audit-logs', { headers }) : Promise.resolve({ data: [] })
+        user?.role === 'admin' ? axios.get('/api/audit-logs', { headers }) : Promise.resolve({ data: [] }),
+        axios.get('/api/models', { headers }).catch(() => ({ data: [] }))
       ]);
       
       setStats(statsRes.data);
@@ -75,6 +83,7 @@ export default function UniversalHub() {
       setProjects(projectsRes.data);
       setFullHistory(historyRes.data);
       setAuditLogs(auditRes.data);
+      setModelOptions(modelsRes.data || []);
 
       if (activeProject) {
         const [alertsRes, ticketsRes, detailsRes] = await Promise.all([
@@ -98,6 +107,26 @@ export default function UniversalHub() {
     if (!authLoading && !user) router.push('/login');
     if (user) fetchData();
   }, [user, authLoading, activeProject, fetchData, router]);
+
+  const handlePredict = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!review.trim()) return;
+    setPredicting(true);
+    setPrediction(null);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`/api/predict`, null, {
+          params: { review_text: review, project_id: activeProject?.id || projects[0]?.id, model_version: selectedVersion },
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setPrediction(response.data);
+      if (activeProject) fetchData();
+    } catch (err) {
+      console.error("Prediction failed", err);
+    } finally {
+      setPredicting(false);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
