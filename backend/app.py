@@ -116,6 +116,10 @@ def migrate_db():
         if not admin:
             admin = User(username="admin", hashed_password=CryptContext(schemes=["bcrypt"]).hash("admin123"), role="admin")
             db.add(admin); db.commit()
+        if not db.query(Project).first():
+            p = Project(name="Default Workspace", description="Auto-created.", owner_id=admin.id, uuid=str(uuid.uuid4())[:8], api_key=secrets.token_hex(16))
+            db.add(p); db.commit(); db.refresh(p)
+            db.query(DataSource).update({DataSource.project_id: p.id}); db.query(AlertRule).update({AlertRule.project_id: p.id}); db.commit()
     finally: db.close()
 
 # Helpers
@@ -210,10 +214,27 @@ def get_project_details(project_id: int, db: Session = Depends(get_db), current_
     p = verify_project_access(project_id, current_user, db)
     return {"id": p.id, "uuid": p.uuid, "name": p.name, "api_key": p.api_key}
 
+@api_router.delete("/projects/{project_id}")
+def delete_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = verify_project_access(project_id, current_user, db)
+    if current_user.role != "admin" and p.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized deletion")
+    db.query(DataSource).filter(DataSource.project_id == project_id).delete()
+    db.query(AlertRule).filter(AlertRule.project_id == project_id).delete()
+    db.query(Ticket).filter(Ticket.project_id == project_id).delete()
+    db.query(AuditLog).filter(AuditLog.project_id == project_id).delete()
+    db.delete(p); db.commit()
+    preds_log_col.delete_many({"project_id": {"$in": [project_id, str(project_id)]}})
+    return {"status": "success"}
+
 @api_router.post("/projects")
-def create_project(name: str, description: str = "", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_project(name: str, description: str = "", monitor_type: str = "crawler", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = Project(name=name, description=description, owner_id=current_user.id, uuid=str(uuid.uuid4())[:8], api_key=secrets.token_hex(16))
-    db.add(p); db.commit(); db.refresh(p); log_audit(db, current_user, "CREATE_PROJECT", f"Created {name}", p.id); return p
+    db.add(p); db.commit(); db.refresh(p)
+    if monitor_type == "webhook":
+        db.add(DataSource(project_id=p.id, platform="Webhook", app_id=p.uuid, status="active"))
+    log_audit(db, current_user, "CREATE_PROJECT", f"Created {name} ({monitor_type})", p.id)
+    db.commit(); return p
 
 @api_router.get("/stats")
 def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -272,13 +293,14 @@ def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), curren
 @api_router.get("/history")
 @api_router.get("/user-history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Filter for active AI analysis sources
-    query = {"source": {"$in": ["instant_analysis", "Bulk Analysis", "csv_upload"]}}
+    query = {}
     if project_id: 
         verify_project_access(project_id, current_user, db)
         query["project_id"] = {"$in": [project_id, str(project_id)]}
-    elif current_user.role not in ["admin", "ai_engineer", "analyst"]: 
-        query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
+    else:
+        query["source"] = {"$in": ["instant_analysis", "Bulk Analysis", "csv_upload"]}
+        if current_user.role not in ["admin", "ai_engineer", "analyst"]: 
+            query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
     
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(100)
     history = []
