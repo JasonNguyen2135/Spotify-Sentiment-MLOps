@@ -30,13 +30,11 @@ export default function ConnectorsPage() {
   const [newAppId, setNewAppId] = useState('');
   const [newPlatform, setNewPlatform] = useState('Google Play');
 
-  const [forceCrawlerMode, setForceCrawlerMode] = useState(false);
-  const [forceApiMode, setForceApiMode] = useState(false); 
-  const isCrawlerMode = sources.length > 0 || forceCrawlerMode;
-  const currentMode = isCrawlerMode ? 'CRAWLER' : (forceApiMode ? 'API' : 'NONE');
-
   const [alerts, setAlerts] = useState<any[]>([]);
   const [fullProject, setFullProject] = useState<any>(null);
+
+  // Derived current mode from persisted strategy or current session
+  const currentMode = fullProject?.monitor_strategy?.toUpperCase() || 'NONE';
 
   const webhookUrl = fullProject?.uuid ? `${window.location.protocol}//${window.location.host}/api/collect/${fullProject.uuid}` : 'Loading...';
 
@@ -80,9 +78,13 @@ export default function ConnectorsPage() {
       setAlerts(alertsRes.data || []);
       if (projectRes.data) {
         setFullProject(projectRes.data);
+        // Sync context
         if (!activeProject || activeProject.id !== projectRes.data.id) {
           setActiveProject(projectRes.data);
         }
+        // Set initial tab based on strategy
+        if (projectRes.data.monitor_strategy === 'webhook') setActiveTab('webhooks');
+        else setActiveTab('crawlers');
       }
     } catch (err) {
       console.error("Failed to fetch settings", err);
@@ -94,30 +96,8 @@ export default function ConnectorsPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) { router.push('/login'); return; }
-    
-    const mode = searchParams.get('mode');
-    if (mode === 'webhook') {
-      setForceApiMode(true);
-      setActiveTab('webhooks');
-    } else if (mode === 'crawler') {
-      setForceCrawlerMode(true);
-      setActiveTab('crawlers');
-    }
-    
     fetchData();
-  }, [user, authLoading, fetchData, router, searchParams]);
-
-  const handleSync = async (connectorId: number) => {
-    setSyncing(connectorId);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(`/api/connectors/sync/${connectorId}`, null, { headers: { 'Authorization': `Bearer ${token}` } });
-      setStats({ type: 'success', msg: `Synced ${res.data.synced_count} records!` });
-      fetchData();
-    } catch (err: any) {
-      setStats({ type: 'error', msg: 'Sync failed' });
-    } finally { setSyncing(null); }
-  };
+  }, [user, authLoading, fetchData, router]);
 
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,15 +118,12 @@ export default function ConnectorsPage() {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      for (const s of sources) {
-        await axios.delete(`/api/connectors/${s.id}`, { headers });
-      }
+      // Backend call to reset strategy and delete connectors
+      await axios.post(`/api/projects/${activeProject.id}/reset-strategy`, null, { headers });
 
       setSources([]);
-      setForceApiMode(false);
-      setForceCrawlerMode(false);
-      setActiveTab('crawlers');
       setStats({ type: 'success', msg: 'Monitoring strategy reset.' });
+      fetchData();
     } catch (err) {
       alert("Failed to reset strategy");
     } finally {
@@ -154,7 +131,19 @@ export default function ConnectorsPage() {
     }
   };
 
-  if (authLoading || (loading && !sources.length && !alerts.length)) {
+  const handleSync = async (connectorId: number) => {
+    setSyncing(connectorId);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`/api/connectors/sync/${connectorId}`, null, { headers: { 'Authorization': `Bearer ${token}` } });
+      setStats({ type: 'success', msg: `Synced ${res.data.synced_count} records!` });
+      fetchData();
+    } catch (err: any) {
+      setStats({ type: 'error', msg: 'Sync failed' });
+    } finally { setSyncing(null); }
+  };
+
+  if (authLoading || (loading && !sources.length && !alerts.length && currentMode === 'NONE')) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh]">
         <Loader2 className="w-12 h-12 text-brand animate-spin mb-4" />
@@ -164,6 +153,21 @@ export default function ConnectorsPage() {
   }
 
   if (currentMode === 'NONE') {
+    const setStrategy = async (strategy: 'crawler' | 'webhook') => {
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`/api/projects/${activeProject.id}/config`, null, {
+                params: { monitor_strategy: strategy },
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (strategy === 'webhook') {
+                // Initialize default webhook source if needed (backend does this in create but if resetting it might need it)
+                // Actually backend reset deletes all. 
+            }
+            fetchData();
+        } catch(err) { alert("Failed to set strategy"); }
+    };
+
     return (
       <div className="max-w-4xl mx-auto py-20 px-4 animate-in fade-in duration-700">
         <div className="text-center mb-16">
@@ -171,12 +175,12 @@ export default function ConnectorsPage() {
           <p className="text-slate-500 text-lg font-medium">Select how to monitor <span className="text-brand font-bold">{activeProject?.name}</span></p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <button onClick={() => { setForceCrawlerMode(true); setActiveTab('crawlers'); }} className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl">
+          <button onClick={() => setStrategy('crawler')} className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl">
             <Smartphone className="w-12 h-12 text-emerald-500 mb-6" />
             <h3 className="text-2xl font-black text-slate-900 mb-2">Public App</h3>
             <p className="text-slate-500 text-sm">Monitor Google Play or App Store reviews automatically.</p>
           </button>
-          <button onClick={() => { setForceApiMode(true); setActiveTab('webhooks'); }} className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl">
+          <button onClick={() => setStrategy('webhook')} className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl">
             <Code className="w-12 h-12 text-blue-500 mb-6" />
             <h3 className="text-2xl font-black text-slate-900 mb-2">Custom / API</h3>
             <p className="text-slate-500 text-sm">Push data from your own systems via secure Webhook.</p>
@@ -200,9 +204,9 @@ export default function ConnectorsPage() {
         <div className="flex items-center gap-4">
            <button onClick={() => router.push('/')} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2 shadow-xl shadow-slate-200">Apply & Finish <ArrowRight className="w-4 h-4" /></button>
            <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
-             {currentMode === 'CRAWLER' && <button onClick={() => setActiveTab('crawlers')} className={clsx("px-5 py-2 rounded-xl font-bold text-xs", activeTab === 'crawlers' ? "bg-white shadow-sm" : "text-slate-500")}>Crawler</button>}
-             {currentMode === 'API' && <button onClick={() => setActiveTab('webhooks')} className={clsx("px-5 py-2 rounded-xl font-bold text-xs", activeTab === 'webhooks' ? "bg-white shadow-sm" : "text-slate-500")}>Webhook</button>}
-             <button onClick={() => setActiveTab('alerts')} className={clsx("px-5 py-2 rounded-xl font-bold text-xs", activeTab === 'alerts' ? "bg-white shadow-sm" : "text-slate-500")}>Alerts</button>
+             {currentMode === 'CRAWLER' && <button onClick={() => setActiveTab('crawlers')} className={clsx("px-5 py-2 rounded-xl font-bold text-xs transition-all", activeTab === 'crawlers' ? "bg-white shadow-sm" : "text-slate-500")}>Crawler</button>}
+             {currentMode === 'WEBHOOK' && <button onClick={() => setActiveTab('webhooks')} className={clsx("px-5 py-2 rounded-xl font-bold text-xs transition-all", activeTab === 'webhooks' ? "bg-white shadow-sm" : "text-slate-500")}>Webhook</button>}
+             <button onClick={() => setActiveTab('alerts')} className={clsx("px-5 py-2 rounded-xl font-bold text-xs transition-all", activeTab === 'alerts' ? "bg-white shadow-sm" : "text-slate-500")}>Alerts</button>
            </div>
         </div>
       </div>
@@ -237,12 +241,21 @@ export default function ConnectorsPage() {
           <div className="lg:col-span-2">
             <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8 h-full">
               <h3 className="text-xl font-bold mb-6">Tracked Application</h3>
-              {sources.map(s => (
-                <div key={s.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center">
+              {sources.length > 0 ? sources.map(s => (
+                <div key={s.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center mb-4">
                   <div><p className="font-black text-slate-900">{s.app_id}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{s.platform}</p></div>
-                  <button onClick={() => handleSync(s.id)} className="p-3 bg-white rounded-xl shadow-sm text-brand">{syncing === s.id ? <Loader2 className="animate-spin" /> : <RefreshCw />}</button>
+                  <div className="flex gap-2">
+                     <button onClick={() => handleSync(s.id)} className="p-3 bg-white rounded-xl shadow-sm text-brand">{syncing === s.id ? <Loader2 className="animate-spin" /> : <RefreshCw className="w-5 h-5" />}</button>
+                     <button onClick={async () => {
+                         const token = localStorage.getItem('token');
+                         await axios.delete(`/api/connectors/${s.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                         fetchData();
+                     }} className="p-3 bg-white rounded-xl shadow-sm text-rose-500 hover:bg-rose-50 transition-colors"><Trash2 className="w-5 h-5" /></button>
+                  </div>
                 </div>
-              ))}
+              )) : (
+                <div className="py-20 text-center text-slate-300 italic font-medium">No application registered.</div>
+              )}
             </div>
           </div>
         </div>
@@ -312,15 +325,16 @@ export default function ConnectorsPage() {
            <h2 className="text-2xl font-black mb-8 flex items-center gap-3"><Bell className="text-brand" /> Smart Alert Rules</h2>
            <div className="space-y-4">
               {alerts.map(a => (
-                <div key={a.id} className="p-4 bg-white/5 border border-white/10 rounded-2xl flex justify-between items-center">
+                <div key={a.id} className="p-4 bg-white/5 border border-white/10 rounded-2xl flex justify-between items-center group">
                    <div><p className="font-bold">{a.name}</p><p className="text-[10px] text-slate-400 uppercase">Trigger: {">"}{a.threshold}% Negative</p></div>
                    <button onClick={async () => {
                      const token = localStorage.getItem('token');
                      await axios.delete(`/api/alerts/${a.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
                      fetchData();
-                   }} className="text-rose-500 hover:bg-rose-500/10 p-2 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                   }} className="opacity-0 group-hover:opacity-100 text-rose-500 hover:bg-rose-500/10 p-2 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
+              {alerts.length === 0 && <div className="py-20 text-center text-slate-500 italic font-medium">No alerts configured.</div>}
            </div>
         </div>
       )}

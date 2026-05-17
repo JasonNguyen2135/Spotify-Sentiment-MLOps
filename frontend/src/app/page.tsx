@@ -117,11 +117,12 @@ export default function UniversalHub() {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.post(`/api/predict`, null, {
-          params: { review_text: review, project_id: activeProject?.id || projects[0]?.id, model_version: selectedVersion },
+          // If NOT in a project, send project_id: 0 or similar to avoid project-pollution
+          params: { review_text: review, project_id: activeProject?.id || 0, model_version: selectedVersion },
           headers: { 'Authorization': `Bearer ${token}` }
       });
       setPrediction(response.data);
-      if (activeProject) fetchData();
+      fetchData();
     } catch (err) {
       console.error("Prediction failed", err);
     } finally {
@@ -156,12 +157,12 @@ export default function UniversalHub() {
   };
 
   const handleDeleteProject = async (id: number) => {
-    if (!confirm("Delete workspace? This is irreversible.")) return;
+    if (!confirm("Delete this project? All data will be lost.")) return;
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`/api/projects/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
       setProjects(projects.filter(p => p.id !== id));
-      if (activeProject?.id === id) setActiveProject(null);
+      setActiveProject(null);
     } catch (err) { alert("Delete failed"); }
   };
 
@@ -440,7 +441,7 @@ export default function UniversalHub() {
             <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl text-white">
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-xl font-black tracking-tight flex items-center gap-3"><BellRing className="w-6 h-6 text-brand" /> Smart Alerts</h2>
-                <button onClick={handleSaveConfig} disabled={savingConfig} className="bg-brand text-slate-900 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all">{savingConfig ? 'Saving...' : 'Save Config'}</button>
+                <button onClick={handleSaveConfig} disabled={savingConfig} className="bg-brand text-slate-900 px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all">{savingConfig ? 'Saving...' : 'Save Config'}</button>
               </div>
               <div className="space-y-6">
                 <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
@@ -542,7 +543,7 @@ export default function UniversalHub() {
           
           <div className="flex justify-center pt-16 border-t border-slate-100">
              <button onClick={() => handleDeleteProject(activeProject.id)} className="flex items-center gap-2 text-rose-500 font-black text-xs uppercase tracking-[0.2em] hover:text-rose-600 transition-colors group">
-               <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" /> Delete Workspace
+               <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" /> Delete
              </button>
           </div>
         </div>
