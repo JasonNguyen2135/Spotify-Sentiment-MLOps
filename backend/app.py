@@ -245,6 +245,16 @@ def get_comparison(project_id: int = None, db: Session = Depends(get_db), curren
     total_growth = ((curr["total"] - prev["total"]) / prev["total"] * 100) if prev["total"] > 0 else 0
     return {"current": curr, "previous": prev, "total_growth": total_growth, "delta_positive": curr["positive"] - prev["positive"], "delta_negative": curr["negative"] - prev["negative"]}
 
+@api_router.get("/models/compare")
+def compare_models(v1: str, v2: str, current_user: User = Depends(get_current_user)):
+    if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
+    try:
+        # Mock metrics for 2 models
+        m1 = {"version": v1, "accuracy": 0.92, "f1": 0.91, "precision": 0.90, "latency": "45ms", "stage": "Staging"}
+        m2 = {"version": v2, "accuracy": 0.94, "f1": 0.93, "precision": 0.92, "latency": "38ms", "stage": "Production"}
+        return {"model1": m1, "model2": m2}
+    except: return {}
+
 @api_router.get("/word-cloud")
 def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
@@ -256,7 +266,7 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
     query = {}
     if project_id: verify_project_access(project_id, current_user, db); query["project_id"] = project_id
     elif current_user.role not in ["admin", "ai_engineer", "analyst"]: query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
-    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(50)
+    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(100)
     history = []
     for d in cursor:
         ts = d.get("timestamp"); 
@@ -286,12 +296,22 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
     if project_id: verify_project_access(project_id, current_user, db)
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     summary, results = {"positive": 0, "negative": 0, "neutral": 0}, []
-    col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
+    # Identify columns
+    id_col = next((c for c in df.columns if any(k in c.lower() for k in ["id", "uuid", "index"])), None)
+    time_col = next((c for c in df.columns if any(k in c.lower() for k in ["date", "time", "at", "timestamp"])), None)
+    text_col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
+    
     for i, row in df.head(100).iterrows():
-        txt = str(row[col])
+        txt = str(row[text_col])
         try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
         except: sent = "neutral"
-        summary[sent] += 1; results.append({"text": txt, "sentiment": sent})
+        summary[sent] += 1
+        results.append({
+            "id": str(row[id_col]) if id_col else i,
+            "text": txt,
+            "time": str(row[time_col]) if time_col else datetime.utcnow().isoformat(),
+            "sentiment": sent
+        })
     log_audit(db, current_user, "UPLOAD_DATA", f"Analyzed {len(results)} rows", project_id); return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
 @api_router.post("/collect/{project_uuid}")
@@ -307,6 +327,18 @@ async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(g
         r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
         r_client.lpush(QUEUE_NAME, json.dumps(payload)); return {"status": "Accepted"}
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/connectors/harvest")
+def harvest_reviews(platform: str, app_id: str, limit: int = 100, current_user: User = Depends(get_current_user)):
+    try:
+        from google_play_scraper import reviews, Sort
+        result, _ = reviews(app_id, lang='en', country='us', sort=Sort.NEWEST, count=limit)
+        data = []
+        for r in result:
+            data.append({"id": r.get("reviewId"), "text": r.get("content"), "time": r.get("at").isoformat() if r.get("at") else datetime.utcnow().isoformat()})
+        df = pd.DataFrame(data); output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
+        return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={platform}_{app_id}_harvest.csv"})
+    except Exception as e: raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
 
 # --- MLOps ---
 @api_router.get("/models")
@@ -368,6 +400,7 @@ def get_audit_logs(project_id: int = None, db: Session = Depends(get_db), curren
     if project_id: q = q.filter(AuditLog.project_id == project_id)
     return q.order_by(AuditLog.timestamp.desc()).limit(100).all()
 
+# --- Reporting ---
 from fastapi.responses import StreamingResponse, Response
 @api_router.get("/export/excel/{project_id}")
 def export_excel(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -375,9 +408,20 @@ def export_excel(project_id: int, db: Session = Depends(get_db), current_user: U
     df = pd.DataFrame(list(preds_log_col.find({"project_id": project_id}).limit(1000)))
     if not df.empty: df['_id'] = df['_id'].astype(str)
     else: df = pd.DataFrame(columns=["text", "sentiment", "timestamp"])
-    output = io.BytesIO(); 
+    output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer: df.to_excel(writer, index=False)
-    output.seek(0); return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.xlsx"})
+    output.seek(0)
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.xlsx"})
+
+@api_router.get("/export/logs/{project_id}")
+def export_logs(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_access(project_id, current_user, db)
+    cursor = preds_log_col.find({"project_id": project_id}).sort("timestamp", -1).limit(5000)
+    data = []
+    for d in cursor:
+        data.append({"id": str(d["_id"]), "text": d.get("text"), "sentiment": d.get("sentiment"), "corrected": d.get("sentiment_corrected", ""), "timestamp": d.get("timestamp").isoformat(), "model": d.get("model_version", "Production")})
+    df = pd.DataFrame(data); output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
+    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=logs_{project_id}.csv"})
 
 @api_router.get("/export/pdf/{project_id}")
 def export_pdf(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

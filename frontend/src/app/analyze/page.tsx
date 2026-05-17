@@ -48,11 +48,39 @@ export default function AnalyzePage() {
     }
   };
 
+  const handleDownloadResults = () => {
+    if (!results || !results.results) return;
+    const headers = ["id", "time", "text", "sentiment"];
+    const csvContent = [
+      headers.join(","),
+      ...results.results.map((r: any) => [r.id, `"${r.time}"`, `"${r.text.replace(/"/g, '""')}"`, r.sentiment].join(","))
+    ].join("\n");
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `analysis_results_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   return (
     <div className="max-w-6xl mx-auto py-10 px-4 animate-in fade-in duration-500">
-      <div className="mb-12">
-        <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">Bulk Analysis</h1>
-        <p className="text-slate-500 font-medium">Large-scale dataset processing for enterprise-wide sentiment mapping.</p>
+      <div className="mb-12 flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">Bulk Analysis</h1>
+          <p className="text-slate-500 font-medium">Large-scale dataset processing for enterprise-wide sentiment mapping.</p>
+        </div>
+        {results && (
+          <button 
+            onClick={handleDownloadResults}
+            className="bg-emerald-500 text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
+          >
+            <Download className="w-4 h-4" /> Download 4-Column CSV
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">

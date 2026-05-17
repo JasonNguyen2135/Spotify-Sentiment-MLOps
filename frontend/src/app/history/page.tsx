@@ -43,6 +43,23 @@ export default function HistoryPage() {
     </div>
   );
 
+  const handleDownloadLogs = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`/api/export/logs/${activeProject?.id || 1}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `history_logs_project_${activeProject?.id || 1}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) { alert("Download failed"); }
+  };
+
   return (
     <div className="max-w-6xl mx-auto py-10 px-4 animate-in fade-in duration-500">
       <div className="mb-12 flex justify-between items-end">
@@ -50,8 +67,11 @@ export default function HistoryPage() {
           <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">Intelligence Logs</h1>
           <p className="text-slate-500 font-medium">Full audit trail of platform-wide sentiment classifications.</p>
         </div>
-        <button className="bg-white border border-slate-100 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
-          <Download className="w-4 h-4" /> Download Logs
+        <button 
+          onClick={handleDownloadLogs}
+          className="bg-white border border-slate-100 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
+        >
+          <Download className="w-4 h-4" /> Download Logs CSV
         </button>
       </div>
 

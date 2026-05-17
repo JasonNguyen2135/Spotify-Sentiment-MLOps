@@ -140,12 +140,18 @@ export default function TrainingPage() {
       <div className="flex justify-between items-end mb-10">
         <div>
           <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3">
-            <Cpu className="text-brand w-10 h-10" />
+            <RefreshCw className="text-brand w-10 h-10" />
             Training <span className="text-brand">Management</span>
           </h1>
           <p className="text-gray-500 mt-2">Automated model training and pipeline monitoring.</p>
         </div>
         <div className="flex gap-3">
+          <a href="http://airflow.ntdevopsairflow.io.vn" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
+             <Activity className="w-4 h-4 text-emerald-500" /> Airflow UI
+          </a>
+        </div>
+      </div>
+
           <a href="https://github.com/JasonNguyen2135/Spotify-Sentiment-MLOps/actions" target="_blank" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2">
             <Github className="w-4 h-4" /> GitHub Actions
           </a>
