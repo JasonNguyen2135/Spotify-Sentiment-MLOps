@@ -7,11 +7,13 @@ import {
   Info, Loader2, Download
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useProject } from '@/context/ProjectContext';
 import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 
 export default function HistoryPage() {
   const { user, loading: authLoading } = useAuth();
+  const { activeProject } = useProject();
   const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +25,7 @@ export default function HistoryPage() {
       try {
         const token = localStorage.getItem('token');
         const res = await axios.get('/api/user-history', {
-            params: { project_id: 1 }, // Default to global or first project
+            params: { project_id: activeProject?.id || null },
             headers: { 'Authorization': `Bearer ${token}` }
         });
         setHistory(res.data);
@@ -33,31 +35,34 @@ export default function HistoryPage() {
         setLoading(false);
       }
     };
-    fetchHistory();
-  }, [user, authLoading, router]);
+    if (user) fetchHistory();
+  }, [user, authLoading, activeProject, router]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-[60vh]">
       <Loader2 className="w-12 h-12 text-brand animate-spin mb-4" />
-      <p className="text-slate-500 font-medium italic">Retrieving neural footprints...</p>
+      <p className="text-gray-500 font-medium italic">Retrieving neural footprints...</p>
     </div>
   );
 
   const handleDownloadLogs = async () => {
+    const projectId = activeProject?.id;
+    if (!projectId) return alert("Please select a workspace first from the Dashboard.");
+
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`/api/export/logs/${activeProject?.id || 1}`, {
+      const res = await axios.get(`/api/export/logs/${projectId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `history_logs_project_${activeProject?.id || 1}.csv`);
+      link.setAttribute('download', `logs_project_${projectId}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();
-    } catch (err) { alert("Download failed"); }
+    } catch (err) { alert("Download failed. Ensure you have selected a workspace."); }
   };
 
   return (

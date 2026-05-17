@@ -66,18 +66,20 @@ export default function RegistryPage() {
   }, [user, authLoading, fetchData, router]);
 
   const handleDeploy = async (version: string, modelName: string) => {
-    if (!activeProject) return;
+    const projectId = activeProject?.id;
+    if (!projectId) return alert("Please select a workspace first from the Dashboard.");
+    
     setDeploying(version);
     setStatus(null);
     try {
       const token = localStorage.getItem('token');
       await axios.post('/api/deploy-model', null, {
-        params: { version, model_name: modelName, project_id: activeProject.id },
+        params: { version, model_name: modelName, project_id: projectId },
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       const buildRes = await axios.post('/api/build-deploy', null, {
-        params: { version, project_id: activeProject.id },
+        params: { version, project_id: projectId },
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

@@ -88,14 +88,16 @@ export default function TrainingPage() {
   }, [user, authLoading, fetchData, router]);
 
   const handleTrain = async () => {
-    if (!activeProject) return;
+    const projectId = activeProject?.id;
+    if (!projectId) return alert("Please select a workspace first from the Dashboard.");
+    
     setTriggering(true);
     setStatus(null);
     try {
       const token = localStorage.getItem('token');
       const source = customDataset || selectedDataset;
       await axios.post('/api/train', null, {
-        params: { dataset_source: source, project_id: activeProject.id },
+        params: { dataset_source: source, project_id: projectId },
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setStatus({ type: 'success', msg: 'Training pipeline triggered successfully!' });
