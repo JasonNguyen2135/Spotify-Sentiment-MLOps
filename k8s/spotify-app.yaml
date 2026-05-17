@@ -175,7 +175,7 @@ spec:
             - name: RABBITMQ_PASS
               value: "mlops123"
             - name: MODEL_TARGET
-              value: "15"
+              value: "Production"
           ports:
             - containerPort: 8000
           resources:
@@ -219,7 +219,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: backend
-          image: registry.ntdevopsregistry.io.vn/mlops/backend:b3efae249d74988dedcf213f02f900fec450f251
+          image: registry.ntdevopsregistry.io.vn/mlops/backend:1cd308433e94cef7190e822c1f50048198bbdd24
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
