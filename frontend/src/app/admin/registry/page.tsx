@@ -118,6 +118,7 @@ export default function RegistryPage() {
           <a href="https://github.com/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_build_deploy_model_service.yml" target="_blank" rel="noopener noreferrer" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-all">
             <Zap className="w-4 h-4 text-brand" /> Deploy Service
           </a>
+
           <a href="http://mlflow.ntdevopsmlflow.io.vn" target="_blank" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2">
             <Settings className="w-4 h-4" /> MLflow UI
           </a>

@@ -402,6 +402,12 @@ export default function UniversalHub() {
                  Workspace Monitoring
               </h2>
               <div className="flex gap-4">
+                <Link 
+                  href="/admin/connectors"
+                  className="bg-white px-6 py-3 rounded-2xl border border-slate-200 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm text-slate-600"
+                >
+                  <RefreshCw className="w-4 h-4 text-brand" /> Change Strategy
+                </Link>
                 <button onClick={() => handleExport('excel')} className="bg-emerald-50 text-emerald-600 px-6 py-3 rounded-2xl border border-emerald-100 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-emerald-100 transition-all shadow-sm">
                   <FileText className="w-4 h-4" /> Excel Report
                 </button>
