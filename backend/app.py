@@ -402,6 +402,38 @@ def get_connectors(project_id: int, db: Session = Depends(get_db), current_user:
     verify_project_access(project_id, current_user, db)
     return db.query(DataSource).filter(DataSource.project_id == project_id).all()
 
+@api_router.post("/connectors")
+def create_connector(project_id: int, platform: str, app_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_access(project_id, current_user, db)
+    # Replace existing if any (since user requested "Replace App" logic in UI)
+    db.query(DataSource).filter(DataSource.project_id == project_id).delete()
+    ds = DataSource(project_id=project_id, platform=platform, app_id=app_id, status="active")
+    db.add(ds); db.commit(); return ds
+
+@api_router.delete("/connectors/{connector_id}")
+def delete_connector(connector_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ds = db.query(DataSource).filter(DataSource.id == connector_id).first()
+    if not ds: raise HTTPException(status_code=404)
+    verify_project_access(ds.project_id, current_user, db)
+    db.delete(ds); db.commit(); return {"status": "success"}
+
+@api_router.post("/connectors/sync/{connector_id}")
+def sync_connector(connector_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ds = db.query(DataSource).filter(DataSource.id == connector_id).first()
+    if not ds: raise HTTPException(status_code=404)
+    verify_project_access(ds.project_id, current_user, db)
+    # Simulated Sync: adding a few mock reviews to MongoDB
+    for i in range(5):
+        preds_log_col.insert_one({
+            "text": f"Scraped review #{i} for {ds.app_id}",
+            "sentiment": "positive" if i % 2 == 0 else "negative",
+            "project_id": ds.project_id,
+            "timestamp": datetime.utcnow(),
+            "source": "crawler",
+            "model_version": "Production"
+        })
+    return {"synced_count": 5}
+
 @api_router.get("/alerts")
 def get_alerts(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
