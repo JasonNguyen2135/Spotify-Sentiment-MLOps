@@ -78,8 +78,9 @@ export default function TrainingPage() {
   }, [activeProject, selectedDataset]);
 
   useEffect(() => {
-    if (!authLoading && user?.role !== 'admin') router.push('/');
-    if (user?.role === 'admin') {
+    const allowedRoles = ['admin', 'ai_engineer', 'analyst'];
+    if (!authLoading && !allowedRoles.includes(user?.role || '')) router.push('/');
+    if (allowedRoles.includes(user?.role || '')) {
       fetchData();
       const interval = setInterval(fetchData, 15000);
       return () => clearInterval(interval);
