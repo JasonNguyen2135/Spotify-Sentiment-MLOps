@@ -15,6 +15,8 @@ import json
 import threading
 import time
 import redis
+import uuid
+import secrets
 from pymongo import MongoClient
 
 # ====== CONFIG ======
@@ -56,8 +58,10 @@ class AuditLog(Base):
 class Project(Base):
     __tablename__ = "projects"
     id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(String, unique=True, index=True)
     name = Column(String, unique=True, index=True)
     description = Column(String)
+    api_key = Column(String, unique=True, index=True)
     owner_id = Column(Integer, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -94,15 +98,26 @@ Base.metadata.create_all(bind=engine)
 def migrate_db():
     db = SessionLocal()
     try:
-        for table, col in [("projects", "owner_id"), ("data_sources", "project_id"), ("alert_rules", "project_id")]:
-            try: db.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} INTEGER")); db.commit()
+        # Schema Migration
+        for col in ["owner_id", "uuid", "api_key"]:
+            try:
+                db.execute(text(f"ALTER TABLE projects ADD COLUMN {col} VARCHAR"))
+                db.commit()
             except: db.rollback()
+        
+        # Initialize unique credentials for projects
+        projects = db.query(Project).all()
+        for p in projects:
+            if not p.uuid: p.uuid = str(uuid.uuid4())[:8]
+            if not p.api_key: p.api_key = secrets.token_hex(16)
+        db.commit()
+
         admin = db.query(User).filter(User.username == "admin").first()
         if not admin:
             admin = User(username="admin", hashed_password=CryptContext(schemes=["bcrypt"]).hash("admin123"), role="admin")
             db.add(admin); db.commit(); db.refresh(admin)
         if not db.query(Project).first():
-            p = Project(name="Default Workspace", description="Auto-created.", owner_id=admin.id)
+            p = Project(name="Default Workspace", description="Auto-created.", owner_id=admin.id, uuid=str(uuid.uuid4())[:8], api_key=secrets.token_hex(16))
             db.add(p); db.commit(); db.refresh(p)
             db.query(DataSource).update({DataSource.project_id: p.id}); db.query(AlertRule).update({AlertRule.project_id: p.id}); db.commit()
     finally: db.close()
@@ -140,69 +155,34 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 # Worker logic
 def redis_worker():
-    """
-    Background worker to consume messages from Redis and process them.
-    """
     print("Starting MQ Consumer Worker...")
     r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
     db_session = SessionLocal()
-    
     while True:
         try:
-            # Block until a message is available (timeout 5s)
             msg = r_client.brpop(QUEUE_NAME, timeout=5)
             if msg:
-                _, data_json = msg
-                data = json.loads(data_json)
-                
-                project_id = data["project_id"]
-                text_val = data["text"]
-                username = data.get("user_id", "system_worker")
-                
-                # Parse timestamp from message or use current
+                _, data_json = msg; data = json.loads(data_json)
+                pid, txt = data["project_id"], data["text"]
                 raw_ts = data.get("timestamp")
                 try:
+                    if raw_ts and raw_ts.endswith('Z'): raw_ts = raw_ts.replace('Z', '+00:00')
                     msg_ts = datetime.fromisoformat(raw_ts) if raw_ts else datetime.utcnow()
-                except:
-                    msg_ts = datetime.utcnow()
-
-                # Predict
+                except: msg_ts = datetime.utcnow()
                 try:
-                    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_val}, timeout=10).json()
-                    sentiment = res["sentiment"]
-                except:
-                    sentiment = "neutral"
-                
-                # Log to Mongo with original timestamp
-                preds_log_col.insert_one({
-                    "text": text_val, 
-                    "sentiment": sentiment, 
-                    "project_id": project_id,
-                    "user": username, 
-                    "timestamp": msg_ts,
-                    "source": data.get("source", "webhook_async")
-                })
-                
-                # Create ticket if negative
-                if sentiment == "negative":
-                    db_add = Ticket(project_id=project_id, review_text=text_val, sentiment_score="negative")
-                    db_session.add(db_add)
-                    db_session.commit()
-                
-                print(f"Worker: Processed async comment for project {project_id}")
-                
-        except Exception as e:
-            print(f"Worker Error: {e}")
-            time.sleep(2)
+                    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=10).json()
+                    sent = res["sentiment"]
+                except: sent = "neutral"
+                preds_log_col.insert_one({"text": txt, "sentiment": sent, "project_id": pid, "user": data.get("user_id", "worker"), "timestamp": msg_ts, "source": data.get("source", "webhook_async"), "model_version": "Production (Async)"})
+                if sent == "negative": db_session.add(Ticket(project_id=pid, review_text=txt, sentiment_score="negative")); db_session.commit()
+        except Exception as e: print(f"Worker Error: {e}"); time.sleep(2)
 
-# Start worker in a separate thread
-worker_thread = threading.Thread(target=redis_worker, daemon=True)
-worker_thread.start()
+worker_thread = threading.Thread(target=redis_worker, daemon=True); worker_thread.start()
 
 app = FastAPI(); app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 api_router = APIRouter()
 
-# --- Auth ---
+# --- API Endpoints ---
 @api_router.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first(): raise HTTPException(status_code=400)
@@ -214,18 +194,19 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not pwd_context.verify(form_data.password, user.hashed_password): raise HTTPException(status_code=400)
     return {"access_token": create_access_token({"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
 
-# --- Projects ---
 @api_router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role in ["admin", "ai_engineer", "analyst"]: return db.query(Project).all()
-    return db.query(Project).filter(Project.owner_id == current_user.id).all()
+    if current_user.role in ["admin", "ai_engineer", "analyst"]: 
+        projects = db.query(Project).all()
+    else:
+        projects = db.query(Project).filter(Project.owner_id == current_user.id).all()
+    return [{"id": p.id, "uuid": p.uuid, "name": p.name, "description": p.description, "api_key": p.api_key, "owner_id": p.owner_id, "created_at": p.created_at} for p in projects]
 
 @api_router.post("/projects")
 def create_project(name: str, description: str = "", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    p = Project(name=name, description=description, owner_id=current_user.id)
+    p = Project(name=name, description=description, owner_id=current_user.id, uuid=str(uuid.uuid4())[:8], api_key=secrets.token_hex(16))
     db.add(p); db.commit(); db.refresh(p); log_audit(db, current_user, "CREATE_PROJECT", f"Created {name}", p.id); return p
 
-# --- Analytics ---
 @api_router.get("/stats")
 def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
@@ -241,8 +222,7 @@ def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db),
     pipeline = [{"$match": query}, {"$group": {"_id": {"month": {"$month": "$timestamp"}, "year": {"$year": "$timestamp"}, "sentiment": "$sentiment"}, "count": {"$sum": 1}}}]
     results = {}
     for doc in preds_log_col.aggregate(pipeline):
-        _id = doc.get('_id', {})
-        year, month, sentiment = _id.get('year', 2024), _id.get('month', 1), _id.get('sentiment', 'neutral')
+        _id = doc.get('_id', {}); year, month, sentiment = _id.get('year', 2024), _id.get('month', 1), _id.get('sentiment', 'neutral')
         k = f"{year}-{month:02d}"
         if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0}
         if sentiment in results[k]: results[k][sentiment] = doc.get("count", 0)
@@ -261,7 +241,6 @@ def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), curren
     if project_id: verify_project_access(project_id, current_user, db)
     return [{"text": "demo", "value": 10}]
 
-# --- History & HITL ---
 @api_router.get("/history")
 @api_router.get("/user-history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -271,13 +250,8 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(50)
     history = []
     for d in cursor:
-        ts = d.get("timestamp")
-        history.append({
-            "id": str(d["_id"]), "text": d.get("text", ""), "sentiment": d.get("sentiment", "neutral"),
-            "sentiment_corrected": d.get("sentiment_corrected"),
-            "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else datetime.utcnow().isoformat(),
-            "model_version": d.get("model_version", "Production")
-        })
+        ts = d.get("timestamp"); 
+        history.append({"id": str(d["_id"]), "text": d.get("text", ""), "sentiment": d.get("sentiment", "neutral"), "sentiment_corrected": d.get("sentiment_corrected"), "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else datetime.utcnow().isoformat(), "model_version": d.get("model_version", "Production")})
     return history
 
 @api_router.post("/predict")
@@ -301,18 +275,29 @@ def correction(prediction_id: str, text: str, corrected_sentiment: str, project_
 @api_router.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
-    df = pd.read_csv(io.BytesIO(await file.read()))
+    content = await file.read(); df = pd.read_csv(io.BytesIO(content))
+    summary, results = {"positive": 0, "negative": 0, "neutral": 0}, []
     col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
-    summary = {"positive": 0, "negative": 0, "neutral": 0}
-    results = []
     for i, row in df.head(100).iterrows():
         txt = str(row[col])
-        try:
-            sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
+        try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
         except: sent = "neutral"
         summary[sent] += 1; results.append({"text": txt, "sentiment": sent})
-    log_audit(db, current_user, "UPLOAD_DATA", f"Analyzed {len(results)} rows", project_id)
-    return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
+    log_audit(db, current_user, "UPLOAD_DATA", f"Analyzed {len(results)} rows", project_id); return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
+
+@api_router.post("/collect/{project_uuid}")
+async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.uuid == project_uuid).first()
+    if not project: raise HTTPException(status_code=404, detail="Invalid Project ID")
+    api_key = data.get("api_key")
+    if not api_key or api_key != project.api_key: raise HTTPException(status_code=401, detail="Invalid Secret Key")
+    txt = data.get("text") or data.get("review_text")
+    if not txt: raise HTTPException(status_code=400)
+    payload = {"project_id": project.id, "text": txt, "user_id": data.get("user_id", "anon"), "timestamp": data.get("timestamp") or datetime.utcnow().isoformat(), "source": "webhook_v2"}
+    try:
+        r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT_VAL, db=0)
+        r_client.lpush(QUEUE_NAME, json.dumps(payload)); return {"status": "Accepted"}
+    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 # --- MLOps ---
 @api_router.get("/models")
@@ -331,8 +316,7 @@ def train(dataset: str, project_id: int, current_user: User = Depends(get_curren
     if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
     if not tk: return {"status": "error"}
-    url = f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches"
-    requests.post(url, json={"ref": "main", "inputs": {"data_source": dataset, "project_id": str(project_id)}}, headers={"Authorization": f"token {tk}"}, timeout=10)
+    requests.post(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", json={"ref": "main", "inputs": {"data_source": dataset, "project_id": str(project_id)}}, headers={"Authorization": f"token {tk}"}, timeout=10)
     log_audit(db, current_user, "TRIGGER_TRAIN", f"Training {dataset}", project_id); return {"status": "success"}
 
 @api_router.get("/airflow/runs")
@@ -350,30 +334,6 @@ def github_runs(current_user: User = Depends(get_current_user)):
     try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 5}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
-@api_router.post("/collect/{project_id}")
-async def collect_comment(project_id: int, data: dict, db: Session = Depends(get_db)):
-    """
-    Proxy endpoint to allow the UI and external apps to push data into the MQ.
-    """
-    text_val = data.get("text") or data.get("review_text")
-    if not text_val: raise HTTPException(status_code=400, detail="Missing text")
-    
-    payload = {
-        "project_id": project_id,
-        "text": text_val,
-        "user_id": data.get("user_id", "anonymous"),
-        "timestamp": data.get("timestamp") or datetime.utcnow().isoformat(),
-        "source": data.get("source", "webhook_v2")
-    }
-    
-    try:
-        r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
-        r_client.lpush(QUEUE_NAME, json.dumps(payload))
-        return {"status": "Accepted", "message": "Data queued"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# --- Infrastructure ---
 @api_router.get("/connectors")
 def get_connectors(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     q = db.query(DataSource)
@@ -399,7 +359,6 @@ def get_audit_logs(project_id: int = None, db: Session = Depends(get_db), curren
     if project_id: q = q.filter(AuditLog.project_id == project_id)
     return q.order_by(AuditLog.timestamp.desc()).limit(100).all()
 
-# --- Reporting ---
 from fastapi.responses import StreamingResponse, Response
 @api_router.get("/export/excel/{project_id}")
 def export_excel(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -407,15 +366,13 @@ def export_excel(project_id: int, db: Session = Depends(get_db), current_user: U
     df = pd.DataFrame(list(preds_log_col.find({"project_id": project_id}).limit(1000)))
     if not df.empty: df['_id'] = df['_id'].astype(str)
     else: df = pd.DataFrame(columns=["text", "sentiment", "timestamp"])
-    output = io.BytesIO()
+    output = io.BytesIO(); 
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer: df.to_excel(writer, index=False)
-    output.seek(0)
-    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.xlsx"})
+    output.seek(0); return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.xlsx"})
 
 @api_router.get("/export/pdf/{project_id}")
 def export_pdf(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    verify_project_access(project_id, current_user, db)
-    return Response(content=b"PDF Placeholder", media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.pdf"})
+    verify_project_access(project_id, current_user, db); return Response(content=b"PDF Placeholder", media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.pdf"})
 
 app.include_router(api_router); app.include_router(api_router, prefix="/api")
 migrate_db()

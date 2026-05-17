@@ -40,10 +40,12 @@ export default function ConnectorsPage() {
   const [channel, setChannel] = useState('Telegram');
   const [destination, setDestination] = useState('');
 
-  const webhookUrl = activeProject ? `${window.location.protocol}//${window.location.host}/api/collect/${activeProject.id}` : '';
+  const webhookUrl = activeProject ? `${window.location.protocol}//${window.location.host}/api/collect/${activeProject.uuid}` : '';
+  const apiKey = (activeProject as any)?.api_key || '••••••••••••••••';
 
   const webhookExample = JSON.stringify({
-    "review_text": "Sản phẩm tuyệt vời, giao hàng nhanh!",
+    "api_key": apiKey,
+    "text": "Sản phẩm tuyệt vời, giao hàng nhanh!",
     "user_id": "customer_123",
     "timestamp": new Date().toISOString()
   }, null, 2);
@@ -75,12 +77,10 @@ export default function ConnectorsPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    
     if (!user) {
       router.push('/login');
       return;
     }
-
     fetchData();
   }, [user, authLoading, fetchData]);
 
@@ -103,12 +103,9 @@ export default function ConnectorsPage() {
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeProject) return;
-
     if (sources.length > 0) {
-      const confirmChange = window.confirm("Important: Each project can only track one application at a time. Registering a new app will PERMANENTLY DELETE all current history for this project. Continue?");
-      if (!confirmChange) return;
+      if (!window.confirm("Each project can only track one app. Existing app will be replaced. Continue?")) return;
     }
-
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
@@ -167,7 +164,6 @@ export default function ConnectorsPage() {
     );
   }
 
-  // If No Mode Selected Yet
   if (currentMode === 'NONE') {
     return (
       <div className="max-w-4xl mx-auto py-20 px-4 animate-in fade-in duration-700">
@@ -175,38 +171,18 @@ export default function ConnectorsPage() {
           <h1 className="text-5xl font-black text-slate-900 mb-4 tracking-tight">Select Monitoring Strategy</h1>
           <p className="text-slate-500 text-lg font-medium">How should we collect intelligence for <span className="text-brand font-bold">"{activeProject?.name}"</span>?</p>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <button 
-            onClick={() => { setForceCrawlerMode(true); setActiveTab('crawlers'); }}
-            className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl hover:scale-[1.02]"
-          >
-            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-colors">
-              <Smartphone className="w-8 h-8" />
-            </div>
+          <button onClick={() => { setForceCrawlerMode(true); setActiveTab('crawlers'); }} className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl hover:scale-[1.02]">
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-colors"><Smartphone className="w-8 h-8" /></div>
             <h3 className="text-2xl font-black text-slate-900 mb-3">Public App</h3>
-            <p className="text-slate-500 text-sm leading-relaxed mb-8">
-              Automatic monitoring for apps on <strong>Google Play, App Store, or Shopee</strong>. No code required.
-            </p>
-            <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">
-              Setup Crawler <ArrowRight className="w-4 h-4" />
-            </div>
+            <p className="text-slate-500 text-sm leading-relaxed mb-8">Automatic monitoring for apps on <strong>Google Play, App Store, or Shopee</strong>. No code required.</p>
+            <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">Setup Crawler <ArrowRight className="w-4 h-4" /></div>
           </button>
-
-          <button 
-            onClick={() => { setForceApiMode(true); setActiveTab('webhooks'); }}
-            className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl hover:scale-[1.02]"
-          >
-            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-colors">
-              <Code className="w-8 h-8" />
-            </div>
+          <button onClick={() => { setForceApiMode(true); setActiveTab('webhooks'); }} className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl hover:scale-[1.02]">
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-colors"><Code className="w-8 h-8" /></div>
             <h3 className="text-2xl font-black text-slate-900 mb-3">Custom / API</h3>
-            <p className="text-slate-500 text-sm leading-relaxed mb-8">
-              For <strong>private apps or unique websites</strong>. We provide a webhook API for you to send comments.
-            </p>
-            <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">
-              Setup Webhook <ArrowRight className="w-4 h-4" />
-            </div>
+            <p className="text-slate-500 text-sm leading-relaxed mb-8">For <strong>private apps or unique websites</strong>. We provide a webhook API for you to send comments.</p>
+            <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">Setup Webhook <ArrowRight className="w-4 h-4" /></div>
           </button>
         </div>
       </div>
@@ -218,64 +194,25 @@ export default function ConnectorsPage() {
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
-             <span className={clsx(
-               "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
-               currentMode === 'CRAWLER' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
-             )}>
-               {currentMode} MODE ACTIVE
-             </span>
-             <button 
-                onClick={() => { 
-                  if(confirm("Reset monitoring strategy? This will let you choose a new mode (Crawler vs Webhook).")) { 
-                    setForceApiMode(false); 
-                    setForceCrawlerMode(false);
-                    // We don't delete sources automatically to prevent data loss, 
-                    // but currentMode will become 'NONE' if no sources exist.
-                  } 
-                }} 
-                className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest"
-             >
-               Change Mode
-             </button>
+             <span className={clsx("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest", currentMode === 'CRAWLER' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700")}>{currentMode} MODE ACTIVE</span>
+             <button onClick={() => { if(confirm("Reset monitoring strategy?")) { setForceApiMode(false); setForceCrawlerMode(false); } }} className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest">Change Mode</button>
           </div>
-          <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3">
-            <RefreshCw className="text-brand w-10 h-10" />
-            Automation <span className="text-brand">Hub</span>
-          </h1>
+          <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3"><RefreshCw className="text-brand w-10 h-10" />Automation <span className="text-brand">Hub</span></h1>
         </div>
-        
         <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
           {[
             ...(currentMode === 'CRAWLER' ? [{ id: 'crawlers', label: 'Auto-Crawlers', icon: Smartphone }] : []),
             ...(activeProject ? [{ id: 'alerts', label: 'Smart Alerts', icon: Zap }] : []),
-            ...(currentMode === 'API' ? [
-              { id: 'webhooks', label: 'Webhooks', icon: Code }
-            ] : []),
+            ...(currentMode === 'API' ? [{ id: 'webhooks', label: 'Webhooks', icon: Code }] : []),
           ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={clsx(
-                "flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all",
-                activeTab === tab.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={clsx("flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all", activeTab === tab.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}><tab.icon className="w-4 h-4" />{tab.label}</button>
           ))}
         </div>
       </div>
 
       {status && (
-        <div className={clsx(
-          "mb-10 p-6 rounded-2xl flex items-center justify-between border animate-in slide-in-from-top",
-          status.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'
-        )}>
-          <div className="flex items-center gap-4">
-            {status.type === 'success' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
-            <span className="font-bold">{status.msg}</span>
-          </div>
+        <div className={clsx("mb-10 p-6 rounded-2xl flex items-center justify-between border animate-in slide-in-from-top", status.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100')}>
+          <div className="flex items-center gap-4">{status.type === 'success' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}<span className="font-bold">{status.msg}</span></div>
           <button onClick={() => setStats(null)} className="text-sm opacity-50 hover:opacity-100 uppercase font-black">Dismiss</button>
         </div>
       )}
@@ -284,92 +221,42 @@ export default function ConnectorsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-brand" /> {sources.length > 0 ? 'Replace App' : 'Register App'}
-              </h2>
-              <p className="text-[10px] text-red-500 font-bold uppercase mb-6 italic">Note: Only 1 app per project allowed.</p>
-              
+              <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2"><Plus className="w-5 h-5 text-brand" /> {sources.length > 0 ? 'Replace App' : 'Register App'}</h2>
               <form onSubmit={handleAddSource} className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Store Platform</label>
-                  <select 
-                    value={newPlatform}
-                    onChange={(e) => setNewPlatform(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
-                  >
-                    <option>Google Play</option>
-                    <option>App Store</option>
-                    <option>Shopee</option>
-                    <option>Lazada</option>
-                    <option>Tiki</option>
+                  <select value={newPlatform} onChange={(e) => setNewPlatform(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold">
+                    <option>Google Play</option><option>App Store</option><option>Shopee</option><option>Lazada</option><option>Tiki</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Application/Shop ID</label>
-                  <input 
-                    type="text"
-                    value={newAppId}
-                    onChange={(e) => setNewAppId(e.target.value)}
-                    placeholder="e.g. com.spotify.music or shop_123"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold"
-                    required
-                  />
+                  <input type="text" value={newAppId} onChange={(e) => setNewAppId(e.target.value)} placeholder="e.g. com.spotify.music" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold" required />
                 </div>
-                <button 
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
-                >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
-                  {sources.length > 0 ? 'Update App' : 'Register App'}
-                </button>
+                <button type="submit" disabled={submitting} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}{sources.length > 0 ? 'Update App' : 'Register App'}</button>
               </form>
             </div>
           </div>
-          
           <div className="lg:col-span-2">
             <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden h-full">
-              <div className="p-8 border-b border-slate-50">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Database className="w-5 h-5 text-brand" /> Tracked Application
-                </h2>
-              </div>
+              <div className="p-8 border-b border-slate-50"><h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Database className="w-5 h-5 text-brand" /> Tracked Application</h2></div>
               <div className="p-8">
                 {sources.length > 0 ? (
                   <div className="grid grid-cols-1 gap-4">
                     {sources.map((s) => (
                       <div key={s.id} className="flex items-center justify-between p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 group hover:border-brand/30 transition-all">
                         <div className="flex items-center gap-6">
-                          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100">
-                            {s.platform === 'Google Play' ? <Smartphone className="w-7 h-7 text-emerald-500" /> : s.platform === 'Shopee' ? <Globe className="w-7 h-7 text-orange-500" /> : <Globe className="w-7 h-7 text-blue-500" />}
-                          </div>
-                          <div>
-                            <p className="text-lg font-black text-slate-900">{s.app_id}</p>
-                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{s.platform}</p>
-                          </div>
+                          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100">{s.platform === 'Google Play' ? <Smartphone className="w-7 h-7 text-emerald-500" /> : <Globe className="w-7 h-7 text-orange-500" />}</div>
+                          <div><p className="text-lg font-black text-slate-900">{s.app_id}</p><p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{s.platform}</p></div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <button 
-                            onClick={() => handleSync(s.id)}
-                            disabled={syncing === s.id}
-                            className="p-3 text-brand hover:bg-white rounded-2xl transition-all shadow-sm bg-white/50"
-                            title="Sync Now"
-                          >
-                            {syncing === s.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
-                          </button>
-                          <button 
-                            onClick={() => handleDelete('connectors', s.id)}
-                            className="p-3 text-slate-300 hover:text-red-500 hover:bg-white rounded-2xl transition-all shadow-sm"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
+                          <button onClick={() => handleSync(s.id)} disabled={syncing === s.id} className="p-3 text-brand hover:bg-white rounded-2xl transition-all shadow-sm bg-white/50">{syncing === s.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}</button>
+                          <button onClick={() => handleDelete('connectors', s.id)} className="p-3 text-slate-300 hover:text-red-500 hover:bg-white rounded-2xl transition-all shadow-sm"><Trash2 className="w-5 h-5" /></button>
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="py-20 text-center text-slate-400 font-medium italic">No application registered for this project yet.</div>
-                )}
+                ) : <div className="py-20 text-center text-slate-400 font-medium italic">No application registered.</div>}
               </div>
             </div>
           </div>
@@ -380,26 +267,24 @@ export default function ConnectorsPage() {
         <div className="space-y-8">
           <div className="bg-slate-900 p-12 rounded-[3rem] text-white relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 right-0 -mt-20 -mr-20 w-96 h-96 bg-brand opacity-10 blur-[120px]"></div>
-            
             <div className="relative z-10 max-w-3xl">
               <div className="bg-brand/20 text-brand px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] w-fit mb-6">Real-time Integration</div>
-              <h2 className="text-4xl font-black mb-4">Ingest from any application.</h2>
-              <p className="text-slate-400 text-lg mb-10 leading-relaxed">
-                Use your unique Webhook URL to push user feedback directly into **{activeProject?.name}**. 
-              </p>
-
-              <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Your Unique Webhook Endpoint</label>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1 bg-black/40 px-6 py-4 rounded-2xl font-mono text-sm text-emerald-400 border border-white/5 overflow-x-auto whitespace-nowrap">
-                    {webhookUrl}
+              <h2 className="text-4xl font-black mb-4">Secure Data Ingestion</h2>
+              <p className="text-slate-400 text-lg mb-10 leading-relaxed">Use your unique UUID and Secret Key to push user feedback directly into **{activeProject?.name}**.</p>
+              <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8 space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Your Unique Webhook Endpoint</label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 bg-black/40 px-6 py-4 rounded-2xl font-mono text-sm text-emerald-400 border border-white/5 overflow-x-auto whitespace-nowrap">{webhookUrl}</div>
+                    <button onClick={() => copyToClipboard(webhookUrl)} className="p-4 bg-brand text-white rounded-2xl hover:opacity-90 transition-all shadow-lg shadow-brand/20"><Copy className="w-6 h-6" /></button>
                   </div>
-                  <button 
-                    onClick={() => copyToClipboard(webhookUrl)}
-                    className="p-4 bg-brand text-white rounded-2xl hover:opacity-90 transition-all shadow-lg shadow-brand/20"
-                  >
-                    <Copy className="w-6 h-6" />
-                  </button>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Project Secret Key (api_key)</label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 bg-black/40 px-6 py-4 rounded-2xl font-mono text-sm text-brand border border-white/5 overflow-x-auto whitespace-nowrap">{apiKey}</div>
+                    <button onClick={() => copyToClipboard(apiKey)} className="p-4 bg-white/5 text-slate-400 rounded-2xl hover:bg-white/10 transition-all"><Copy className="w-6 h-6" /></button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -407,71 +292,32 @@ export default function ConnectorsPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <Terminal className="w-5 h-5 text-brand" /> Payload Specification
-              </h3>
+              <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2"><Terminal className="w-5 h-5 text-brand" /> Payload Specification</h3>
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 relative group">
                 <button onClick={() => copyToClipboard(webhookExample)} className="absolute top-4 right-4 p-2 bg-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><Copy className="w-4 h-4 text-slate-400" /></button>
-                <pre className="text-xs font-mono text-slate-600 overflow-x-auto">
-                  {webhookExample}
-                </pre>
-              </div>
-              <div className="mt-6 space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-5 h-5 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 font-black text-[10px]">1</div>
-                  <p className="text-xs text-slate-500 font-medium">`review_text` (String, Required): The content to analyze.</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-5 h-5 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 font-black text-[10px]">2</div>
-                  <p className="text-xs text-slate-500 font-medium">`user_id` (String, Optional): Identifier for the customer.</p>
-                </div>
+                <pre className="text-xs font-mono text-slate-600 overflow-x-auto">{webhookExample}</pre>
               </div>
             </div>
-
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-               <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <Info className="w-5 h-5 text-brand" /> Integration Note
-              </h3>
-              <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-                Your application should send a POST request to the unique endpoint whenever a new user comment is submitted. 
-                Ensure your headers include the Authorization bearer token if you've enabled security.
-              </p>
-              <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-blue-700 text-xs font-medium mb-8">
-                Tip: Use this for real-time monitoring of internal apps or private feedback forms.
-              </div>
-
-              {/* NEW: Simulator Tool */}
-              <div className="pt-8 border-t border-slate-50">
-                <h4 className="text-[10px] font-black text-brand uppercase tracking-[0.2em] mb-4">Webhook Test Simulator</h4>
-                <div className="space-y-4">
-                  <input 
-                    type="text" id="sim-text" placeholder="Enter test comment..."
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none text-sm"
-                  />
-                  <div className="flex gap-4">
-                    <input 
-                      type="date" id="sim-date"
-                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none text-sm"
-                    />
-                    <button 
-                      onClick={async () => {
-                        const txt = (document.getElementById('sim-text') as HTMLInputElement).value;
-                        const date = (document.getElementById('sim-date') as HTMLInputElement).value;
-                        if(!txt) return alert("Enter text");
-                        try {
-                          const token = localStorage.getItem('token');
-                          await axios.post(`/api/collect/${activeProject.id}`, { 
-                            text: txt, 
-                            timestamp: date ? new Date(date).toISOString() : new Date().toISOString() 
-                          }, { headers: { 'Authorization': `Bearer ${token}` }});
-                          alert("Test message queued via MQ! Wait 2-3s then check Workspace charts.");
-                        } catch(err) { alert("Simulation failed."); }
-                      }}
-                      className="bg-brand text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all"
-                    >
-                      Send Test
-                    </button>
-                  </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2"><Info className="w-5 h-5 text-brand" /> Webhook Simulator</h3>
+              <div className="space-y-4">
+                <input type="text" id="sim-text" placeholder="Enter test comment..." className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none text-sm" />
+                <div className="flex gap-4">
+                  <input type="date" id="sim-date" className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none text-sm" />
+                  <button onClick={async () => {
+                      const txt = (document.getElementById('sim-text') as HTMLInputElement).value;
+                      const date = (document.getElementById('sim-date') as HTMLInputElement).value;
+                      if(!txt) return alert("Enter text");
+                      try {
+                        const token = localStorage.getItem('token');
+                        await axios.post(`/api/collect/${activeProject.uuid}`, { 
+                          api_key: activeProject.api_key,
+                          text: txt, 
+                          timestamp: date ? new Date(date).toISOString() : new Date().toISOString() 
+                        }, { headers: { 'Authorization': `Bearer ${token}` }});
+                        alert("Success! Data queued via MQ.");
+                      } catch(err) { alert("Auth failed: Invalid Secret Key or UUID."); }
+                    }} className="bg-brand text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all">Send Test</button>
                 </div>
               </div>
             </div>
