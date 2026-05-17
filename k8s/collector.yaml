@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector
+  namespace: mlops-sentiment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collector
+  template:
+    metadata:
+      labels:
+        app: collector
+    spec:
+      imagePullSecrets:
+        - name: harbor-secret
+      containers:
+      - name: collector
+        image: registry.ntdevopsregistry.io.vn/mlops/collector:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        env:
+        - name: REDIS_HOST
+          value: "redis"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: collector
+  namespace: mlops-sentiment
+spec:
+  selector:
+    app: collector
+  ports:
+  - port: 8002
+    targetPort: 8000
