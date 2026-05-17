@@ -419,9 +419,17 @@ def export_logs(project_id: int, db: Session = Depends(get_db), current_user: Us
     cursor = preds_log_col.find({"project_id": project_id}).sort("timestamp", -1).limit(5000)
     data = []
     for d in cursor:
-        data.append({"id": str(d["_id"]), "text": d.get("text"), "sentiment": d.get("sentiment"), "corrected": d.get("sentiment_corrected", ""), "timestamp": d.get("timestamp").isoformat(), "model": d.get("model_version", "Production")})
+        ts = d.get("timestamp")
+        data.append({
+            "id": str(d["_id"]), 
+            "text": d.get("text"), 
+            "sentiment": d.get("sentiment"), 
+            "corrected": d.get("sentiment_corrected", ""), 
+            "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", 
+            "model": d.get("model_version", "Production")
+        })
     df = pd.DataFrame(data); output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
-    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=logs_{project_id}.csv"})
+    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=logs_project_{project_id}.csv"})
 
 @api_router.get("/export/pdf/{project_id}")
 def export_pdf(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

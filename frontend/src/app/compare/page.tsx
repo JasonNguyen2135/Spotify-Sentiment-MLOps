@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { 
   ArrowLeftRight, Loader2, Target, Zap, 
@@ -9,10 +9,6 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Cell, Legend
-} from 'recharts';
 
 export default function ComparePage() {
   const { user, loading: authLoading } = useAuth();
@@ -23,6 +19,21 @@ export default function ComparePage() {
   const [compData, setCompData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchComparison = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/api/models/compare', { 
+        params: { v1: model1, v2: model2 },
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setCompData(res.data);
+    } catch (err) { 
+      console.error(err); 
+      alert("Failed to fetch model metrics from MLflow.");
+    } finally { setLoading(false); }
+  }, [model1, model2]);
+
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
     const fetchModels = async () => {
@@ -32,49 +43,42 @@ export default function ComparePage() {
         setModels(res.data || []);
       } catch (err) { console.error(err); }
     };
-    if (user) fetchModels();
-  }, [user, authLoading, router]);
+    if (user) {
+      fetchModels();
+      fetchComparison();
+    }
+  }, [user, authLoading, router, fetchComparison]);
 
-  useEffect(() => {
-    const fetchComparison = async () => {
-      setLoading(true);
-      try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get('/api/models/compare', { 
-          params: { v1: model1, v2: model2 },
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        setCompData(res.data);
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
-    };
-    if (user) fetchComparison();
-  }, [model1, model2, user]);
+  const MetricCard = ({ label, m1, m2, unit = "" }: any) => {
+    const val1 = parseFloat(m1) || 0;
+    const val2 = parseFloat(m2) || 0;
+    const improvement = val1 !== 0 ? ((val2 - val1) / val1 * 100) : 0;
 
-  const MetricCard = ({ label, m1, m2, unit = "" }: any) => (
-    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl group">
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">{label}</p>
-      <div className="flex items-center justify-between gap-4">
-        <div className="text-center flex-1">
-           <p className="text-3xl font-black text-slate-900">{m1}{unit}</p>
-           <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Model A</p>
+    return (
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl group">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">{label}</p>
+        <div className="flex items-center justify-between gap-4">
+          <div className="text-center flex-1">
+             <p className="text-3xl font-black text-slate-900">{m1}{unit}</p>
+             <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Model A</p>
+          </div>
+          <div className="h-10 w-px bg-slate-100" />
+          <div className="text-center flex-1">
+             <p className="text-3xl font-black text-brand">{m2}{unit}</p>
+             <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Model B</p>
+          </div>
         </div>
-        <div className="h-10 w-px bg-slate-100" />
-        <div className="text-center flex-1">
-           <p className="text-3xl font-black text-brand">{m2}{unit}</p>
-           <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Model B</p>
+        <div className="mt-8 pt-6 border-t border-slate-50 flex justify-center">
+           <div className={clsx(
+             "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
+             improvement >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+           )}>
+             {improvement >= 0 ? `+${improvement.toFixed(1)}% Improvement` : `${improvement.toFixed(1)}% Variance`}
+           </div>
         </div>
       </div>
-      <div className="mt-8 pt-6 border-t border-slate-50 flex justify-center">
-         <div className={clsx(
-           "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
-           m2 >= m1 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-         )}>
-           {m2 >= m1 ? `+${(((m2-m1)/m1)||0*100).toFixed(1)}% Improvement` : `${(((m2-m1)/m1)||0*100).toFixed(1)}% Variance`}
-         </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="max-w-6xl mx-auto py-10 px-4 animate-in fade-in duration-500 pb-20">
@@ -96,6 +100,12 @@ export default function ComparePage() {
               <option value="LSTM">Bi-LSTM</option>
               {models.map(m => <option key={m.version} value={m.version}>v{m.version}</option>)}
            </select>
+           <button 
+             onClick={fetchComparison}
+             className="ml-4 bg-brand text-white px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all shadow-lg shadow-brand/20"
+           >
+             Run Comparison
+           </button>
         </div>
       </div>
 
@@ -106,7 +116,7 @@ export default function ComparePage() {
           <MetricCard label="Accuracy Score" m1={compData.model1.accuracy} m2={compData.model2.accuracy} />
           <MetricCard label="F1 Weighted" m1={compData.model1.f1} m2={compData.model2.f1} />
           <MetricCard label="Precision" m1={compData.model1.precision} m2={compData.model2.precision} />
-          <MetricCard label="Avg Latency" m1={parseInt(compData.model1.latency)} m2={parseInt(compData.model2.latency)} unit="ms" />
+          <MetricCard label="Avg Latency" m1={compData.model1.latency} m2={compData.model2.latency} unit="" />
         </div>
       )}
     </div>

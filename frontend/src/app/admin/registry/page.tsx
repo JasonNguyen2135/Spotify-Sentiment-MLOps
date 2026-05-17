@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   Settings, ExternalLink, CheckCircle2, 
   AlertCircle, Layers, Zap, 
-  ShieldCheck, Loader2, List, Github
+  ShieldCheck, Loader2, List, Github, Activity
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
