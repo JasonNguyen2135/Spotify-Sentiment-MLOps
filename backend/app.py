@@ -348,7 +348,30 @@ def github_runs(current_user: User = Depends(get_current_user)):
     try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 5}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
-# --- System ---
+@api_router.post("/collect/{project_id}")
+async def collect_comment(project_id: int, data: dict, db: Session = Depends(get_db)):
+    """
+    Proxy endpoint to allow the UI and external apps to push data into the MQ.
+    """
+    text_val = data.get("text") or data.get("review_text")
+    if not text_val: raise HTTPException(status_code=400, detail="Missing text")
+    
+    payload = {
+        "project_id": project_id,
+        "text": text_val,
+        "user_id": data.get("user_id", "anonymous"),
+        "timestamp": data.get("timestamp") or datetime.utcnow().isoformat(),
+        "source": data.get("source", "webhook_v2")
+    }
+    
+    try:
+        r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
+        r_client.lpush(QUEUE_NAME, json.dumps(payload))
+        return {"status": "Accepted", "message": "Data queued"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Infrastructure ---
 @api_router.get("/connectors")
 def get_connectors(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     q = db.query(DataSource)

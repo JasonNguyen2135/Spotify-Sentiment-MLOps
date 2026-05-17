@@ -436,8 +436,43 @@ export default function ConnectorsPage() {
                 Your application should send a POST request to the unique endpoint whenever a new user comment is submitted. 
                 Ensure your headers include the Authorization bearer token if you've enabled security.
               </p>
-              <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-blue-700 text-xs font-medium">
+              <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-blue-700 text-xs font-medium mb-8">
                 Tip: Use this for real-time monitoring of internal apps or private feedback forms.
+              </div>
+
+              {/* NEW: Simulator Tool */}
+              <div className="pt-8 border-t border-slate-50">
+                <h4 className="text-[10px] font-black text-brand uppercase tracking-[0.2em] mb-4">Webhook Test Simulator</h4>
+                <div className="space-y-4">
+                  <input 
+                    type="text" id="sim-text" placeholder="Enter test comment..."
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none text-sm"
+                  />
+                  <div className="flex gap-4">
+                    <input 
+                      type="date" id="sim-date"
+                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none text-sm"
+                    />
+                    <button 
+                      onClick={async () => {
+                        const txt = (document.getElementById('sim-text') as HTMLInputElement).value;
+                        const date = (document.getElementById('sim-date') as HTMLInputElement).value;
+                        if(!txt) return alert("Enter text");
+                        try {
+                          const token = localStorage.getItem('token');
+                          await axios.post(`/api/collect/${activeProject.id}`, { 
+                            text: txt, 
+                            timestamp: date ? new Date(date).toISOString() : new Date().toISOString() 
+                          }, { headers: { 'Authorization': `Bearer ${token}` }});
+                          alert("Test message queued via MQ! Wait 2-3s then check Workspace charts.");
+                        } catch(err) { alert("Simulation failed."); }
+                      }}
+                      className="bg-brand text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all"
+                    >
+                      Send Test
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
