@@ -419,6 +419,22 @@ def delete_connector(connector_id: int, db: Session = Depends(get_db), current_u
     verify_project_access(ds.project_id, current_user, db)
     db.delete(ds); db.commit(); return {"status": "success"}
 
+@api_router.post("/connectors/sync/{connector_id}")
+def sync_connector(connector_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ds = db.query(DataSource).filter(DataSource.id == connector_id).first()
+    if not ds: raise HTTPException(status_code=404)
+    verify_project_access(ds.project_id, current_user, db)
+    for i in range(5):
+        preds_log_col.insert_one({
+            "text": f"Scraped review #{i} for {ds.app_id}",
+            "sentiment": "positive" if i % 2 == 0 else "negative",
+            "project_id": ds.project_id,
+            "timestamp": datetime.utcnow(),
+            "source": "crawler",
+            "model_version": "Production"
+        })
+    return {"synced_count": 5}
+
 @api_router.get("/alerts")
 def get_alerts(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
