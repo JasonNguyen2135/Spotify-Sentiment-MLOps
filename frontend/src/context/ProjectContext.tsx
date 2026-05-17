@@ -3,8 +3,10 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface Project {
   id: number;
+  uuid: string;
   name: string;
   description: string;
+  api_key: string;
 }
 
 interface ProjectContextType {

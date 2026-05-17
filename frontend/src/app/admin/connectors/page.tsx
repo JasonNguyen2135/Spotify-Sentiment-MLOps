@@ -6,7 +6,7 @@ import {
   Smartphone, Globe, Mail, MessageCircle,
   CheckCircle2, AlertCircle, Loader2, RefreshCw,
   Code, Copy, Terminal, Link as LinkIcon, Info,
-  Send, Download, ArrowRight
+  Send, Download, ArrowRight, Eye, EyeOff
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';
@@ -23,12 +23,12 @@ export default function ConnectorsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [status, setStats] = useState<{type: 'success' | 'error', msg: string} | null>(null);
   const [syncing, setSyncing] = useState<number | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const [sources, setSources] = useState<any[]>([]);
   const [newAppId, setNewAppId] = useState('');
   const [newPlatform, setNewPlatform] = useState('Google Play');
 
-  // Monitoring Strategy Lock
   const [forceCrawlerMode, setForceCrawlerMode] = useState(false);
   const [forceApiMode, setForceApiMode] = useState(false); 
   const isCrawlerMode = sources.length > 0 || forceCrawlerMode;
@@ -40,11 +40,11 @@ export default function ConnectorsPage() {
   const [channel, setChannel] = useState('Telegram');
   const [destination, setDestination] = useState('');
 
-  const webhookUrl = activeProject ? `${window.location.protocol}//${window.location.host}/api/collect/${activeProject.uuid}` : '';
+  const webhookUrl = activeProject?.uuid ? `${window.location.protocol}//${window.location.host}/api/collect/${activeProject.uuid}` : 'Loading...';
   const apiKey = (activeProject as any)?.api_key || '••••••••••••••••';
 
   const webhookExample = JSON.stringify({
-    "api_key": apiKey,
+    "api_key": (activeProject as any)?.api_key || "YOUR_API_KEY",
     "text": "Sản phẩm tuyệt vời, giao hàng nhanh!",
     "user_id": "customer_123",
     "timestamp": new Date().toISOString()
@@ -77,89 +77,47 @@ export default function ConnectorsPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
-      router.push('/login');
-      return;
-    }
+    if (!user) { router.push('/login'); return; }
     fetchData();
-  }, [user, authLoading, fetchData]);
+  }, [user, authLoading, fetchData, router]);
 
   const handleSync = async (connectorId: number) => {
     setSyncing(connectorId);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post(`/api/connectors/sync/${connectorId}`, null, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setStats({ type: 'success', msg: `Successfully synced ${res.data.synced_count} records!` });
+      const res = await axios.post(`/api/connectors/sync/${connectorId}`, null, { headers: { 'Authorization': `Bearer ${token}` } });
+      setStats({ type: 'success', msg: `Synced ${res.data.synced_count} records!` });
       fetchData();
     } catch (err: any) {
-      setStats({ type: 'error', msg: err.response?.data?.detail || 'Sync failed' });
-    } finally {
-      setSyncing(null);
-    }
+      setStats({ type: 'error', msg: 'Sync failed' });
+    } finally { setSyncing(null); }
   };
 
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeProject) return;
-    if (sources.length > 0) {
-      if (!window.confirm("Each project can only track one app. Existing app will be replaced. Continue?")) return;
-    }
+    if (sources.length > 0) { if (!window.confirm("Replace existing application?")) return; }
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.post('/api/connectors', null, {
-        params: { platform: newPlatform, app_id: newAppId, project_id: activeProject.id },
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setNewAppId('');
-      setStats({ type: 'success', msg: 'Application updated!' });
-      fetchData();
-    } catch (err: any) {
-      setStats({ type: 'error', msg: 'Failed to update' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleAddAlert = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeProject) return;
-    setSubmitting(true);
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/alerts', null, {
-        params: { name: ruleName, threshold, channel, destination, project_id: activeProject.id },
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setRuleName(''); setDestination('');
-      setStats({ type: 'success', msg: 'Alert rule active.' });
-      fetchData();
-    } catch (err: any) {
-      setStats({ type: 'error', msg: 'Failed to create alert' });
-    } finally {
-      setSubmitting(false);
-    }
+      await axios.post('/api/connectors', null, { params: { platform: newPlatform, app_id: newAppId, project_id: activeProject.id }, headers: { 'Authorization': `Bearer ${token}` } });
+      setNewAppId(''); setStats({ type: 'success', msg: 'Application updated!' }); fetchData();
+    } catch (err: any) { setStats({ type: 'error', msg: 'Failed to update' }); } finally { setSubmitting(false); }
   };
 
   const handleDelete = async (type: 'connectors' | 'alerts', id: number) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`/api/${type}/${id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      await axios.delete(`/api/${type}/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
       fetchData();
-    } catch (err) {
-      console.error("Delete failed", err);
-    }
+    } catch (err) { console.error("Delete failed", err); }
   };
 
   if (authLoading || (loading && !sources.length && !alerts.length)) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh]">
         <Loader2 className="w-12 h-12 text-brand animate-spin mb-4" />
-        <p className="text-gray-500 font-medium italic">Loading framework settings...</p>
+        <p className="text-gray-500 font-medium italic">Loading settings...</p>
       </div>
     );
   }
@@ -169,19 +127,19 @@ export default function ConnectorsPage() {
       <div className="max-w-4xl mx-auto py-20 px-4 animate-in fade-in duration-700">
         <div className="text-center mb-16">
           <h1 className="text-5xl font-black text-slate-900 mb-4 tracking-tight">Select Monitoring Strategy</h1>
-          <p className="text-slate-500 text-lg font-medium">How should we collect intelligence for <span className="text-brand font-bold">"{activeProject?.name}"</span>?</p>
+          <p className="text-slate-500 text-lg font-medium">Project: <span className="text-brand font-bold">{activeProject?.name}</span></p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <button onClick={() => { setForceCrawlerMode(true); setActiveTab('crawlers'); }} className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl hover:scale-[1.02]">
             <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-colors"><Smartphone className="w-8 h-8" /></div>
             <h3 className="text-2xl font-black text-slate-900 mb-3">Public App</h3>
-            <p className="text-slate-500 text-sm leading-relaxed mb-8">Automatic monitoring for apps on <strong>Google Play, App Store, or Shopee</strong>. No code required.</p>
+            <p className="text-slate-500 text-sm leading-relaxed mb-8">Automatic monitoring for apps on <strong>Google Play, App Store, or Shopee</strong>.</p>
             <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">Setup Crawler <ArrowRight className="w-4 h-4" /></div>
           </button>
           <button onClick={() => { setForceApiMode(true); setActiveTab('webhooks'); }} className="group p-10 bg-white border-2 border-slate-100 rounded-[3.5rem] text-left hover:border-brand transition-all hover:shadow-2xl hover:scale-[1.02]">
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-colors"><Code className="w-8 h-8" /></div>
             <h3 className="text-2xl font-black text-slate-900 mb-3">Custom / API</h3>
-            <p className="text-slate-500 text-sm leading-relaxed mb-8">For <strong>private apps or unique websites</strong>. We provide a webhook API for you to send comments.</p>
+            <p className="text-slate-500 text-sm leading-relaxed mb-8">For <strong>private apps or unique websites</strong> via Webhook API.</p>
             <div className="flex items-center gap-2 text-brand font-black text-[10px] uppercase tracking-widest">Setup Webhook <ArrowRight className="w-4 h-4" /></div>
           </button>
         </div>
@@ -226,7 +184,7 @@ export default function ConnectorsPage() {
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Store Platform</label>
                   <select value={newPlatform} onChange={(e) => setNewPlatform(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-brand text-sm font-bold">
-                    <option>Google Play</option><option>App Store</option><option>Shopee</option><option>Lazada</option><option>Tiki</option>
+                    <option>Google Play</option><option>App Store</option><option>Shopee</option>
                   </select>
                 </div>
                 <div>
@@ -268,9 +226,10 @@ export default function ConnectorsPage() {
           <div className="bg-slate-900 p-12 rounded-[3rem] text-white relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 right-0 -mt-20 -mr-20 w-96 h-96 bg-brand opacity-10 blur-[120px]"></div>
             <div className="relative z-10 max-w-3xl">
-              <div className="bg-brand/20 text-brand px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] w-fit mb-6">Real-time Integration</div>
-              <h2 className="text-4xl font-black mb-4">Secure Data Ingestion</h2>
-              <p className="text-slate-400 text-lg mb-10 leading-relaxed">Use your unique UUID and Secret Key to push user feedback directly into **{activeProject?.name}**.</p>
+              <div className="bg-brand/20 text-brand px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] w-fit mb-6">Secure Real-time Integration</div>
+              <h2 className="text-4xl font-black mb-4">API Credentials</h2>
+              <p className="text-slate-400 text-lg mb-10 leading-relaxed">Use your unique UUID and Secret Key to push data into **{activeProject?.name}**.</p>
+              
               <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8 space-y-6">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Your Unique Webhook Endpoint</label>
@@ -282,8 +241,15 @@ export default function ConnectorsPage() {
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Project Secret Key (api_key)</label>
                   <div className="flex items-center gap-4">
-                    <div className="flex-1 bg-black/40 px-6 py-4 rounded-2xl font-mono text-sm text-brand border border-white/5 overflow-x-auto whitespace-nowrap">{apiKey}</div>
-                    <button onClick={() => copyToClipboard(apiKey)} className="p-4 bg-white/5 text-slate-400 rounded-2xl hover:bg-white/10 transition-all"><Copy className="w-6 h-6" /></button>
+                    <div className="flex-1 bg-black/40 px-6 py-4 rounded-2xl font-mono text-sm text-brand border border-white/5 overflow-x-auto whitespace-nowrap">
+                        {showApiKey ? (activeProject as any)?.api_key : '••••••••••••••••••••••••••••••••'}
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => setShowApiKey(!showApiKey)} className="p-4 bg-white/5 text-slate-400 rounded-2xl hover:bg-white/10 transition-all">
+                            {showApiKey ? <EyeOff className="w-6 h-6" /> : <Eye className="w-6 h-6" />}
+                        </button>
+                        <button onClick={() => copyToClipboard((activeProject as any)?.api_key)} className="p-4 bg-white/5 text-slate-400 rounded-2xl hover:bg-white/10 transition-all"><Copy className="w-6 h-6" /></button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -310,8 +276,8 @@ export default function ConnectorsPage() {
                       if(!txt) return alert("Enter text");
                       try {
                         const token = localStorage.getItem('token');
-                        await axios.post(`/api/collect/${activeProject.uuid}`, { 
-                          api_key: activeProject.api_key,
+                        await axios.post(`/api/collect/${activeProject?.uuid}`, { 
+                          api_key: (activeProject as any)?.api_key,
                           text: txt, 
                           timestamp: date ? new Date(date).toISOString() : new Date().toISOString() 
                         }, { headers: { 'Authorization': `Bearer ${token}` }});
