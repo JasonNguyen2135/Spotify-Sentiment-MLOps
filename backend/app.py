@@ -133,7 +133,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 app = FastAPI(); app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 api_router = APIRouter()
 
-# --- API Endpoints ---
+# --- Auth ---
 @api_router.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first(): raise HTTPException(status_code=400)
@@ -145,6 +145,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not pwd_context.verify(form_data.password, user.hashed_password): raise HTTPException(status_code=400)
     return {"access_token": create_access_token({"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
 
+# --- Projects ---
 @api_router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role in ["admin", "ai_engineer", "analyst"]: return db.query(Project).all()
@@ -155,18 +156,19 @@ def create_project(name: str, description: str = "", db: Session = Depends(get_d
     p = Project(name=name, description=description, owner_id=current_user.id)
     db.add(p); db.commit(); db.refresh(p); log_audit(db, current_user, "CREATE_PROJECT", f"Created {name}", p.id); return p
 
+# --- Analytics ---
 @api_router.get("/stats")
 def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
     if project_id: verify_project_access(project_id, current_user, db); query["project_id"] = project_id
-    elif current_user.role != 'admin': query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
+    elif current_user.role not in ["admin", "ai_engineer", "analyst"]: query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
     return {"total_predictions": preds_log_col.count_documents(query), "accuracy": "94.2%", "drift_score": "0.1%"}
 
 @api_router.get("/monthly-analytics")
 def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
     if project_id: verify_project_access(project_id, current_user, db); query["project_id"] = project_id
-    elif current_user.role != 'admin': query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
+    elif current_user.role not in ["admin", "ai_engineer", "analyst"]: query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
     pipeline = [{"$match": query}, {"$group": {"_id": {"month": {"$month": "$timestamp"}, "year": {"$year": "$timestamp"}, "sentiment": "$sentiment"}, "count": {"$sum": 1}}}]
     results = {}
     for doc in preds_log_col.aggregate(pipeline):
@@ -190,6 +192,23 @@ def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), curren
     if project_id: verify_project_access(project_id, current_user, db)
     return [{"text": "demo", "value": 10}]
 
+# --- History & HITL ---
+@api_router.get("/history")
+@api_router.get("/user-history")
+def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = {}
+    if project_id: verify_project_access(project_id, current_user, db); query["project_id"] = project_id
+    elif current_user.role not in ["admin", "ai_engineer", "analyst"]: query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
+    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(50)
+    history = []
+    for d in cursor:
+        ts = d.get("timestamp")
+        history.append({
+            "id": str(d["_id"]), "text": d.get("text", ""), "sentiment": d.get("sentiment", "neutral"),
+            "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else datetime.utcnow().isoformat()
+        })
+    return history
+
 @api_router.post("/predict")
 async def predict(review_text: str, project_id: int, model_version: str = "Production", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
@@ -198,14 +217,6 @@ async def predict(review_text: str, project_id: int, model_version: str = "Produ
     preds_log_col.insert_one({"text": review_text, "sentiment": res["sentiment"], "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), "model_version": model_version})
     if res["sentiment"] == "negative": db.add(Ticket(project_id=project_id, review_text=review_text, sentiment_score="negative")); db.commit()
     return res
-
-@api_router.get("/history")
-@api_router.get("/user-history")
-def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    query = {}
-    if project_id: verify_project_access(project_id, current_user, db); query["project_id"] = project_id
-    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(50)
-    return [{"id": str(d["_id"]), "text": d["text"], "sentiment": d["sentiment"], "timestamp": d["timestamp"].isoformat()} for d in cursor]
 
 @api_router.post("/correction")
 def correction(prediction_id: str, text: str, corrected_sentiment: str, project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -219,38 +230,30 @@ def correction(prediction_id: str, text: str, corrected_sentiment: str, project_
 @api_router.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
-    content = await file.read(); df = pd.read_csv(io.BytesIO(content))
-    
+    df = pd.read_csv(io.BytesIO(await file.read()))
     col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
-    
     summary = {"positive": 0, "negative": 0, "neutral": 0}
     results = []
-    
     for i, row in df.head(100).iterrows():
-        text_val = str(row[col])
+        txt = str(row[col])
         try:
-            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": text_val, "project_id": project_id}, timeout=5)
-            sentiment = res.json().get("sentiment", "neutral")
-        except:
-            sentiment = "neutral"
-            
-        summary[sentiment] += 1
-        results.append({"text": text_val, "sentiment": sentiment})
-        
-    log_audit(db, current_user, "UPLOAD_DATA", f"Analyzed {len(results)} rows from CSV", project_id)
+            sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
+        except: sent = "neutral"
+        summary[sent] += 1; results.append({"text": txt, "sentiment": sent})
+    log_audit(db, current_user, "UPLOAD_DATA", f"Analyzed {len(results)} rows", project_id)
     return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
 # --- MLOps ---
 @api_router.get("/models")
 def get_models(current_user: User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
+    if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
     try: return requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search", params={"filter": "name='Spotify_Production_Model'"}, timeout=5).json().get("model_versions", [])
     except: return []
 
 @api_router.get("/datasets")
 def get_datasets(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
-    return [{"name": "MongoDB Data", "source": "mongodb"}]
+    return [{"name": "MongoDB Data", "source": "mongodb", "count": preds_log_col.count_documents({"project_id": project_id} if project_id else {})}]
 
 @api_router.post("/train")
 def train(dataset: str, project_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -276,6 +279,7 @@ def github_runs(current_user: User = Depends(get_current_user)):
     try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 5}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
+# --- System ---
 @api_router.get("/connectors")
 def get_connectors(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     q = db.query(DataSource)
@@ -296,7 +300,7 @@ def get_tickets(project_id: int = None, db: Session = Depends(get_db), current_u
 
 @api_router.get("/audit-logs")
 def get_audit_logs(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin": raise HTTPException(status_code=403)
+    if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
     q = db.query(AuditLog)
     if project_id: q = q.filter(AuditLog.project_id == project_id)
     return q.order_by(AuditLog.timestamp.desc()).limit(100).all()
