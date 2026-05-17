@@ -47,70 +47,74 @@ export default function Navbar() {
             </div>
           </div>
           
-          <div className="flex gap-6 items-center">
-            {/* Global View Items */}
-            {!activeProject && (
+          <div className="flex gap-4 items-center">
+            {/* Unified Core Navigation */}
+            <div className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-2xl border border-slate-100">
               <Link 
                 href="/"
+                onClick={() => setActiveProject(null)}
                 className={clsx(
-                  "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                  pathname === '/' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                  "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all",
+                  pathname === '/' && !activeProject ? "bg-white text-slate-900 shadow-sm shadow-slate-200" : "text-slate-500 hover:text-slate-800"
                 )}
               >
-                <LayoutDashboard className="w-4 h-4" />
-                Dashboard
+                <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
               </Link>
-            )}
 
-            {/* Project-specific items */}
-            {activeProject && (
               <Link 
-                href="/admin/connectors"
+                href="/analyze"
                 className={clsx(
-                  "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                  pathname === '/admin/connectors' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
+                  "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all",
+                  pathname === '/analyze' ? "bg-white text-slate-900 shadow-sm shadow-slate-200" : "text-slate-500 hover:text-slate-800"
                 )}
               >
-                <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
-                Observability
+                <BarChart3 className="w-3.5 h-3.5" /> Analysis
               </Link>
-            )}
 
-            {/* Toolkit items only shown in Global View (no activeProject) */}
-            {!activeProject && (
-              <>
-                <Link 
-                  href="/analyze"
-                  className={clsx(
-                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                    pathname === '/analyze' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                  )}
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  Analysis
-                </Link>
-                <Link 
-                  href="/compare"
-                  className={clsx(
-                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                    pathname === '/compare' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                  )}
-                >
-                  <ArrowLeftRight className="w-4 h-4" />
-                  Compare
-                </Link>
-                <Link 
-                  href="/history"
-                  className={clsx(
-                    "flex items-center gap-1.5 text-sm font-bold transition-all px-3 py-2 rounded-xl",
-                    pathname === '/history' ? "text-brand bg-brand/5" : "text-gray-500 hover:text-brand hover:bg-slate-50"
-                  )}
-                >
-                  <History className="w-4 h-4" />
-                  History
-                </Link>
-              </>
-            )}
+              <Link 
+                href="/compare"
+                className={clsx(
+                  "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all",
+                  pathname === '/compare' ? "bg-white text-slate-900 shadow-sm shadow-slate-200" : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" /> Compare
+              </Link>
+
+              <Link 
+                href="/history"
+                className={clsx(
+                  "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all",
+                  pathname === '/history' ? "bg-white text-slate-900 shadow-sm shadow-slate-200" : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                <History className="w-3.5 h-3.5" /> History
+              </Link>
+
+              {['admin', 'ai_engineer'].includes(user?.role || '') && (
+                <>
+                  <div className="w-px h-4 bg-slate-200 mx-1" />
+                  <Link 
+                    href="/admin/registry"
+                    className={clsx(
+                      "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all",
+                      pathname === '/admin/registry' ? "bg-brand text-white shadow-lg shadow-brand/20" : "text-slate-500 hover:text-brand"
+                    )}
+                  >
+                    <Settings className="w-3.5 h-3.5" /> Model Hub
+                  </Link>
+                  <Link 
+                    href="/admin/training"
+                    className={clsx(
+                      "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all",
+                      pathname === '/admin/training' ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "text-slate-500 hover:text-emerald-500"
+                    )}
+                  >
+                    <Zap className="w-3.5 h-3.5" /> Training
+                  </Link>
+                </>
+              )}
+            </div>
 
             <div className="flex items-center gap-4 ml-4 pl-4 border-l">
               {user ? (

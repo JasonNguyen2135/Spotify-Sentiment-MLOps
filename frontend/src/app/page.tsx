@@ -236,62 +236,17 @@ export default function UniversalHub() {
 
   return (
     <div className="animate-in fade-in duration-700 pb-20 print:p-0 max-w-7xl mx-auto">
-      {/* Header & Navigation */}
+      {/* Header */}
       <div className="mb-12 print:hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-          <div>
-            <h1 className="text-5xl font-black text-slate-900 tracking-tight mb-2">
-              {activeProject ? activeProject.name : 'Universal Hub'}
-            </h1>
-            <p className="text-slate-500 text-lg font-medium">
-              {activeProject 
-                ? `Enterprise sentiment intelligence monitoring.` 
-                : 'Global sentiment analysis & platform-wide toolkit.'}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 bg-slate-100/50 p-1.5 rounded-[2rem] border border-slate-200 shadow-inner">
-            {[
-              { label: 'Dashboard', active: !activeProject, onClick: () => setActiveProject(null), icon: LayoutGrid, href: null },
-              { label: 'Analysis', icon: Activity, href: '/analyze' },
-              { label: 'Compare', icon: ArrowLeftRight, href: '/compare' },
-              { label: 'History', icon: FileText, href: '/history' },
-            ].map((item) => (
-              item.href ? (
-                <Link 
-                  key={item.label}
-                  href={item.href}
-                  className="px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 text-slate-500 hover:text-slate-800"
-                >
-                  <item.icon className="w-3.5 h-3.5" /> {item.label}
-                </Link>
-              ) : (
-                <button 
-                  key={item.label}
-                  onClick={item.onClick}
-                  className={clsx(
-                    "px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2",
-                    item.active ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-800"
-                  )}
-                >
-                  <item.icon className="w-3.5 h-3.5" /> {item.label}
-                </button>
-              )
-            ))}
-            {['admin', 'ai_engineer'].includes(user?.role) && (
-              <>
-                <div className="w-px h-6 bg-slate-200 mx-2" />
-                <Link href="/admin/registry" className="px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-brand transition-all flex items-center gap-2">
-                  <Settings className="w-3.5 h-3.5" /> Model Hub
-                </Link>
-                <Link href="/admin/training" className="px-6 py-2.5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-emerald-500 transition-all flex items-center gap-2">
-                  <Database className="w-3.5 h-3.5" /> Training
-                </Link>
-              </>
-            )}
-            {user?.role === 'analyst' && (
-               <div className="px-6 py-2.5 text-slate-400 font-black text-[9px] uppercase tracking-widest bg-white rounded-full shadow-sm ml-2">Analyst Mode</div>
-            )}
-          </div>
+        <div>
+          <h1 className="text-5xl font-black text-slate-900 tracking-tight mb-2">
+            {activeProject ? activeProject.name : 'Universal Hub'}
+          </h1>
+          <p className="text-slate-500 text-lg font-medium">
+            {activeProject 
+              ? `Enterprise sentiment intelligence monitoring.` 
+              : 'Global sentiment analysis & platform-wide toolkit.'}
+          </p>
         </div>
       </div>
 
@@ -329,45 +284,37 @@ export default function UniversalHub() {
 
           {/* Ad-hoc Actions */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
-            {/* Harvester - ADMIN & AI_ENGINEER ONLY */}
-            {['admin', 'ai_engineer'].includes(user?.role) ? (
-              <div className="lg:col-span-1 bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col group">
-                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-emerald-500 opacity-10 blur-[100px] group-hover:opacity-20 transition-opacity"></div>
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-8">
-                    <div className="bg-emerald-500/20 p-2.5 rounded-xl text-emerald-400"><Database className="w-5 h-5" /></div>
-                    <h2 className="text-2xl font-black text-white tracking-tight">Harvester</h2>
-                  </div>
-                  <form onSubmit={handleHarvest} className="space-y-4">
-                    <select 
-                      value={harvestPlatform}
-                      onChange={(e) => setHarvestPlatform(e.target.value)}
-                      className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all font-bold text-sm appearance-none"
-                    >
-                      <option className="bg-slate-900">Google Play</option>
-                      <option className="bg-slate-900">App Store</option>
-                    </select>
-                    <input 
-                      type="text"
-                      value={harvestId}
-                      onChange={(e) => setHarvestId(e.target.value)}
-                      placeholder="Application ID (e.g. com.spotify.music)"
-                      className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all placeholder:text-slate-500 font-medium text-sm"
-                    />
-                    <button type="submit" disabled={harvesting || !harvestId.trim()} className="w-full bg-emerald-500 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 disabled:bg-slate-800 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
-                      {harvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                      Scrape 1K Samples
-                    </button>
-                  </form>
+            {/* Harvester - ALL USERS ALLOWED */}
+            <div className="lg:col-span-1 bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col group">
+              <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-emerald-500 opacity-10 blur-[100px] group-hover:opacity-20 transition-opacity"></div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="bg-emerald-500/20 p-2.5 rounded-xl text-emerald-400"><Database className="w-5 h-5" /></div>
+                  <h2 className="text-2xl font-black text-white tracking-tight">Harvester</h2>
                 </div>
+                <form onSubmit={handleHarvest} className="space-y-4">
+                  <select 
+                    value={harvestPlatform}
+                    onChange={(e) => setHarvestPlatform(e.target.value)}
+                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all font-bold text-sm appearance-none"
+                  >
+                    <option className="bg-slate-900">Google Play</option>
+                    <option className="bg-slate-900">App Store</option>
+                  </select>
+                  <input 
+                    type="text"
+                    value={harvestId}
+                    onChange={(e) => setHarvestId(e.target.value)}
+                    placeholder="Application ID (e.g. com.spotify.music)"
+                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white transition-all placeholder:text-slate-500 font-medium text-sm"
+                  />
+                  <button type="submit" disabled={harvesting || !harvestId.trim()} className="w-full bg-emerald-500 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 disabled:bg-slate-800 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
+                    {harvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Scrape 1K Samples
+                  </button>
+                </form>
               </div>
-            ) : (
-              <div className="lg:col-span-1 bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
-                 <ShieldAlert className="w-12 h-12 text-slate-200 mb-4" />
-                 <h3 className="text-lg font-black text-slate-900">Restricted Tool</h3>
-                 <p className="text-slate-400 text-xs font-medium">Harvester is reserved for AI Engineers.</p>
-              </div>
-            )}
+            </div>
 
             <div className="lg:col-span-2 bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col justify-center group border border-white/5">
               <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-brand opacity-20 blur-[120px] group-hover:opacity-30 transition-opacity"></div>
@@ -375,20 +322,6 @@ export default function UniversalHub() {
                 <div className="flex items-center gap-3 mb-8">
                   <div className="bg-brand/20 p-2.5 rounded-xl text-brand"><Sparkles className="w-5 h-5 fill-brand" /></div>
                   <h2 className="text-2xl font-black text-white tracking-tight">Instant Analysis</h2>
-                  {user?.role === 'admin' && (
-                    <select 
-                      value={selectedVersion}
-                      onChange={(e) => setSelectedVersion(e.target.value)}
-                      className="ml-auto bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-brand outline-none focus:ring-1 focus:ring-brand"
-                    >
-                      <option className="bg-slate-900" value="Production">Prod (v1.2)</option>
-                      {modelOptions.map((m: any) => (
-                        <option key={m.version} className="bg-slate-900" value={m.version}>v{m.version}</option>
-                      ))}
-                      <option className="bg-slate-900" value="BERT">BERT Transformer</option>
-                      <option className="bg-slate-900" value="LSTM">Bi-LSTM</option>
-                    </select>
-                  )}
                 </div>
                 <form onSubmit={handlePredict} className="relative mb-8">
                   <input 
