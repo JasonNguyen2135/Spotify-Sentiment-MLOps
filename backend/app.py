@@ -283,7 +283,7 @@ async def predict(review_text: str, project_id: int, model_version: str = "Produ
     verify_project_access(project_id, current_user, db)
     if model_version != "Production" and current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
     res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text, "version": model_version}, timeout=10).json()
-    preds_log_col.insert_one({"text": review_text, "sentiment": res["sentiment"], "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), "model_version": model_version})
+    preds_log_col.insert_one({"text": review_text, "sentiment": res["sentiment"], "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), "model_version": model_version, "source": "instant_analysis"})
     if res["sentiment"] == "negative": db.add(Ticket(project_id=project_id, review_text=review_text, sentiment_score="negative")); db.commit()
     return res
 
@@ -302,11 +302,21 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     summary, results = {"positive": 0, "negative": 0, "neutral": 0}, []
     col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
+    
+    log_entries = []
     for i, row in df.head(100).iterrows():
         txt = str(row[col])
         try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
         except: sent = "neutral"
-        summary[sent] += 1; results.append({"id": i, "text": txt, "sentiment": sent, "time": datetime.utcnow().isoformat()})
+        summary[sent] += 1
+        results.append({"id": i, "text": txt, "sentiment": sent, "time": datetime.utcnow().isoformat()})
+        log_entries.append({
+            "text": txt, "sentiment": sent, "project_id": project_id, 
+            "user": current_user.username, "timestamp": datetime.utcnow(), 
+            "model_version": "Bulk Analysis", "source": "csv_upload"
+        })
+    
+    if log_entries: preds_log_col.insert_many(log_entries)
     return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
 # --- MLOps ---
@@ -352,7 +362,7 @@ def airflow_runs(current_user: User = Depends(get_current_user)):
 def github_runs(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
-    try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 15}, timeout=5).json().get("workflow_runs", [])
+    try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 30}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
 # --- Infrastructure ---
@@ -385,6 +395,7 @@ def get_audit_logs(project_id: int = None, db: Session = Depends(get_db), curren
 from fastapi.responses import StreamingResponse, Response
 @api_router.get("/export/logs/{project_id}")
 def export_logs(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Special case: project_id 0 means global logs for admin/tech roles
     query = {}
     if project_id != 0:
         verify_project_access(project_id, current_user, db)
@@ -396,7 +407,14 @@ def export_logs(project_id: int, db: Session = Depends(get_db), current_user: Us
     data = []
     for d in cursor:
         ts = d.get("timestamp")
-        data.append({"id": str(d["_id"]), "text": d.get("text"), "sentiment": d.get("sentiment"), "corrected": d.get("sentiment_corrected", ""), "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", "model": d.get("model_version", "Production")})
+        data.append({
+            "id": str(d["_id"]), 
+            "text": d.get("text"), 
+            "sentiment": d.get("sentiment"), 
+            "corrected": d.get("sentiment_corrected", ""), 
+            "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", 
+            "model": d.get("model_version", "Production")
+        })
     df = pd.DataFrame(data, columns=["id", "text", "sentiment", "corrected", "timestamp", "model"])
     output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
     return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=sentiment_logs.csv"})

@@ -114,20 +114,7 @@ export default function RegistryPage() {
             <Layers className="text-brand w-10 h-10" />
             Model <span className="text-brand">Registry</span>
           </h1>
-          <div className="flex items-center gap-4 mt-6 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 w-fit">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4">Context:</p>
-            <select 
-              value={activeProject?.id || ''} 
-              onChange={(e) => {
-                const p = projects.find(p => p.id === parseInt(e.target.value));
-                setActiveProject(p || null);
-              }}
-              className="bg-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest outline-none shadow-sm cursor-pointer border-none text-slate-700"
-            >
-              <option value="">Global / Select Workspace</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
+          <p className="text-gray-500 mt-2 font-medium">Manage model versions, stages, and production deployments.</p>
         </div>
         <div className="flex gap-3">
           <a href="http://localhost:31453/" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
