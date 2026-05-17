@@ -139,98 +139,94 @@ export default function RegistryPage() {
         </div>
       )}
 
-      <div className="space-y-12">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         <section className="space-y-6">
           <div className="flex items-center gap-2 px-2">
             <ShieldCheck className="w-5 h-5 text-brand" />
             <h2 className="text-xl font-bold text-gray-800 uppercase">Version Control</h2>
           </div>
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                <tr>
-                  <th className="px-10 py-6">Version / Model Name</th>
-                  <th className="px-10 py-6">Stage</th>
-                  <th className="px-10 py-6 text-right">Deployment</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {models.map((model) => (
-                  <tr key={`${model.name}-${model.version}`} className="hover:bg-slate-50/30 transition-colors">
-                    <td className="px-10 py-6">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-xs font-black text-slate-500 shadow-inner">v{model.version}</div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-900">{model.name}</p>
-                          <a href={model.mlflow_url} target="_blank" className="text-[10px] text-brand hover:underline font-black flex items-center gap-1 mt-1 uppercase tracking-tighter">
-                            <ExternalLink className="w-2.5 h-2.5" /> MLflow Details
-                          </a>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-6">
-                      <span className={clsx("px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border", model.current_stage === "Production" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : model.current_stage === "Staging" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-slate-100 text-slate-500 border-slate-200")}>
-                        {model.current_stage}
-                      </span>
-                    </td>
-                    <td className="px-10 py-6 text-right">
-                      {model.current_stage === "Production" ? (
-                        <div className="flex items-center justify-end gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em]">
-                          <ShieldCheck className="w-4 h-4" /> Served in Prod
-                        </div>
-                      ) : (
-                        <button onClick={() => handleDeploy(model.version, model.name)} disabled={!!deploying} className="bg-brand text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center gap-2 ml-auto disabled:bg-slate-100 disabled:text-slate-300 shadow-lg shadow-brand/20">
-                          {deploying === model.version ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-white" />}
-                          PROMPT & DEPLOY
-                        </button>
-                      )}
-                    </td>
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden h-[600px] flex flex-col">
+            <div className="overflow-y-auto flex-1">
+              <table className="w-full text-left">
+                <thead className="sticky top-0 bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest z-10">
+                  <tr>
+                    <th className="px-8 py-4">Version</th>
+                    <th className="px-8 py-4">Stage</th>
+                    <th className="px-8 py-4 text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {models.map((model) => (
+                    <tr key={`${model.name}-${model.version}`} className="hover:bg-slate-50/30 transition-colors">
+                      <td className="px-8 py-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-black text-slate-500 shadow-inner">v{model.version}</div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{model.name}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <span className={clsx("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border", model.current_stage === "Production" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : model.current_stage === "Staging" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-slate-100 text-slate-500 border-slate-200")}>
+                          {model.current_stage}
+                        </span>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        {model.current_stage === "Production" ? (
+                          <ShieldCheck className="w-5 h-5 text-emerald-600 ml-auto" />
+                        ) : (
+                          <button onClick={() => handleDeploy(model.version, model.name)} disabled={!!deploying} className="bg-brand text-white p-2 rounded-lg hover:opacity-90 transition-all disabled:bg-slate-100 disabled:text-slate-300 shadow-md">
+                            {deploying === model.version ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-white" />}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
 
         <section className="space-y-6">
           <div className="flex items-center gap-2 px-2">
             <List className="w-5 h-5 text-brand" />
-            <h2 className="text-xl font-bold text-gray-800 uppercase">Deployment History</h2>
+            <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">Deployment History</h2>
           </div>
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                <tr>
-                  <th className="px-10 py-6">Pipeline Run</th>
-                  <th className="px-10 py-6">Status</th>
-                  <th className="px-10 py-6">Timestamp</th>
-                  <th className="px-10 py-6 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {runs.length > 0 ? runs.map((run) => (
-                  <tr key={run.id} className="hover:bg-slate-50/30 transition-colors group">
-                    <td className="px-10 py-6">
-                      <p className="text-sm font-bold text-slate-900">{run.type}</p>
-                      <p className="text-[10px] text-slate-400 mt-1 font-medium">{run.details}</p>
-                    </td>
-                    <td className="px-10 py-6">
-                      <span className={clsx("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest", run.status === "success" || run.status === "completed" ? "bg-emerald-100 text-emerald-700" : run.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
-                        {run.status}
-                      </span>
-                    </td>
-                    <td className="px-10 py-6 text-xs font-bold text-slate-400">
-                      {new Date(run.time || Date.now()).toLocaleString()}
-                    </td>
-                    <td className="px-10 py-6 text-right">
-                      <a href={run.raw?.html_url} target="_blank" className="text-brand hover:underline font-black text-[10px] uppercase tracking-widest">View on GitHub</a>
-                    </td>
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden h-[600px] flex flex-col">
+            <div className="overflow-y-auto flex-1">
+              <table className="w-full text-left">
+                <thead className="sticky top-0 bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest z-10">
+                  <tr>
+                    <th className="px-8 py-4">Pipeline</th>
+                    <th className="px-8 py-4">Status</th>
+                    <th className="px-8 py-4 text-right">Link</th>
                   </tr>
-                )) : (
-                  <tr><td colSpan={4} className="py-20 text-center text-slate-300 italic font-medium">No deployment history found.</td></tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {runs.length > 0 ? runs.map((run) => (
+                    <tr key={run.id} className="hover:bg-slate-50/30 transition-colors group">
+                      <td className="px-8 py-5">
+                        <p className="text-sm font-bold text-slate-900 line-clamp-1">{run.details}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 uppercase font-black">{new Date(run.time).toLocaleDateString()}</p>
+                      </td>
+                      <td className="px-8 py-5">
+                        <span className={clsx("px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter", run.status === "success" || run.status === "completed" ? "bg-emerald-50 text-emerald-600" : run.status === "failed" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600")}>
+                          {run.status}
+                        </span>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <a href={run.raw?.html_url} target="_blank" className="text-brand hover:underline font-black text-[10px] uppercase">
+                           <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan={3} className="py-20 text-center text-slate-300 italic font-medium">No deployment history found.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       </div>

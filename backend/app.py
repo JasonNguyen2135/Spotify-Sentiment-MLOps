@@ -266,6 +266,7 @@ def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), curren
     return [{"text": "demo", "value": 10}]
 
 # --- History & HITL ---
+@api_router.get("/history")
 @api_router.get("/user-history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Strictly filter for Instant Analysis and Bulk Analysis sources
@@ -302,9 +303,20 @@ async def predict(review_text: str, project_id: int, model_version: str = "Produ
 @api_router.post("/correction")
 def correction(prediction_id: str, text: str, corrected_sentiment: str, project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
-    feedback_col.insert_one({"text": text, "corrected_sentiment": corrected_sentiment, "user": current_user.username, "timestamp": datetime.utcnow(), "original_id": prediction_id, "project_id": project_id})
+    feedback_col.insert_one({
+        "text": text, 
+        "corrected_sentiment": corrected_sentiment, 
+        "user": current_user.username, 
+        "timestamp": datetime.utcnow(), 
+        "original_id": prediction_id, 
+        "project_id": project_id
+    })
     from bson import ObjectId
-    try: preds_log_col.update_one({"_id": ObjectId(prediction_id)}, {"$set": {"sentiment_corrected": corrected_sentiment}})
+    try: 
+        preds_log_col.update_one(
+            {"_id": ObjectId(prediction_id)}, 
+            {"$set": {"sentiment_corrected": corrected_sentiment}}
+        )
     except: pass
     return {"status": "success"}
 
