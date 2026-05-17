@@ -81,7 +81,7 @@ class AlertRule(Base):
     name = Column(String)
     threshold = Column(Integer)
     channel = Column(String)
-    destination = Column(String)
+    destination = Column(String) # Slack Webhook URL now
 
 class Ticket(Base):
     __tablename__ = "tickets"
@@ -105,7 +105,7 @@ def migrate_db():
                 db.commit()
             except: db.rollback()
         
-        # Initialize unique credentials for projects
+        # Initialize unique credentials
         projects = db.query(Project).all()
         for p in projects:
             if not p.uuid: p.uuid = str(uuid.uuid4())[:8]
@@ -116,10 +116,6 @@ def migrate_db():
         if not admin:
             admin = User(username="admin", hashed_password=CryptContext(schemes=["bcrypt"]).hash("admin123"), role="admin")
             db.add(admin); db.commit()
-        if not db.query(Project).first():
-            p = Project(name="Default Workspace", description="Auto-created.", owner_id=admin.id, uuid=str(uuid.uuid4())[:8], api_key=secrets.token_hex(16))
-            db.add(p); db.commit(); db.refresh(p)
-            db.query(DataSource).update({DataSource.project_id: p.id}); db.query(AlertRule).update({AlertRule.project_id: p.id}); db.commit()
     finally: db.close()
 
 # Helpers
@@ -174,7 +170,14 @@ def redis_worker():
                     sent = res["sentiment"]
                 except: sent = "neutral"
                 preds_log_col.insert_one({"text": txt, "sentiment": sent, "project_id": pid, "user": data.get("user_id", "worker"), "timestamp": msg_ts, "source": "webhook_async", "model_version": "Production (Async)"})
-                if sent == "negative": db_session.add(Ticket(project_id=pid, review_text=txt, sentiment_score="negative")); db_session.commit()
+                if sent == "negative": 
+                    db_session.add(Ticket(project_id=pid, review_text=txt, sentiment_score="negative"))
+                    # Simulated Slack Trigger
+                    alert = db_session.query(AlertRule).filter(AlertRule.project_id == pid, AlertRule.name == "Slack Notification").first()
+                    if alert and alert.destination:
+                        try: requests.post(alert.destination, json={"text": f"🚨 Negative Sentiment Detected in Project {pid}: {txt[:100]}..."})
+                        except: pass
+                    db_session.commit()
         except Exception as e: print(f"Worker Error: {e}"); time.sleep(2)
 
 worker_thread = threading.Thread(target=redis_worker, daemon=True); worker_thread.start()
@@ -304,19 +307,13 @@ async def predict(review_text: str, project_id: int, model_version: str = "Produ
 def correction(prediction_id: str, text: str, corrected_sentiment: str, project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
     feedback_col.insert_one({
-        "text": text, 
-        "corrected_sentiment": corrected_sentiment, 
-        "user": current_user.username, 
-        "timestamp": datetime.utcnow(), 
-        "original_id": prediction_id, 
-        "project_id": project_id
+        "text": text, "corrected_sentiment": corrected_sentiment, 
+        "user": current_user.username, "timestamp": datetime.utcnow(), 
+        "original_id": prediction_id, "project_id": project_id
     })
     from bson import ObjectId
     try: 
-        preds_log_col.update_one(
-            {"_id": ObjectId(prediction_id)}, 
-            {"$set": {"sentiment_corrected": corrected_sentiment}}
-        )
+        preds_log_col.update_one({"_id": ObjectId(prediction_id)}, {"$set": {"sentiment_corrected": corrected_sentiment}})
     except: pass
     return {"status": "success"}
 
@@ -417,31 +414,28 @@ def get_audit_logs(project_id: int = None, db: Session = Depends(get_db), curren
 
 # --- Reporting ---
 from fastapi.responses import StreamingResponse, Response
-@api_router.get("/export/logs/{project_id}")
-def export_logs(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Special case: project_id 0 means global logs for admin/tech roles
-    query = {}
-    if project_id != 0:
-        verify_project_access(project_id, current_user, db)
-        query = {"project_id": {"$in": [project_id, str(project_id)]}}
-    elif current_user.role not in ["admin", "ai_engineer", "analyst"]:
-        raise HTTPException(status_code=403)
-
-    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(5000)
+@api_router.get("/export/excel/{project_id}")
+@api_router.get("/export/csv/{project_id}")
+def export_csv_report(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_access(project_id, current_user, db)
+    cursor = preds_log_col.find({"project_id": project_id}).sort("timestamp", -1).limit(5000)
     data = []
     for d in cursor:
         ts = d.get("timestamp")
         data.append({
-            "id": str(d["_id"]), 
-            "text": d.get("text"), 
-            "sentiment": d.get("sentiment"), 
+            "text": d.get("text"), "sentiment": d.get("sentiment"), 
             "corrected": d.get("sentiment_corrected", ""), 
             "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", 
             "model": d.get("model_version", "Production")
         })
-    df = pd.DataFrame(data, columns=["id", "text", "sentiment", "corrected", "timestamp", "model"])
+    df = pd.DataFrame(data)
     output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
-    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=sentiment_logs.csv"})
+    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=project_{project_id}_predictions.csv"})
+
+@api_router.get("/export/pdf/{project_id}")
+def export_pdf_report(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_access(project_id, current_user, db)
+    return {"project_id": project_id, "export_time": datetime.utcnow().isoformat(), "type": "Chart Analytics Summary"}
 
 @api_router.post("/collect/{project_uuid}")
 async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(get_db)):

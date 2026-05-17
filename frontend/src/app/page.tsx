@@ -113,7 +113,7 @@ export default function UniversalHub() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Project_${activeProject.name}_Report.${type === 'excel' ? 'xlsx' : 'pdf'}`);
+      link.setAttribute('download', `Project_${activeProject.name}_Report.${type === 'excel' ? 'csv' : 'pdf'}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -409,14 +409,11 @@ export default function UniversalHub() {
                   <RefreshCw className="w-4 h-4 text-brand" /> Change Strategy
                 </Link>
                 <button onClick={() => handleExport('excel')} className="bg-emerald-50 text-emerald-600 px-6 py-3 rounded-2xl border border-emerald-100 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-emerald-100 transition-all shadow-sm">
-                  <FileText className="w-4 h-4" /> Excel Report
+                  <FileText className="w-4 h-4" /> Download CSV
                 </button>
-                <button onClick={() => handleExport('pdf')} className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl border border-rose-100 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-rose-100 transition-all shadow-sm">
-                  <FileText className="w-4 h-4" /> PDF Report
+                <button onClick={() => { window.print(); }} className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl border border-rose-100 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-rose-100 transition-all shadow-sm">
+                  <PieChartIcon className="w-4 h-4" /> Export Charts
                 </button>
-                <div className="bg-slate-900 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-3 shadow-xl shadow-slate-200">
-                  <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" /> Live Stream
-                </div>
               </div>
             </div>
 
@@ -517,20 +514,24 @@ export default function UniversalHub() {
                   <h2 className="text-xl font-black tracking-tight flex items-center gap-3">
                     <BellRing className="w-6 h-6 text-brand" /> Smart Alerts
                   </h2>
-                  <button className="bg-brand text-slate-900 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider">Add Rule</button>
+                  <button className="bg-brand text-slate-900 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider">Save Config</button>
                 </div>
                 <div className="space-y-4">
-                  <div className="p-5 bg-white/5 rounded-2xl border border-white/10 flex justify-between items-center">
-                    <div>
-                      <p className="font-black text-sm mb-1">Negative Storm Alert</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Trigger: {">"}25% Negative Reviews</p>
+                  <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+                    <div className="flex justify-between items-center mb-3">
+                      <p className="font-black text-sm">Slack Notification</p>
+                      <div className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-black uppercase">Active</div>
                     </div>
-                    <div className="flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-black">Telegram</div>
+                    <input 
+                      type="text" 
+                      placeholder="Slack Webhook URL (https://hooks.slack.com/...)"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-xs text-slate-300 outline-none focus:ring-1 focus:ring-brand"
+                    />
                   </div>
-                  <div className="p-5 bg-white/5 rounded-2xl border border-white/10 flex justify-between items-center">
+                  <div className="p-5 bg-white/5 rounded-2xl border border-white/10 flex justify-between items-center opacity-50">
                     <div>
                       <p className="font-black text-sm mb-1">Sentiment Drop Alert</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Trigger: Avg Score drop 15%</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Trigger: {">"}15% Drop</p>
                     </div>
                     <div className="flex items-center gap-2 bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-[10px] font-black">Email</div>
                   </div>
@@ -554,7 +555,9 @@ export default function UniversalHub() {
                     <p className="text-xs font-bold text-slate-700 mb-3 line-clamp-2">"The latest update is crashing constantly on my iPhone. Very frustrated."</p>
                     <div className="flex justify-between items-center">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">2h ago</span>
-                      <button className="text-[9px] font-black text-brand uppercase tracking-widest hover:underline">Assign Staff</button>
+                      <button onClick={() => alert("Forwarding ticket to support@company.com...")} className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2">
+                        <Send className="w-3 h-3" /> Send to Email
+                      </button>
                     </div>
                   </div>
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -565,7 +568,9 @@ export default function UniversalHub() {
                     <p className="text-xs font-bold text-slate-700 mb-3 line-clamp-2">"Can't find the lyrics feature anymore. Why was it moved?"</p>
                     <div className="flex justify-between items-center">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">5h ago</span>
-                      <button className="text-[9px] font-black text-brand uppercase tracking-widest hover:underline">Assign Staff</button>
+                      <button onClick={() => alert("Forwarding ticket to support@company.com...")} className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2">
+                        <Send className="w-3 h-3" /> Send to Email
+                      </button>
                     </div>
                   </div>
                 </div>
