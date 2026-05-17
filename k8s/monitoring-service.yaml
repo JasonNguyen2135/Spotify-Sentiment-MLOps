@@ -17,7 +17,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: monitoring
-          image: registry.ntdevopsregistry.io.vn/mlops/spotify-monitoring:v10
+          image: registry.ntdevopsregistry.io.vn/mlops/spotify-monitoring:8d336a916599b6f8724d03f5a35e109481cd5cc8
           env:
             - name: RABBITMQ_HOST
               value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
