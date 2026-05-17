@@ -274,7 +274,9 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
         ts = d.get("timestamp")
         history.append({
             "id": str(d["_id"]), "text": d.get("text", ""), "sentiment": d.get("sentiment", "neutral"),
-            "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else datetime.utcnow().isoformat()
+            "sentiment_corrected": d.get("sentiment_corrected"),
+            "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else datetime.utcnow().isoformat(),
+            "model_version": d.get("model_version", "Production")
         })
     return history
 
