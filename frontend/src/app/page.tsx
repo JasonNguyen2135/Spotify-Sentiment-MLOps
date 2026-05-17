@@ -255,11 +255,6 @@ export default function UniversalHub() {
             {activeProject ? `Project-specific intelligence & correction.` : 'Global sentiment toolkit.'}
           </p>
         </div>
-        {activeProject && (
-          <button onClick={() => handleDeleteProject(activeProject.id)} className="bg-rose-50 text-rose-600 p-4 rounded-2xl hover:bg-rose-100 transition-all border border-rose-100 shadow-sm">
-            <Trash2 className="w-6 h-6" />
-          </button>
-        )}
       </div>
 
       {!activeProject ? (
@@ -533,12 +528,21 @@ export default function UniversalHub() {
                   {fullHistory.length === 0 && (
                     <tr><td colSpan={3} className="py-20 text-center text-slate-300 italic font-medium">No workspace predictions to audit yet.</td></tr>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+                  </tbody>
+                  </table>
+                  </div>
+                  </div>
+                  <div className="flex justify-center pt-12 border-t border-slate-100">
+                  <button 
+                  onClick={() => handleDeleteProject(activeProject.id)}
+                  className="flex items-center gap-2 text-rose-500 font-black text-xs uppercase tracking-[0.2em] hover:text-rose-600 transition-colors group"
+                  >
+                  <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" /> Delete Workspace
+                  </button>
+                  </div>
+                  </div>
+                  ) : (
+
 
       {showCreate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] flex items-center justify-center p-6">

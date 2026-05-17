@@ -160,18 +160,44 @@ export default function ConnectorsPage() {
         </div>
       </div>
     );
-  }
+  const handleChangeMode = async () => {
+    if (!confirm("Are you sure you want to change monitoring strategy? This will delete current connector configurations and reset your tracking mode.")) return;
 
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      // Delete existing connectors for this project
+      for (const s of sources) {
+        await axios.delete(`/api/connectors/${s.id}`, { headers });
+      }
+
+      setSources([]);
+      setForceApiMode(false);
+      setForceCrawlerMode(false);
+      setActiveTab('crawlers');
+      setStats({ type: 'success', msg: 'Monitoring strategy reset. Please select a new mode.' });
+    } catch (err) {
+      alert("Failed to reset strategy");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (authLoading || (loading && !sources.length && !alerts.length)) {
+  // ...
   return (
     <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20 px-4">
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
              <span className={clsx("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest", currentMode === 'CRAWLER' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700")}>{currentMode} MODE ACTIVE</span>
-             <button onClick={() => { if(confirm("Reset?")) { setForceApiMode(false); setForceCrawlerMode(false); } }} className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase">Change Mode</button>
+             <button onClick={handleChangeMode} className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest transition-colors">Change Mode</button>
           </div>
           <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3">Automation Hub</h1>
         </div>
+
         <div className="flex items-center gap-4">
            <button onClick={() => router.push('/')} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2 shadow-xl shadow-slate-200">Apply & Finish <ArrowRight className="w-4 h-4" /></button>
            <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
