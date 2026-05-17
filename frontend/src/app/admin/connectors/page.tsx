@@ -130,6 +130,30 @@ export default function ConnectorsPage() {
     } catch (err: any) { setStats({ type: 'error', msg: 'Failed to update' }); } finally { setSubmitting(false); }
   };
 
+  const handleChangeMode = async () => {
+    if (!confirm("Are you sure you want to change monitoring strategy? This will delete current connector configurations and reset your tracking mode.")) return;
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      for (const s of sources) {
+        await axios.delete(`/api/connectors/${s.id}`, { headers });
+      }
+
+      setSources([]);
+      setForceApiMode(false);
+      setForceCrawlerMode(false);
+      setActiveTab('crawlers');
+      setStats({ type: 'success', msg: 'Monitoring strategy reset.' });
+    } catch (err) {
+      alert("Failed to reset strategy");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (authLoading || (loading && !sources.length && !alerts.length)) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh]">
@@ -162,33 +186,6 @@ export default function ConnectorsPage() {
     );
   }
 
-  const handleChangeMode = async () => {
-    if (!confirm("Are you sure you want to change monitoring strategy? This will delete current connector configurations and reset your tracking mode.")) return;
-
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-
-      // Delete existing connectors for this project
-      for (const s of sources) {
-        await axios.delete(`/api/connectors/${s.id}`, { headers });
-      }
-
-      setSources([]);
-      setForceApiMode(false);
-      setForceCrawlerMode(false);
-      setActiveTab('crawlers');
-      setStats({ type: 'success', msg: 'Monitoring strategy reset. Please select a new mode.' });
-    } catch (err) {
-      alert("Failed to reset strategy");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (authLoading || (loading && !sources.length && !alerts.length)) {
-  // ...
   return (
     <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20 px-4">
       <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
@@ -307,6 +304,24 @@ export default function ConnectorsPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'alerts' && (
+        <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl text-white">
+           <h2 className="text-2xl font-black mb-8 flex items-center gap-3"><Bell className="text-brand" /> Smart Alert Rules</h2>
+           <div className="space-y-4">
+              {alerts.map(a => (
+                <div key={a.id} className="p-4 bg-white/5 border border-white/10 rounded-2xl flex justify-between items-center">
+                   <div><p className="font-bold">{a.name}</p><p className="text-[10px] text-slate-400 uppercase">Trigger: {">"}{a.threshold}% Negative</p></div>
+                   <button onClick={async () => {
+                     const token = localStorage.getItem('token');
+                     await axios.delete(`/api/alerts/${a.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                     fetchData();
+                   }} className="text-rose-500 hover:bg-rose-500/10 p-2 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+           </div>
         </div>
       )}
     </div>
