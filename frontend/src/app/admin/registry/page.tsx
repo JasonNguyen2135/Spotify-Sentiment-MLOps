@@ -112,7 +112,7 @@ export default function RegistryPage() {
           <p className="text-gray-500 mt-2">Manage model versions, stages, and production deployments.</p>
         </div>
         <div className="flex gap-3">
-          <a href="http://localhost:30086" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
+          <a href="http://localhost:31453/" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
             <Activity className="w-4 h-4 text-emerald-500" /> Evidently
           </a>
           <a href="https://github.com/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_build_deploy_model_service.yml" target="_blank" rel="noopener noreferrer" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-all">

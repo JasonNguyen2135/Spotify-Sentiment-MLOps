@@ -146,7 +146,7 @@ export default function TrainingPage() {
           <p className="text-gray-500 mt-2">Automated model training and pipeline monitoring.</p>
         </div>
         <div className="flex gap-3">
-          <a href="http://airflow.ntdevopsairflow.io.vn" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
+          <a href="http://localhost:31190/" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
              <Activity className="w-4 h-4 text-emerald-500" /> Airflow UI
           </a>
           <a href="https://github.com/JasonNguyen2135/Spotify-Sentiment-MLOps/actions" target="_blank" rel="noopener noreferrer" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200">
@@ -154,7 +154,6 @@ export default function TrainingPage() {
           </a>
         </div>
       </div>
-
       {status && (
         <div className={clsx("mb-10 p-6 rounded-2xl flex items-center justify-between border", status.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100')}>
           <div className="flex items-center gap-4">

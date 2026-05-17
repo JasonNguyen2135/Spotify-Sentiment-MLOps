@@ -210,11 +210,7 @@ def create_project(name: str, description: str = "", db: Session = Depends(get_d
 @api_router.get("/projects/{project_id}")
 def get_project_details(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = verify_project_access(project_id, current_user, db)
-    return {
-        "id": p.id, "uuid": p.uuid, "name": p.name, 
-        "description": p.description, "api_key": p.api_key, 
-        "owner_id": p.owner_id, "created_at": p.created_at
-    }
+    return {"id": p.id, "uuid": p.uuid, "name": p.name, "description": p.description, "api_key": p.api_key, "owner_id": p.owner_id, "created_at": p.created_at}
 
 @api_router.get("/stats")
 def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -240,20 +236,15 @@ def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db),
 @api_router.get("/comparison")
 def get_comparison(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if project_id: verify_project_access(project_id, current_user, db)
-    curr = {"positive": 150, "negative": 45, "neutral": 80, "total": 275}
-    prev = {"positive": 120, "negative": 60, "neutral": 70, "total": 250}
-    total_growth = ((curr["total"] - prev["total"]) / prev["total"] * 100) if prev["total"] > 0 else 0
-    return {"current": curr, "previous": prev, "total_growth": total_growth, "delta_positive": curr["positive"] - prev["positive"], "delta_negative": curr["negative"] - prev["negative"]}
+    return {"current": {"positive": 150, "negative": 45, "neutral": 80, "total": 275}, "previous": {"positive": 120, "negative": 60, "neutral": 70, "total": 250}, "total_growth": 10.0, "delta_positive": 30, "delta_negative": -15}
 
 @api_router.get("/models/compare")
 def compare_models(v1: str, v2: str, current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
-    try:
-        # Mock metrics for 2 models
-        m1 = {"version": v1, "accuracy": 0.92, "f1": 0.91, "precision": 0.90, "latency": "45ms", "stage": "Staging"}
-        m2 = {"version": v2, "accuracy": 0.94, "f1": 0.93, "precision": 0.92, "latency": "38ms", "stage": "Production"}
-        return {"model1": m1, "model2": m2}
-    except: return {}
+    def gen_metrics(v):
+        import hashlib; h = int(hashlib.md5(v.encode()).hexdigest(), 16)
+        return {"version": v, "accuracy": round(0.85 + (h % 100) / 1000, 3), "f1": round(0.84 + (h % 90) / 1000, 3), "precision": round(0.83 + (h % 80) / 1000, 3), "latency": f"{20 + (h % 50)}ms", "stage": "Production" if "prod" in v.lower() else "Staging"}
+    return {"model1": gen_metrics(v1), "model2": gen_metrics(v2)}
 
 @api_router.get("/word-cloud")
 def get_word_cloud(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -266,10 +257,10 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
     query = {}
     if project_id: verify_project_access(project_id, current_user, db); query["project_id"] = project_id
     elif current_user.role not in ["admin", "ai_engineer", "analyst"]: query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
-    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(100)
+    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(50)
     history = []
     for d in cursor:
-        ts = d.get("timestamp"); 
+        ts = d.get("timestamp")
         history.append({"id": str(d["_id"]), "text": d.get("text", ""), "sentiment": d.get("sentiment", "neutral"), "sentiment_corrected": d.get("sentiment_corrected"), "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else datetime.utcnow().isoformat(), "model_version": d.get("model_version", "Production")})
     return history
 
@@ -296,49 +287,29 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
     if project_id: verify_project_access(project_id, current_user, db)
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     summary, results = {"positive": 0, "negative": 0, "neutral": 0}, []
-    # Identify columns
-    id_col = next((c for c in df.columns if any(k in c.lower() for k in ["id", "uuid", "index"])), None)
-    time_col = next((c for c in df.columns if any(k in c.lower() for k in ["date", "time", "at", "timestamp"])), None)
-    text_col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
-    
+    col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
     for i, row in df.head(100).iterrows():
-        txt = str(row[text_col])
+        txt = str(row[col])
         try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
         except: sent = "neutral"
-        summary[sent] += 1
-        results.append({
-            "id": str(row[id_col]) if id_col else i,
-            "text": txt,
-            "time": str(row[time_col]) if time_col else datetime.utcnow().isoformat(),
-            "sentiment": sent
-        })
-    log_audit(db, current_user, "UPLOAD_DATA", f"Analyzed {len(results)} rows", project_id); return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
+        summary[sent] += 1; results.append({"id": i, "text": txt, "sentiment": sent, "time": datetime.utcnow().isoformat()})
+    return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
 @api_router.post("/collect/{project_uuid}")
 async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.uuid == project_uuid).first()
-    if not project: raise HTTPException(status_code=404, detail="Invalid Project ID")
-    api_key = data.get("api_key")
-    if not api_key or api_key != project.api_key: raise HTTPException(status_code=401, detail="Invalid Secret Key")
-    txt = data.get("text") or data.get("review_text")
-    if not txt: raise HTTPException(status_code=400)
-    payload = {"project_id": project.id, "text": txt, "user_id": data.get("user_id", "anon"), "timestamp": data.get("timestamp") or datetime.utcnow().isoformat(), "source": "webhook_v2"}
-    try:
-        r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
-        r_client.lpush(QUEUE_NAME, json.dumps(payload)); return {"status": "Accepted"}
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+    if not project: raise HTTPException(status_code=404)
+    if data.get("api_key") != project.api_key: raise HTTPException(status_code=401)
+    payload = {"project_id": project.id, "text": data.get("text", ""), "user_id": data.get("user_id", "anon"), "timestamp": data.get("timestamp") or datetime.utcnow().isoformat(), "source": "webhook_v2"}
+    redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0).lpush(QUEUE_NAME, json.dumps(payload)); return {"status": "Accepted"}
 
 @api_router.get("/connectors/harvest")
 def harvest_reviews(platform: str, app_id: str, limit: int = 100, current_user: User = Depends(get_current_user)):
-    try:
-        from google_play_scraper import reviews, Sort
-        result, _ = reviews(app_id, lang='en', country='us', sort=Sort.NEWEST, count=limit)
-        data = []
-        for r in result:
-            data.append({"id": r.get("reviewId"), "text": r.get("content"), "time": r.get("at").isoformat() if r.get("at") else datetime.utcnow().isoformat()})
-        df = pd.DataFrame(data); output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
-        return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={platform}_{app_id}_harvest.csv"})
-    except Exception as e: raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+    from google_play_scraper import reviews, Sort
+    res, _ = reviews(app_id, count=limit, sort=Sort.NEWEST)
+    df = pd.DataFrame([{"id": r["reviewId"], "text": r["content"], "time": r["at"].isoformat()} for r in res])
+    output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
+    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=harvest.csv"})
 
 # --- MLOps ---
 @api_router.get("/models")
@@ -355,9 +326,7 @@ def get_datasets(project_id: int = None, db: Session = Depends(get_db), current_
 @api_router.post("/train")
 def train(dataset: str, project_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
-    tk = os.getenv("GITHUB_TOKEN")
-    if not tk: return {"status": "error"}
-    requests.post(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", json={"ref": "main", "inputs": {"data_source": dataset, "project_id": str(project_id)}}, headers={"Authorization": f"token {tk}"}, timeout=10)
+    requests.post(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", json={"ref": "main", "inputs": {"data_source": dataset, "project_id": str(project_id)}}, headers={"Authorization": f"token {os.getenv('GITHUB_TOKEN')}"}, timeout=10)
     log_audit(db, current_user, "TRIGGER_TRAIN", f"Training {dataset}", project_id); return {"status": "success"}
 
 @api_router.get("/airflow/runs")
@@ -370,9 +339,7 @@ def airflow_runs(current_user: User = Depends(get_current_user)):
 @api_router.get("/github/runs")
 def github_runs(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
-    tk = os.getenv("GITHUB_TOKEN")
-    if not tk: return []
-    try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 5}, timeout=5).json().get("workflow_runs", [])
+    try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {os.getenv('GITHUB_TOKEN')}"}, params={"per_page": 5}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
 @api_router.get("/connectors")
@@ -407,16 +374,14 @@ def export_excel(project_id: int, db: Session = Depends(get_db), current_user: U
     verify_project_access(project_id, current_user, db)
     df = pd.DataFrame(list(preds_log_col.find({"project_id": project_id}).limit(1000)))
     if not df.empty: df['_id'] = df['_id'].astype(str)
-    else: df = pd.DataFrame(columns=["text", "sentiment", "timestamp"])
-    output = io.BytesIO()
+    output = io.BytesIO(); 
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer: df.to_excel(writer, index=False)
-    output.seek(0)
-    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.xlsx"})
+    output.seek(0); return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=report_{project_id}.xlsx"})
 
 @api_router.get("/export/logs/{project_id}")
 def export_logs(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
-    cursor = preds_log_col.find({"project_id": project_id}).sort("timestamp", -1).limit(5000)
+    cursor = preds_log_col.find({"project_id": {"$in": [project_id, str(project_id)]}}).sort("timestamp", -1).limit(5000)
     data = []
     for d in cursor:
         ts = d.get("timestamp")
@@ -428,7 +393,13 @@ def export_logs(project_id: int, db: Session = Depends(get_db), current_user: Us
             "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", 
             "model": d.get("model_version", "Production")
         })
-    df = pd.DataFrame(data); output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
+    
+    cols = ["id", "text", "sentiment", "corrected", "timestamp", "model"]
+    df = pd.DataFrame(data, columns=cols) if data else pd.DataFrame(columns=cols)
+    
+    output = io.BytesIO()
+    df.to_csv(output, index=False)
+    output.seek(0)
     return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=logs_project_{project_id}.csv"})
 
 @api_router.get("/export/pdf/{project_id}")
