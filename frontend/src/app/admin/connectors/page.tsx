@@ -224,7 +224,19 @@ export default function ConnectorsPage() {
              )}>
                {currentMode} MODE ACTIVE
              </span>
-             <button onClick={() => { if(confirm("Reset monitoring strategy? This won't delete data but will let you choose a new mode.")) { setForceApiMode(false); if(sources.length) sources.forEach(s => handleDelete('connectors', s.id)); } }} className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest">Change Mode</button>
+             <button 
+                onClick={() => { 
+                  if(confirm("Reset monitoring strategy? This will let you choose a new mode (Crawler vs Webhook).")) { 
+                    setForceApiMode(false); 
+                    setForceCrawlerMode(false);
+                    // We don't delete sources automatically to prevent data loss, 
+                    // but currentMode will become 'NONE' if no sources exist.
+                  } 
+                }} 
+                className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest"
+             >
+               Change Mode
+             </button>
           </div>
           <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3">
             <RefreshCw className="text-brand w-10 h-10" />
@@ -235,7 +247,7 @@ export default function ConnectorsPage() {
         <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
           {[
             ...(currentMode === 'CRAWLER' ? [{ id: 'crawlers', label: 'Auto-Crawlers', icon: Smartphone }] : []),
-            ...(!activeProject ? [{ id: 'alerts', label: 'Smart Alerts', icon: Zap }] : []),
+            ...(activeProject ? [{ id: 'alerts', label: 'Smart Alerts', icon: Zap }] : []),
             ...(currentMode === 'API' ? [
               { id: 'webhooks', label: 'Webhooks', icon: Code }
             ] : []),
