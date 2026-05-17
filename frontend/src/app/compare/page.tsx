@@ -45,9 +45,10 @@ export default function ComparePage() {
     };
     if (user) {
       fetchModels();
-      fetchComparison();
+      // Don't auto-run comparison on load, wait for user click
+      setLoading(false);
     }
-  }, [user, authLoading, router, fetchComparison]);
+  }, [user, authLoading, router]);
 
   const MetricCard = ({ label, m1, m2, unit = "" }: any) => {
     const val1 = parseFloat(m1) || 0;
