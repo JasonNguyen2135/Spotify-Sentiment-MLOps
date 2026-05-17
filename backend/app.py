@@ -184,7 +184,7 @@ worker_thread = threading.Thread(target=redis_worker, daemon=True); worker_threa
 app = FastAPI(); app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 api_router = APIRouter()
 
-# --- API Endpoints ---
+# --- Auth ---
 @api_router.post("/register")
 def register(username: str, password: str, role: str = "user", db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == username).first(): raise HTTPException(status_code=400)
@@ -196,6 +196,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not pwd_context.verify(form_data.password, user.hashed_password): raise HTTPException(status_code=400)
     return {"access_token": create_access_token({"sub": user.username, "role": user.role}), "token_type": "bearer", "role": user.role}
 
+# --- Projects ---
 @api_router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role in ["admin", "ai_engineer", "analyst"]: projects = db.query(Project).all()
@@ -236,6 +237,7 @@ def update_project_config(project_id: int, slack_webhook: str = None, support_em
     if support_email is not None: p.support_email = support_email
     db.commit(); return p
 
+# --- Analytics ---
 @api_router.get("/stats")
 def get_stats(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
@@ -394,6 +396,12 @@ def github_runs(current_user: User = Depends(get_current_user)):
     try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {os.getenv('GITHUB_TOKEN')}"}, params={"per_page": 30}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
+# --- Infrastructure ---
+@api_router.get("/connectors")
+def get_connectors(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_access(project_id, current_user, db)
+    return db.query(DataSource).filter(DataSource.project_id == project_id).all()
+
 @api_router.get("/alerts")
 def get_alerts(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
@@ -422,6 +430,7 @@ def get_audit_logs(db: Session = Depends(get_db), current_user: User = Depends(g
     if current_user.role != "admin": raise HTTPException(status_code=403)
     return db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(100).all()
 
+# --- Reporting ---
 @api_router.get("/export/excel/{project_id}")
 def export_csv_report(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
