@@ -51,7 +51,7 @@ export default function TrainingPage() {
       }));
       
       const githubRuns = (githubRunsRes.data || [])
-        .filter((r: any) => r.workflow_filename === 'manual_train.yml')
+        .filter((r: any) => r.path?.includes('manual_train.yml'))
         .map((r: any) => ({
           id: r.id,
           type: 'GitHub (Training)',
