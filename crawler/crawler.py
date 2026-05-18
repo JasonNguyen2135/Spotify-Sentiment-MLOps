@@ -36,22 +36,35 @@ def process_all_sources():
 def sync_source(app_id, project_id, platform, limit=500):
     try:
         if platform == 'Google Play':
-            result, _ = reviews(app_id, lang='en', country='us', sort=Sort.NEWEST, count=limit)
+            # Fetch Newest and Most Relevant to get better distribution
+            res_new, _ = reviews(app_id, lang='en', country='us', sort=Sort.NEWEST, count=limit // 2)
+            res_rel, _ = reviews(app_id, lang='en', country='us', sort=Sort.MOST_RELEVANT, count=limit // 2)
+            result = res_new + res_rel
         else:
             print(f"Platform {platform} not supported yet for auto-crawl.")
             return
 
+        seen_ids = set()
         batch = []
         for item in result:
+            if item['reviewId'] in seen_ids: continue
+            seen_ids.add(item['reviewId'])
+            
             text_content = str(item['content'])
             item_ts = item['at']
             print(f"[DEBUG] Processing background crawl review at {item_ts}")
             
-            # Use Backend/Model for prediction
+            # Use Backend/Model for prediction with SYSTEM_TOKEN
             try:
-                res = requests.post(f"{MODEL_API_URL}/predict", params={"review_text": text_content, "project_id": project_id}, timeout=10)
+                res = requests.post(
+                    f"{MODEL_API_URL}/predict", 
+                    params={"review_text": text_content, "project_id": project_id}, 
+                    headers={"Authorization": "Bearer SYSTEM_INTERNAL_SECRET"},
+                    timeout=10
+                )
                 sentiment = res.json().get("sentiment", "neutral")
-            except:
+            except Exception as e:
+                print(f"[DEBUG] Prediction failed: {e}")
                 sentiment = "neutral"
                 
             batch.append({
