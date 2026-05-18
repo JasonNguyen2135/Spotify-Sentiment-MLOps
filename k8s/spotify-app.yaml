@@ -281,7 +281,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: backend
-          image: registry.ntdevopsregistry.io.vn/mlops/backend:3e655021e663040738a0882f9d689bee7a94337b
+          image: registry.ntdevopsregistry.io.vn/mlops/backend:b6f1edbc46683744c5d442bc694f6b40eab1b22c
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -405,7 +405,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: crawler
-          image: registry.ntdevopsregistry.io.vn/mlops/crawler:3e655021e663040738a0882f9d689bee7a94337b
+          image: registry.ntdevopsregistry.io.vn/mlops/crawler:b6f1edbc46683744c5d442bc694f6b40eab1b22c
           imagePullPolicy: IfNotPresent
           env:
             - name: MONGO_URL
