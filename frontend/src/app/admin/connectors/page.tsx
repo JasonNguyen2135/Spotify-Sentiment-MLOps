@@ -42,7 +42,9 @@ export default function ConnectorsPage() {
     "api_key": fullProject?.api_key || "YOUR_API_KEY",
     "text": "Sản phẩm tuyệt vời, giao hàng nhanh!",
     "user_id": "customer_123",
-    "timestamp": new Date().toISOString()
+    "timestamp": new Date().toISOString(),
+    "rating": 5,
+    "app_version": "2.1.0"
   }, null, 2);
 
   const copyToClipboard = (text: string) => {
@@ -308,7 +310,9 @@ export default function ConnectorsPage() {
                         await axios.post(`/api/collect/${fullProject.uuid}`, { 
                           api_key: fullProject.api_key,
                           text: txt, 
-                          timestamp: new Date().toISOString() 
+                          timestamp: new Date().toISOString(),
+                          rating: 5,
+                          app_version: "1.0.0-test"
                         }, { headers: { 'Authorization': `Bearer ${token}` }});
                         alert("Data sent! This project will now have activity.");
                         (document.getElementById('sim-text') as HTMLInputElement).value = '';

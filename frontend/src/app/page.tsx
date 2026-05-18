@@ -566,17 +566,25 @@ export default function UniversalHub() {
 
             <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
               <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Engagement Heatmap</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">Activity density by day and hour</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">Stacked hourly activity by day</p>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                    <CartesianGrid strokeDasharray="5 5" stroke="#f1f5f9" />
-                    <XAxis type="number" dataKey="hour" name="Hour" unit="h" domain={[0, 23]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
-                    <YAxis type="number" dataKey="day" name="Day" domain={[0, 6]} ticks={[0, 1, 2, 3, 4, 5, 6]} tickFormatter={(val) => days[val]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
-                    <ZAxis type="number" dataKey="value" range={[40, 400]} name="Comments" />
-                    <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                    <Scatter name="Activity" data={heatmapData} fill="#6366f1" opacity={0.6} />
-                  </ScatterChart>
+                  <BarChart data={Array.from({length: 24}, (_, i) => ({
+                    hour: `${i}h`,
+                    ...days.reduce((acc, day, di) => ({
+                      ...acc,
+                      [day]: heatmapData.find(d => d.hour === i && d.day === di)?.value || 0
+                    }), {})
+                  }))}>
+                    <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
+                    <Tooltip contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                    <Legend iconType="circle" />
+                    {days.map((day, i) => (
+                      <Bar key={day} dataKey={day} stackId="a" fill={['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#ef4444'][i]} />
+                    ))}
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
