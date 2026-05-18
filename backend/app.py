@@ -779,15 +779,23 @@ def export_csv_report(project_id: int, db: Session = Depends(get_db), current_us
 async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.uuid == project_uuid).first()
     if not project or data.get("api_key") != project.api_key: raise HTTPException(status_code=401)
+    
+    # Robust field extraction
+    text_content = data.get("text") or data.get("review_text") or data.get("content")
+    if not text_content: raise HTTPException(status_code=400, detail="Missing text field")
+    
     payload = {
         "project_id": project.id, 
-        "text": data.get("text", ""), 
-        "user_id": data.get("user_id", "anon"), 
+        "text": text_content, 
+        "user_id": data.get("user_id") or data.get("customer_id") or "anon", 
         "timestamp": data.get("timestamp") or datetime.utcnow().isoformat(),
-        "rating": data.get("rating"),
-        "app_version": data.get("version") or data.get("app_version")
+        "rating": data.get("rating") or data.get("score") or data.get("stars"),
+        "app_version": data.get("app_version") or data.get("version") or data.get("release")
     }
-    redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0).lpush(QUEUE_NAME, json.dumps(payload)); return {"status": "Accepted"}
+    
+    # Push to Redis for async processing (Prediction -> Save)
+    redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0).lpush(QUEUE_NAME, json.dumps(payload))
+    return {"status": "Accepted", "message": "Feedback queued for analysis"}
 
 app.include_router(api_router); app.include_router(api_router, prefix="/api")
 migrate_db()

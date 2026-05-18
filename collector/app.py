@@ -23,7 +23,7 @@ async def collect_comment(project_id: int, data: dict):
     """
     Receive comment with optional timestamp and push to MQ.
     """
-    comment_text = data.get("text") or data.get("review_text")
+    comment_text = data.get("text") or data.get("review_text") or data.get("content")
     if not comment_text:
         raise HTTPException(status_code=400, detail="Missing 'text' field")
 
@@ -33,18 +33,18 @@ async def collect_comment(project_id: int, data: dict):
     payload = {
         "project_id": project_id,
         "text": comment_text,
-        "user_id": data.get("user_id", "anonymous"),
+        "user_id": data.get("user_id") or data.get("customer_id") or "anonymous",
         "timestamp": timestamp,
         "source": data.get("source", "webhook_v2"),
-        "rating": data.get("rating"),
-        "app_version": data.get("version") or data.get("app_version")
+        "rating": data.get("rating") or data.get("score") or data.get("stars"),
+        "app_version": data.get("app_version") or data.get("version") or data.get("release")
     }
 
     try:
         r.lpush(QUEUE_NAME, json.dumps(payload))
         return {
             "status": "Accepted", 
-            "message": "Data queued",
+            "message": "Data queued for async processing",
             "metadata": {"project_id": project_id, "timestamp": timestamp}
         }
     except Exception as e:
