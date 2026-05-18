@@ -10,7 +10,7 @@ from google_play_scraper import Sort, reviews
 # Configuration
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@postgres:5432/mlops_auth")
-MODEL_API_URL = os.getenv("MODEL_API_URL", "http://backend:8000/api") # Redirect through backend proxy
+MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000") # Call model service directly
 
 # Database Connections
 pg_engine = create_engine(DATABASE_URL)
@@ -54,12 +54,11 @@ def sync_source(app_id, project_id, platform, limit=500):
             item_ts = item['at']
             print(f"[DEBUG] Processing background crawl review at {item_ts}")
             
-            # Use Backend/Model for prediction with SYSTEM_TOKEN
+            # Call Model Service directly for sentiment
             try:
                 res = requests.post(
                     f"{MODEL_API_URL}/predict", 
-                    params={"review_text": text_content, "project_id": project_id}, 
-                    headers={"Authorization": "Bearer SYSTEM_INTERNAL_SECRET"},
+                    params={"review": text_content, "project_id": str(project_id)}, 
                     timeout=10
                 )
                 sentiment = res.json().get("sentiment", "neutral")
