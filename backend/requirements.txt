@@ -14,3 +14,4 @@ evidently==0.4.33
 google-play-scraper
 xlsxwriter
 redis
+pymysql

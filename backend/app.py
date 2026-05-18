@@ -19,9 +19,11 @@ import uuid
 import secrets
 from pymongo import MongoClient
 from fastapi.responses import StreamingResponse
+from google_play_scraper import Sort, reviews
 
 # ====== CONFIG ======
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@postgres:5432/mlops_auth")
+MYSQL_URL = os.getenv("MYSQL_URL", "mysql+pymysql://root:root123@mysql-hitl:3306/hitl_audit")
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 MODEL_API_URL = os.getenv("MODEL_API_URL", "http://model-service:8000")
 MLFLOW_URL = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow.ntdevopsmlflow.io.vn")
@@ -38,6 +40,26 @@ QUEUE_NAME = "sentiment_webhook_queue"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# MySQL HITL Database Setup
+engine_hitl = create_engine(MYSQL_URL)
+SessionLocalHitl = sessionmaker(autocommit=False, autoflush=False, bind=engine_hitl)
+BaseHitl = declarative_base()
+
+class HitlComment(BaseHitl):
+    __tablename__ = "hitl_comments"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, index=True)
+    text = Column(String(1000))
+    sentiment_label = Column(String(50))
+    auditor_username = Column(String(100))
+    audit_notes = Column(String(1000))
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+def get_db_hitl():
+    db = SessionLocalHitl()
+    try: yield db
+    finally: db.close()
 
 class User(Base):
     __tablename__ = "users"
@@ -98,6 +120,8 @@ class DataSource(Base):
     status = Column(String, default="active")
 
 Base.metadata.create_all(bind=engine)
+try: BaseHitl.metadata.create_all(bind=engine_hitl)
+except Exception as e: print(f"MySQL Init Error: {e}")
 
 def migrate_db():
     db = SessionLocal()
@@ -277,10 +301,50 @@ def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db),
     for d in cursor:
         ts = d.get("timestamp")
         if not ts: continue
-        k = ts.strftime("%Y-%m")
-        sent = d.get("sentiment_corrected") or d.get("sentiment", "neutral")
-        if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0}
-        if sent in results[k]: results[k][sent] += 1
+        if isinstance(ts, str):
+            try:
+                if ' ' in ts and 'T' not in ts: ts = ts.replace(' ', 'T')
+                if ts.endswith('Z'): ts = ts.replace('Z', '+00:00')
+                ts = datetime.fromisoformat(ts)
+            except: continue
+        
+        try:
+            k = ts.strftime("%Y-%m")
+            sent = d.get("sentiment_corrected") or d.get("sentiment", "neutral")
+            if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0}
+            if sent in results[k]: results[k][sent] += 1
+        except: continue
+        
+    return sorted([{"date": d, **c} for d, c in results.items()], key=lambda x: x["date"])
+
+@api_router.get("/daily-analytics")
+def get_daily_analytics(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = {}
+    if project_id: 
+        verify_project_access(project_id, current_user, db)
+        query["project_id"] = {"$in": [project_id, str(project_id)]}
+    elif current_user.role not in ["admin", "ai_engineer", "analyst"]:
+        query["project_id"] = {"$in": [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]}
+    
+    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(5000)
+    results = {}
+    for d in cursor:
+        ts = d.get("timestamp")
+        if not ts: continue
+        if isinstance(ts, str):
+            try:
+                if ' ' in ts and 'T' not in ts: ts = ts.replace(' ', 'T')
+                if ts.endswith('Z'): ts = ts.replace('Z', '+00:00')
+                ts = datetime.fromisoformat(ts)
+            except: continue
+            
+        try:
+            k = ts.strftime("%Y-%m-%d")
+            sent = d.get("sentiment_corrected") or d.get("sentiment", "neutral")
+            if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0}
+            if sent in results[k]: results[k][sent] += 1
+        except: continue
+        
     return sorted([{"date": d, **c} for d, c in results.items()], key=lambda x: x["date"])
 
 # --- HITL ---
@@ -298,10 +362,15 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
     history = []
     for d in cursor:
         ts = d.get("timestamp")
+        ts_str = ""
+        if ts:
+            if hasattr(ts, 'isoformat'): ts_str = ts.isoformat()
+            else: ts_str = str(ts)
+            
         history.append({
             "id": str(d["_id"]), "text": d.get("text", ""), 
             "sentiment": d.get("sentiment", "neutral"), "sentiment_corrected": d.get("sentiment_corrected"), 
-            "timestamp": ts.isoformat() if ts and hasattr(ts, 'isoformat') else "", 
+            "timestamp": ts_str, 
             "model_version": d.get("model_version", "Production")
         })
     return history
@@ -319,6 +388,18 @@ def correction(prediction_id: str, corrected_sentiment: str, project_id: int, db
     from bson import ObjectId
     preds_log_col.update_one({"_id": ObjectId(prediction_id)}, {"$set": {"sentiment_corrected": corrected_sentiment}})
     return {"status": "success"}
+
+@api_router.get("/hitl-audit")
+def get_hitl_audit(project_id: int = None, db: Session = Depends(get_db_hitl), current_user: User = Depends(get_current_user)):
+    query = db.query(HitlComment)
+    if project_id: query = query.filter(HitlComment.project_id == project_id)
+    return query.order_by(HitlComment.timestamp.desc()).limit(100).all()
+
+@api_router.post("/hitl-audit")
+def add_hitl_audit(project_id: int, text: str, sentiment: str, notes: str = "", db: Session = Depends(get_db_hitl), current_user: User = Depends(get_current_user)):
+    comment = HitlComment(project_id=project_id, text=text, sentiment_label=sentiment, auditor_username=current_user.username, audit_notes=notes)
+    db.add(comment); db.commit(); db.refresh(comment)
+    return comment
 
 # --- MLOps ---
 def get_mlflow_metrics_internal(version):
@@ -404,13 +485,23 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     summary, results, log_entries = {"positive": 0, "negative": 0, "neutral": 0}, [], []
     col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
+    date_col = next((c for c in ["timestamp", "date", "at", "created_at"] if c in df.columns), None)
+    
     for i, row in df.head(100).iterrows():
         txt = str(row[col])
         try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
         except: sent = "neutral"
         summary[sent] += 1
-        results.append({"id": i, "text": txt, "sentiment": sent, "time": datetime.utcnow().isoformat()})
-        log_entries.append({"text": txt, "sentiment": sent, "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), "model_version": "Bulk Analysis", "source": "csv_upload"})
+        
+        row_ts = datetime.utcnow()
+        if date_col:
+            try:
+                row_ts = pd.to_datetime(row[date_col])
+                if pd.isna(row_ts): row_ts = datetime.utcnow()
+            except: pass
+            
+        results.append({"id": i, "text": txt, "sentiment": sent, "time": row_ts.isoformat() if hasattr(row_ts, 'isoformat') else str(row_ts)})
+        log_entries.append({"text": txt, "sentiment": sent, "project_id": project_id, "user": current_user.username, "timestamp": row_ts, "model_version": "Bulk Analysis", "source": "csv_upload"})
     if log_entries: preds_log_col.insert_many(log_entries)
     return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
@@ -440,6 +531,25 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
     ds = db.query(DataSource).filter(DataSource.id == connector_id).first()
     if not ds: raise HTTPException(status_code=404)
     verify_project_access(ds.project_id, current_user, db)
+    
+    if ds.platform == "Google Play":
+        try:
+            res_reviews, _ = reviews(ds.app_id, lang='en', country='us', sort=Sort.NEWEST, count=500)
+            batch = []
+            for item in res_reviews:
+                txt = str(item['content'])
+                try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
+                except: sent = "neutral"
+                batch.append({
+                    "text": txt, "sentiment": sent, "project_id": ds.project_id,
+                    "timestamp": item['at'], "source": "crawler", "model_version": "Production"
+                })
+            if batch: preds_log_col.insert_many(batch)
+            return {"synced_count": len(batch)}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Crawl failed: {str(e)}")
+
+    # Fallback/Mock
     for i in range(5):
         preds_log_col.insert_one({
             "text": f"Scraped review #{i} for {ds.app_id}",
@@ -450,6 +560,22 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
             "model_version": "Production"
         })
     return {"synced_count": 5}
+
+@api_router.get("/connectors/harvest")
+def harvest_data(platform: str, app_id: str, limit: int = 100, current_user: User = Depends(get_current_user)):
+    if platform != "Google Play":
+        raise HTTPException(status_code=400, detail="Only Google Play supported for harvest")
+    try:
+        res_reviews, _ = reviews(app_id, lang='en', country='us', sort=Sort.NEWEST, count=limit)
+        data = []
+        for item in res_reviews:
+            sent = "positive" if item['score'] >= 4 else "negative" if item['score'] <= 2 else "neutral"
+            data.append({"text": str(item['content']), "sentiment": sent, "rating": item['score'], "timestamp": item['at']})
+        df = pd.DataFrame(data)
+        output = io.BytesIO(); df.to_csv(output, index=False, encoding='utf-8-sig'); output.seek(0)
+        return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={app_id}_harvest.csv"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Harvest failed: {str(e)}")
 
 @api_router.get("/alerts")
 def get_alerts(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
