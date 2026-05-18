@@ -519,11 +519,40 @@ async def predict(review_text: str, project_id: int, model_version: str = "Produ
     return res
 
 @api_router.post("/correction")
-def correction(prediction_id: str, corrected_sentiment: str, project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def correction(prediction_id: str, corrected_sentiment: str, project_id: int, db: Session = Depends(get_db), db_hitl: Session = Depends(get_db_hitl), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
     from bson import ObjectId
-    preds_log_col.update_one({"_id": ObjectId(prediction_id)}, {"$set": {"sentiment_corrected": corrected_sentiment}})
-    return {"status": "success"}
+    
+    # 1. Update MongoDB
+    res = preds_log_col.find_one_and_update(
+        {"_id": ObjectId(prediction_id)}, 
+        {"$set": {"sentiment_corrected": corrected_sentiment}},
+        return_document=True
+    )
+    
+    # 2. Update MySQL HITL table if record exists (match by text and project)
+    if res:
+        txt = res.get("text")
+        hitl_rec = db_hitl.query(HitlComment).filter(HitlComment.project_id == project_id, HitlComment.text == txt).first()
+        if hitl_rec:
+            hitl_rec.sentiment_label = corrected_sentiment
+            hitl_rec.auditor_username = current_user.username
+            hitl_rec.audit_notes = f"Corrected via UI Audit by {current_user.username}"
+            db_hitl.commit()
+        else:
+            # If not in MySQL yet, add it as an audited record
+            new_audit = HitlComment(
+                project_id=project_id,
+                text=txt,
+                sentiment_label=corrected_sentiment,
+                auditor_username=current_user.username,
+                audit_notes="Pushed to Audit from UI",
+                timestamp=res.get("timestamp") or datetime.utcnow()
+            )
+            db_hitl.add(new_audit)
+            db_hitl.commit()
+            
+    return {"status": "success", "synced_to_mysql": True}
 
 @api_router.get("/hitl-audit")
 def get_hitl_audit(project_id: int = None, db: Session = Depends(get_db_hitl), current_user: User = Depends(get_current_user)):
@@ -616,7 +645,10 @@ def airflow_runs(current_user: User = Depends(get_current_user)):
 def github_runs(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
-    try: return requests.get(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs", headers={"Authorization": f"token {tk}"}, params={"per_page": 30}, timeout=5).json().get("workflow_runs", [])
+    try: 
+        # Target specific workflow: manual_train.yml
+        url = "https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/runs"
+        return requests.get(url, headers={"Authorization": f"token {tk}"}, params={"per_page": 30}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
 @api_router.post("/analyze-csv")
