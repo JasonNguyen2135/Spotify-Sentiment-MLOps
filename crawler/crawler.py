@@ -44,6 +44,8 @@ def sync_source(app_id, project_id, platform, limit=500):
         batch = []
         for item in result:
             text_content = str(item['content'])
+            item_ts = item['at']
+            print(f"[DEBUG] Processing background crawl review at {item_ts}")
             
             # Use Backend/Model for prediction
             try:
@@ -58,7 +60,7 @@ def sync_source(app_id, project_id, platform, limit=500):
                 "source": f"auto_crawl_{platform}",
                 "project_id": project_id,
                 "user": "system_crawler",
-                "timestamp": item['at'] or datetime.utcnow()
+                "timestamp": item_ts or datetime.utcnow()
             })
         
         if batch:

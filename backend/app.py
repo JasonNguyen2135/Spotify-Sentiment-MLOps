@@ -537,18 +537,24 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
     verify_project_access(ds.project_id, current_user, db)
     
     if ds.platform == "Google Play":
+        print(f"[DEBUG] Syncing Google Play for {ds.app_id} (Project {ds.project_id})")
         try:
             res_reviews, _ = reviews(ds.app_id, lang='en', country='us', sort=Sort.NEWEST, count=500)
+            print(f"[DEBUG] Fetched {len(res_reviews)} reviews from Google Play")
             batch = []
             for item in res_reviews:
                 txt = str(item['content'])
+                item_ts = item['at']
+                print(f"[DEBUG] Processing review at {item_ts}: {txt[:50]}...")
                 try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
                 except: sent = "neutral"
                 batch.append({
                     "text": txt, "sentiment": sent, "project_id": ds.project_id,
-                    "timestamp": item['at'], "source": "crawler", "model_version": "Production"
+                    "timestamp": item_ts, "source": "crawler", "model_version": "Production"
                 })
-            if batch: preds_log_col.insert_many(batch)
+            if batch: 
+                preds_log_col.insert_many(batch)
+                print(f"[DEBUG] Inserted {len(batch)} records into MongoDB")
             return {"synced_count": len(batch)}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Crawl failed: {str(e)}")
