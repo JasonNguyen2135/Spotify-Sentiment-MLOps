@@ -73,7 +73,9 @@ def sync_source(app_id, project_id, platform, limit=500):
                 "source": f"auto_crawl_{platform}",
                 "project_id": project_id,
                 "user": "system_crawler",
-                "timestamp": item_ts or datetime.utcnow()
+                "timestamp": item_ts or datetime.utcnow(),
+                "rating": item.get('score'),
+                "app_version": item.get('reviewCreatedVersion')
             })
         
         if batch:

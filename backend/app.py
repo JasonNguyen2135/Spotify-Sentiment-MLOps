@@ -312,11 +312,99 @@ def get_monthly_analytics(project_id: int = None, db: Session = Depends(get_db),
         try:
             k = ts.strftime("%Y-%m")
             sent = d.get("sentiment_corrected") or d.get("sentiment", "neutral")
-            if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0}
+            rating = d.get("rating")
+            if k not in results: results[k] = {"positive": 0, "negative": 0, "neutral": 0, "ratings": [], "count": 0}
             if sent in results[k]: results[k][sent] += 1
+            if rating is not None: results[k]["ratings"].append(float(rating))
+            results[k]["count"] += 1
         except: continue
         
-    return sorted([{"date": d, **c} for d, c in results.items()], key=lambda x: x["date"])
+    final = []
+    for d, c in results.items():
+        avg_r = sum(c["ratings"])/len(c["ratings"]) if c["ratings"] else 0
+        final.append({"date": d, "positive": c["positive"], "negative": c["negative"], "neutral": c["neutral"], "avg_rating": round(avg_r, 2), "count": c["count"]})
+    return sorted(final, key=lambda x: x["date"])
+
+@api_router.get("/analytics/top-issues")
+def get_top_issues(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = {"sentiment": "negative"}
+    if project_id: 
+        verify_project_access(project_id, current_user, db)
+        query["project_id"] = {"$in": [project_id, str(project_id)]}
+    
+    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(1000)
+    words = {}
+    stop_words = {"the", "a", "to", "and", "is", "in", "it", "of", "for", "with", "this", "my", "on", "app", "spotify", "music"}
+    for d in cursor:
+        txt = d.get("text", "").lower()
+        for w in txt.split():
+            w = "".join(filter(str.isalnum, w))
+            if len(w) > 3 and w not in stop_words:
+                words[w] = words.get(w, 0) + 1
+    
+    top = sorted([{"word": w, "count": c} for w, c in words.items()], key=lambda x: x["count"], reverse=True)[:10]
+    return top
+
+@api_router.get("/analytics/version-sentiment")
+def get_version_sentiment(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = {}
+    if project_id: 
+        verify_project_access(project_id, current_user, db)
+        query["project_id"] = {"$in": [project_id, str(project_id)]}
+    
+    cursor = preds_log_col.find(query)
+    versions = {}
+    for d in cursor:
+        v = d.get("app_version") or "Unknown"
+        if v not in versions: versions[v] = {"positive": 0, "total": 0}
+        sent = d.get("sentiment_corrected") or d.get("sentiment", "neutral")
+        if sent == "positive": versions[v]["positive"] += 1
+        versions[v]["total"] += 1
+    
+    res = []
+    for v, stats in versions.items():
+        if stats["total"] > 5:
+            res.append({"version": v, "positive_rate": round(stats["positive"]/stats["total"]*100, 1), "total": stats["total"]})
+    return sorted(res, key=lambda x: x["version"], reverse=True)[:10]
+
+@api_router.get("/analytics/heatmap")
+def get_heatmap(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = {}
+    if project_id: 
+        verify_project_access(project_id, current_user, db)
+        query["project_id"] = {"$in": [project_id, str(project_id)]}
+    
+    cursor = preds_log_col.find(query)
+    heatmap = {} # (day, hour) -> count
+    for d in cursor:
+        ts = d.get("timestamp")
+        if not ts: continue
+        if isinstance(ts, str):
+            try: ts = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            except: continue
+        
+        try:
+            day = ts.weekday() # 0-6
+            hour = ts.hour # 0-23
+            key = f"{day}-{hour}"
+            heatmap[key] = heatmap.get(key, 0) + 1
+        except: continue
+    
+    return [{"day": int(k.split('-')[0]), "hour": int(k.split('-')[1]), "value": v} for k, v in heatmap.items()]
+
+@api_router.get("/analytics/rating-distribution")
+def get_rating_distribution(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = {}
+    if project_id: 
+        verify_project_access(project_id, current_user, db)
+        query["project_id"] = {"$in": [project_id, str(project_id)]}
+    
+    cursor = preds_log_col.find(query)
+    dist = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for d in cursor:
+        r = d.get("rating")
+        if r and int(r) in dist: dist[int(r)] += 1
+    return [{"rating": r, "count": c} for r, c in dist.items()]
 
 @api_router.get("/daily-analytics")
 def get_daily_analytics(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -505,8 +593,11 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
                 if pd.isna(row_ts): row_ts = datetime.utcnow()
             except: pass
             
+        rating = row.get('rating') or row.get('score') or row.get('stars')
+        version = row.get('version') or row.get('app_version')
+        
         results.append({"id": i, "text": txt, "sentiment": sent, "time": row_ts.isoformat() if hasattr(row_ts, 'isoformat') else str(row_ts)})
-        log_entries.append({"text": txt, "sentiment": sent, "project_id": project_id, "user": current_user.username, "timestamp": row_ts, "model_version": "Bulk Analysis", "source": "csv_upload"})
+        log_entries.append({"text": txt, "sentiment": sent, "project_id": project_id, "user": current_user.username, "timestamp": row_ts, "model_version": "Bulk Analysis", "source": "csv_upload", "rating": rating, "app_version": version})
     if log_entries: preds_log_col.insert_many(log_entries)
     return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
@@ -560,7 +651,8 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
                 
                 batch.append({
                     "text": txt, "sentiment": sent, "project_id": ds.project_id,
-                    "timestamp": item_ts, "source": "crawler", "model_version": "Production"
+                    "timestamp": item_ts, "source": "crawler", "model_version": "Production",
+                    "rating": item.get('score'), "app_version": item.get('reviewCreatedVersion')
                 })
             
             if batch: 
@@ -640,7 +732,14 @@ def export_csv_report(project_id: int, db: Session = Depends(get_db), current_us
 async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.uuid == project_uuid).first()
     if not project or data.get("api_key") != project.api_key: raise HTTPException(status_code=401)
-    payload = {"project_id": project.id, "text": data.get("text", ""), "user_id": data.get("user_id", "anon"), "timestamp": data.get("timestamp") or datetime.utcnow().isoformat()}
+    payload = {
+        "project_id": project.id, 
+        "text": data.get("text", ""), 
+        "user_id": data.get("user_id", "anon"), 
+        "timestamp": data.get("timestamp") or datetime.utcnow().isoformat(),
+        "rating": data.get("rating"),
+        "app_version": data.get("version") or data.get("app_version")
+    }
     redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0).lpush(QUEUE_NAME, json.dumps(payload)); return {"status": "Accepted"}
 
 app.include_router(api_router); app.include_router(api_router, prefix="/api")

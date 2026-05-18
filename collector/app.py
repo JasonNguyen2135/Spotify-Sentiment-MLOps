@@ -35,7 +35,9 @@ async def collect_comment(project_id: int, data: dict):
         "text": comment_text,
         "user_id": data.get("user_id", "anonymous"),
         "timestamp": timestamp,
-        "source": data.get("source", "webhook_v2")
+        "source": data.get("source", "webhook_v2"),
+        "rating": data.get("rating"),
+        "app_version": data.get("version") or data.get("app_version")
     }
 
     try:
