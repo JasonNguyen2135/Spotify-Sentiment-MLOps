@@ -396,8 +396,12 @@ def get_hitl_audit(project_id: int = None, db: Session = Depends(get_db_hitl), c
     return query.order_by(HitlComment.timestamp.desc()).limit(100).all()
 
 @api_router.post("/hitl-audit")
-def add_hitl_audit(project_id: int, text: str, sentiment: str, notes: str = "", db: Session = Depends(get_db_hitl), current_user: User = Depends(get_current_user)):
-    comment = HitlComment(project_id=project_id, text=text, sentiment_label=sentiment, auditor_username=current_user.username, audit_notes=notes)
+def add_hitl_audit(project_id: int, text: str, sentiment: str, notes: str = "", timestamp: str = None, db: Session = Depends(get_db_hitl), current_user: User = Depends(get_current_user)):
+    comment_ts = datetime.utcnow()
+    if timestamp:
+        try: comment_ts = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        except: pass
+    comment = HitlComment(project_id=project_id, text=text, sentiment_label=sentiment, auditor_username=current_user.username, audit_notes=notes, timestamp=comment_ts)
     db.add(comment); db.commit(); db.refresh(comment)
     return comment
 
