@@ -350,6 +350,48 @@ def get_top_issues(project_id: int = None, db: Session = Depends(get_db), curren
     top = sorted([{"word": w, "count": c} for w, c in words.items()], key=lambda x: x["count"], reverse=True)[:10]
     return top
 
+@api_router.get("/analytics/top-positive-issues")
+def get_top_positive_issues(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = {"sentiment": "positive"}
+    if project_id: 
+        verify_project_access(project_id, current_user, db)
+        query["project_id"] = {"$in": [project_id, str(project_id)]}
+    
+    cursor = preds_log_col.find(query).sort("timestamp", -1).limit(1000)
+    words = {}
+    stop_words = {"the", "a", "to", "and", "is", "in", "it", "of", "for", "with", "this", "my", "on", "app", "spotify", "music", "great", "good", "nice", "love", "best", "like"}
+    for d in cursor:
+        txt = d.get("text", "").lower()
+        for w in txt.split():
+            w = "".join(filter(str.isalnum, w))
+            if len(w) > 3 and w not in stop_words:
+                words[w] = words.get(w, 0) + 1
+    
+    top = sorted([{"word": w, "count": c} for w, c in words.items()], key=lambda x: x["count"], reverse=True)[:10]
+    return top
+
+@api_router.get("/analytics/version-negative-sentiment")
+def get_version_negative_sentiment(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = {}
+    if project_id: 
+        verify_project_access(project_id, current_user, db)
+        query["project_id"] = {"$in": [project_id, str(project_id)]}
+    
+    cursor = preds_log_col.find(query)
+    versions = {}
+    for d in cursor:
+        v = d.get("app_version") or "Unknown"
+        if v not in versions: versions[v] = {"negative": 0, "total": 0}
+        sent = d.get("sentiment_corrected") or d.get("sentiment", "neutral")
+        if sent == "negative": versions[v]["negative"] += 1
+        versions[v]["total"] += 1
+    
+    res = []
+    for v, stats in versions.items():
+        if stats["total"] > 5:
+            res.append({"version": v, "negative_rate": round(stats["negative"]/stats["total"]*100, 1), "total": stats["total"]})
+    return sorted(res, key=lambda x: x["version"], reverse=True)[:10]
+
 @api_router.get("/analytics/version-sentiment")
 def get_version_sentiment(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}

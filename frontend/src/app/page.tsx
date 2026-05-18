@@ -30,7 +30,9 @@ export default function UniversalHub() {
   const [stats, setStats] = useState<any>(null);
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
   const [topIssues, setTopIssues] = useState<any[]>([]);
+  const [topPositiveIssues, setTopPositiveIssues] = useState<any[]>([]);
   const [versionData, setVersionData] = useState<any[]>([]);
+  const [versionNegativeData, setVersionNegativeData] = useState<any[]>([]);
   const [heatmapData, setHeatmapData] = useState<any[]>([]);
   const [ratingDist, setRatingDist] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,12 +106,14 @@ export default function UniversalHub() {
       setModelOptions(modelsRes.data || []);
 
       if (activeProject) {
-        const [alertsRes, ticketsRes, detailsRes, issuesRes, versionRes, heatmapRes, ratingRes] = await Promise.all([
+        const [alertsRes, ticketsRes, detailsRes, issuesRes, posIssuesRes, versionRes, versionNegRes, heatmapRes, ratingRes] = await Promise.all([
           axios.get('/api/alerts', { headers, params }),
           axios.get('/api/tickets', { headers, params }),
           axios.get(`/api/projects/${activeProject.id}`, { headers }),
           axios.get('/api/analytics/top-issues', { headers, params }),
+          axios.get('/api/analytics/top-positive-issues', { headers, params }),
           axios.get('/api/analytics/version-sentiment', { headers, params }),
+          axios.get('/api/analytics/version-negative-sentiment', { headers, params }),
           axios.get('/api/analytics/heatmap', { headers, params }),
           axios.get('/api/analytics/rating-distribution', { headers, params })
         ]);
@@ -118,7 +122,9 @@ export default function UniversalHub() {
         setSlackUrl(detailsRes.data.slack_webhook || '');
         setSupportEmail(detailsRes.data.support_email || '');
         setTopIssues(issuesRes.data || []);
+        setTopPositiveIssues(posIssuesRes.data || []);
         setVersionData(versionRes.data || []);
+        setVersionNegativeData(versionNegRes.data || []);
         setHeatmapData(heatmapRes.data || []);
         setRatingDist(ratingRes.data || []);
       }
@@ -424,76 +430,34 @@ export default function UniversalHub() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group">
               <div className="flex justify-between items-center mb-10">
-                <h2 className="text-2xl font-black text-slate-800 tracking-tight">Intelligence Trends</h2>
-                <div className="flex gap-2">
-                  <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Positive</span>
-                  <span className="flex items-center gap-1.5 text-[9px] font-black text-rose-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-rose-500 rounded-full" /> Negative</span>
+                <h2 className="text-2xl font-black text-slate-800 tracking-tight">Rating Trend</h2>
+                <div className="flex gap-4">
+                  <span className="flex items-center gap-1.5 text-[9px] font-black text-amber-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full" /> Avg Star Rating</span>
                 </div>
               </div>
               <div className="h-[350px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthlyData}>
-                    <defs>
-                      <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                      <linearGradient id="colorNeg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
-                    </defs>
+                  <LineChart data={monthlyData}>
                     <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
+                    <YAxis domain={[0, 5]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
                     <Tooltip contentStyle={{borderRadius: '2rem', border: 'none', padding: '1.5rem', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)'}} />
-                    <Area type="monotone" dataKey="positive" stroke="#10b981" strokeWidth={5} fillOpacity={1} fill="url(#colorPos)" />
-                    <Area type="monotone" dataKey="negative" stroke="#ef4444" strokeWidth={5} fillOpacity={1} fill="url(#colorNeg)" />
-                  </AreaChart>
+                    <Line type="monotone" dataKey="avg_rating" stroke="#fbbf24" strokeWidth={4} dot={{r: 6, fill: '#fbbf24', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 8}} />
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
             <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-10 w-full text-left">Sentiment Split</h2>
-              <div className="flex-1 h-[280px] w-full relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={sentimentData} cx="50%" cy="50%" innerRadius={85} outerRadius={110} paddingAngle={10} dataKey="value" stroke="none">
-                      {sentimentData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aggregate</p>
-                  <p className="text-4xl font-black text-slate-900 tracking-tighter">{sentimentData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Rating Distribution</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">Spread of star ratings (1-5)</p>
-              <div className="h-[300px] w-full">
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2 w-full text-left">Rating Distribution</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10 w-full text-left">Spread of star ratings (1-5)</p>
+              <div className="flex-1 h-[280px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ratingDist}>
                     <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
                     <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
                     <Tooltip cursor={{fill: '#f8fafc'}} />
-                    <Bar dataKey="count" fill="#fbbf24" radius={[10, 10, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Top Negative Issues</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">AI-identified common complaints</p>
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart layout="vertical" data={topIssues} margin={{ left: 40 }}>
-                    <CartesianGrid strokeDasharray="5 5" horizontal={false} stroke="#f1f5f9" />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="word" type="category" axisLine={false} tickLine={false} tick={{fill: '#475569', fontSize: 12, fontWeight: 900}} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#ef4444" radius={[0, 10, 10, 0]} />
+                    <Bar dataKey="count" fill="#fbbf24" radius={[6, 6, 0, 0]} barSize={30} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -502,33 +466,71 @@ export default function UniversalHub() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Sentiment by Version</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">Positivity rate per app release</p>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2 text-emerald-600">Top Positive Issues</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">Common praises from users</p>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={versionData}>
-                    <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="version" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} unit="%" />
+                  <BarChart layout="vertical" data={topPositiveIssues} margin={{ left: 40 }}>
+                    <CartesianGrid strokeDasharray="5 5" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="word" type="category" axisLine={false} tickLine={false} tick={{fill: '#059669', fontSize: 12, fontWeight: 900}} />
                     <Tooltip />
-                    <Bar dataKey="positive_rate" fill="#10b981" radius={[10, 10, 0, 0]} name="Positive %" />
+                    <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} barSize={20} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Comment Heatmap</h2>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2 text-rose-600">Top Negative Issues</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">AI-identified common complaints</p>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart layout="vertical" data={topIssues} margin={{ left: 40 }}>
+                    <CartesianGrid strokeDasharray="5 5" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="word" type="category" axisLine={false} tickLine={false} tick={{fill: '#e11d48', fontSize: 12, fontWeight: 900}} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#ef4444" radius={[0, 6, 6, 0]} barSize={20} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Sentiment Trends by Version</h2>
+              <div className="flex gap-4 mb-10">
+                 <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Positivity %</span>
+                 <span className="flex items-center gap-1.5 text-[9px] font-black text-rose-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-rose-500 rounded-full" /> Negativity %</span>
+              </div>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={versionData.map(v => ({...v, negative_rate: versionNegativeData.find(nv => nv.version === v.version)?.negative_rate || 0}))}>
+                    <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="version" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} unit="%" />
+                    <Tooltip />
+                    <Bar dataKey="positive_rate" fill="#10b981" radius={[4, 4, 0, 0]} name="Positive %" barSize={15} />
+                    <Bar dataKey="negative_rate" fill="#ef4444" radius={[4, 4, 0, 0]} name="Negative %" barSize={15} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Engagement Heatmap</h2>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">Activity density by day and hour</p>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                     <CartesianGrid strokeDasharray="5 5" stroke="#f1f5f9" />
-                    <XAxis type="number" dataKey="hour" name="Hour" unit="h" domain={[0, 23]} axisLine={false} tickLine={false} />
-                    <YAxis type="number" dataKey="day" name="Day" domain={[0, 6]} ticks={[0, 1, 2, 3, 4, 5, 6]} tickFormatter={(val) => days[val]} axisLine={false} tickLine={false} />
-                    <ZAxis type="number" dataKey="value" range={[100, 1000]} name="Comments" />
+                    <XAxis type="number" dataKey="hour" name="Hour" unit="h" domain={[0, 23]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
+                    <YAxis type="number" dataKey="day" name="Day" domain={[0, 6]} ticks={[0, 1, 2, 3, 4, 5, 6]} tickFormatter={(val) => days[val]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
+                    <ZAxis type="number" dataKey="value" range={[40, 400]} name="Comments" />
                     <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                    <Scatter name="Activity" data={heatmapData} fill="#6366f1" />
+                    <Scatter name="Activity" data={heatmapData} fill="#6366f1" opacity={0.6} />
                   </ScatterChart>
                 </ResponsiveContainer>
               </div>
