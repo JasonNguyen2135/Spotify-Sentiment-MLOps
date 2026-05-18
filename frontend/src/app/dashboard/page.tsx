@@ -117,49 +117,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* MoM Performance Banner */}
-      {comparison && (
-        <div className="mb-10 bg-gradient-to-r from-slate-900 to-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 -mt-20 -mr-20 w-96 h-96 bg-brand opacity-10 blur-[120px] group-hover:opacity-20 transition-opacity"></div>
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="flex items-center gap-6">
-              <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md">
-                <Sparkles className="w-8 h-8 text-brand" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-black text-white">Monthly Comparison</h2>
-                <p className="text-slate-400 font-medium">Performance vs. previous 30-day window</p>
-              </div>
-            </div>
-            
-            <div className="flex gap-10">
-              <div className="text-center">
-                <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Total Volume</p>
-                <p className="text-3xl font-black text-white flex items-center justify-center gap-2">
-                  {(comparison?.total_growth || 0) >= 0 ? <ArrowUpRight className="text-emerald-400 w-6 h-6" /> : <ArrowDownRight className="text-red-400 w-6 h-6" />}
-                  {Math.abs(comparison?.total_growth || 0).toFixed(1)}%
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Positivity Shift</p>
-                <p className={clsx(
-                  "text-3xl font-black flex items-center justify-center gap-2",
-                  (comparison?.delta_positive || 0) >= 0 ? "text-emerald-400" : "text-red-400"
-                )}>
-                  {(comparison?.delta_positive || 0) >= 0 ? "+" : ""}{comparison?.delta_positive || 0}
-                </p>
-              </div>
-            </div>
-
-            <div className="max-w-xs bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
-              <p className="text-xs text-slate-300 leading-relaxed italic italic">
-                "User sentiment is trending <strong>{(comparison?.delta_positive || 0) >= 0 ? 'upwards' : 'downwards'}</strong> this month. Primary drivers include increased engagement in key features."
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
         {/* Main Chart: Historical Trends */}
         <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">

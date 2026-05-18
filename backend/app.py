@@ -197,7 +197,12 @@ def redis_worker():
                     res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=10).json()
                     sent = res["sentiment"]
                 except: sent = "neutral"
-                preds_log_col.insert_one({"text": txt, "sentiment": sent, "project_id": pid, "user": data.get("user_id", "worker"), "timestamp": msg_ts, "source": "webhook_async", "model_version": "Production (Async)"})
+                preds_log_col.insert_one({
+                    "text": txt, "sentiment": sent, "project_id": pid, 
+                    "user": data.get("user_id", "worker"), "timestamp": msg_ts, 
+                    "source": "webhook_async", "model_version": "Production (Async)",
+                    "rating": data.get("rating"), "app_version": data.get("app_version")
+                })
                 if sent == "negative": 
                     db_session.add(Ticket(project_id=pid, review_text=txt, sentiment_score="negative"))
                     project = db_session.query(Project).filter(Project.id == pid).first()
@@ -465,10 +470,10 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
     return history
 
 @api_router.post("/predict")
-async def predict(review_text: str, project_id: int, model_version: str = "Production", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def predict(review_text: str, project_id: int, model_version: str = "Production", rating: int = None, app_version: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
     res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10).json()
-    preds_log_col.insert_one({"text": review_text, "sentiment": res["sentiment"], "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), "model_version": model_version, "source": "instant_analysis"})
+    preds_log_col.insert_one({"text": review_text, "sentiment": res["sentiment"], "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), "model_version": model_version, "source": "instant_analysis", "rating": rating, "app_version": app_version})
     return res
 
 @api_router.post("/correction")
