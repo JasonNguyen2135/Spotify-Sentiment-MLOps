@@ -182,6 +182,39 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except: raise HTTPException(status_code=401)
 
 # Worker logic
+def check_and_trigger_alerts(pid: int, db_session: Session):
+    # 1. Calculate current negativity rate (last 100 items)
+    cursor = preds_log_col.find({"project_id": {"$in": [pid, str(pid)]}}).sort("timestamp", -1).limit(100)
+    history = list(cursor)
+    if len(history) < 10: return # Need some baseline
+    
+    neg_count = sum(1 for item in history if (item.get("sentiment_corrected") or item.get("sentiment")) == "negative")
+    neg_rate = (neg_count / len(history)) * 100
+    
+    # 2. Get Rules
+    rules = db_session.query(AlertRule).filter(AlertRule.project_id == pid).all()
+    project = db_session.query(Project).filter(Project.id == pid).first()
+    if not project: return
+    
+    r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
+    for rule in rules:
+        if neg_rate >= rule.threshold:
+            # Check cooldown in Redis (key: alert_cooldown_{rule_id})
+            cooldown_key = f"alert_cooldown_{rule.id}"
+            if not r_client.get(cooldown_key):
+                # Trigger Alert
+                msg = f"⚠️ *[THRESHOLD BREACH]* for project *{project.name}*\nRule: {rule.name}\nCurrent Negativity: {neg_rate:.1f}%\nThreshold: {rule.threshold}%"
+                
+                if project.slack_webhook:
+                    try: requests.post(project.slack_webhook, json={"text": msg}, timeout=5)
+                    except: pass
+                
+                if project.support_email:
+                    send_email(project.support_email, f"⚠️ Alert: Threshold Breached for {project.name}", msg + "\n\nPlease check the dashboard.")
+                
+                # Set 30 min cooldown to avoid spam
+                r_client.setex(cooldown_key, 1800, "active")
+
 def redis_worker():
     r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
     db_session = SessionLocal()
@@ -200,27 +233,24 @@ def redis_worker():
                     res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=10).json()
                     sent = res["sentiment"]
                 except: sent = "neutral"
+                
                 preds_log_col.insert_one({
                     "text": txt, "sentiment": sent, "project_id": pid, 
                     "user": data.get("user_id", "worker"), "timestamp": msg_ts, 
                     "source": "webhook_async", "model_version": "Production (Async)",
                     "rating": data.get("rating"), "app_version": data.get("app_version")
                 })
+                
                 if sent == "negative": 
                     db_session.add(Ticket(project_id=pid, review_text=txt, sentiment_score="negative"))
-                    project = db_session.query(Project).filter(Project.id == pid).first()
-                    if project:
-                        # 1. Real Slack Notification
-                        if project.slack_webhook:
-                            try: requests.post(project.slack_webhook, json={"text": f"🚨 *[ALERT]* Critical feedback detected for *{project.name}*\n> {txt[:200]}"})
-                            except: pass
-                        
-                        # 2. Real Email Notification
-                        if project.support_email:
-                            send_email(project.support_email, f"🚨 Critical Feedback: {project.name}", f"Dear Support Team,\n\nA new negative feedback has been detected for project {project.name}.\n\nContent: {txt}\nTime: {msg_ts}\n\nPlease check the dashboard for more details.")
-                    
                     db_session.commit()
-        except: time.sleep(2)
+                
+                # Check Thresholds for this project
+                check_and_trigger_alerts(pid, db_session)
+                
+        except Exception as e: 
+            print(f"[WORKER ERROR] {e}")
+            time.sleep(2)
 
 threading.Thread(target=redis_worker, daemon=True).start()
 
