@@ -49,6 +49,8 @@ export default function UniversalHub() {
   // HITL & Logs
   const [fullHistory, setFullHistory] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [pendingCorrections, setPendingCorrections] = useState<Record<string, string>>({});
+  const [submittingChanges, setSubmittingChanges] = useState(false);
 
   // Harvester
   const [harvestId, setHarvestId] = useState('');
@@ -233,16 +235,33 @@ export default function UniversalHub() {
     } catch (err) { alert("Delete failed"); }
   };
 
-  const handleCorrection = async (id: string, corrected: string) => {
-    if (!activeProject) return;
+  const handleCorrection = (id: string, corrected: string) => {
+    setPendingCorrections(prev => ({ ...prev, [id]: corrected }));
+  };
+
+  const submitChanges = async () => {
+    const ids = Object.keys(pendingCorrections);
+    if (ids.length === 0 || !activeProject) return;
+    
+    setSubmittingChanges(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.post('/api/correction', null, {
-        params: { prediction_id: id, corrected_sentiment: corrected, project_id: activeProject.id },
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      // Process all pending corrections
+      await Promise.all(ids.map(id => 
+        axios.post('/api/correction', null, {
+          params: { prediction_id: id, corrected_sentiment: pendingCorrections[id], project_id: activeProject.id },
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ));
+      
+      setPendingCorrections({});
       fetchData();
-    } catch (err) { alert("Correction failed"); }
+      alert("All corrections synchronized to MySQL successfully!");
+    } catch (err) {
+      alert("Failed to sync some corrections.");
+    } finally {
+      setSubmittingChanges(false);
+    }
   };
 
   const handleExport = async (type: 'excel' | 'pdf') => {
@@ -428,81 +447,81 @@ export default function UniversalHub() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group">
-              <div className="flex justify-between items-center mb-10">
-                <h2 className="text-2xl font-black text-slate-800 tracking-tight">Intelligence Trends</h2>
-                <div className="flex gap-2">
-                  <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Positive</span>
-                  <span className="flex items-center gap-1.5 text-[9px] font-black text-rose-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-rose-500 rounded-full" /> Negative</span>
+            <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative overflow-hidden group">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-xl font-black text-slate-800 tracking-tight">Intelligence Trends</h2>
+                <div className="flex gap-4">
+                  <span className="flex items-center gap-1.5 text-[10px] font-black text-teal-500 uppercase tracking-widest"><div className="w-2 h-2 bg-teal-500 rounded-full" /> Positive</span>
+                  <span className="flex items-center gap-1.5 text-[10px] font-black text-coral-500 uppercase tracking-widest"><div className="w-2 h-2 bg-coral-500 rounded-full" /> Negative</span>
                 </div>
               </div>
               <div className="h-[350px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyData}>
                     <defs>
-                      <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                      <linearGradient id="colorNeg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
+                      <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3}/><stop offset="95%" stopColor="#14b8a6" stopOpacity={0}/></linearGradient>
+                      <linearGradient id="colorNeg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/><stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/></linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                    <Tooltip contentStyle={{borderRadius: '2rem', border: 'none', padding: '1.5rem', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)'}} />
-                    <Area type="monotone" dataKey="positive" stroke="#10b981" strokeWidth={5} fillOpacity={1} fill="url(#colorPos)" />
-                    <Area type="monotone" dataKey="negative" stroke="#ef4444" strokeWidth={5} fillOpacity={1} fill="url(#colorNeg)" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                    <Tooltip contentStyle={{borderRadius: '1.5rem', border: 'none', padding: '1rem', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}} />
+                    <Area type="monotone" dataKey="positive" stroke="#14b8a6" strokeWidth={4} fillOpacity={1} fill="url(#colorPos)" animationDuration={1200} />
+                    <Area type="monotone" dataKey="negative" stroke="#f43f5e" strokeWidth={4} fillOpacity={1} fill="url(#colorNeg)" animationDuration={1200} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-10 w-full text-left">Sentiment Split</h2>
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 flex flex-col items-center justify-center">
+              <h2 className="text-xl font-black text-slate-800 tracking-tight mb-10 w-full text-left">Sentiment Split</h2>
               <div className="flex-1 h-[280px] w-full relative">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={sentimentData} cx="50%" cy="50%" innerRadius={85} outerRadius={110} paddingAngle={10} dataKey="value" stroke="none">
-                      {sentimentData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                    <Pie data={sentimentData} cx="50%" cy="50%" innerRadius={80} outerRadius={105} paddingAngle={8} dataKey="value" stroke="none">
+                      {sentimentData.map((entry, index) => (<Cell key={`cell-${index}`} fill={['#14b8a6', '#f43f5e', '#6366f1'][index % 3]} />))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip contentStyle={{borderRadius: '1rem', border: 'none'}} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aggregate</p>
-                  <p className="text-4xl font-black text-slate-900 tracking-tighter">{sentimentData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Analyzed</p>
+                  <p className="text-4xl font-black text-slate-900 tracking-tighter tabular-nums">{sentimentData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}</p>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group">
-              <div className="flex justify-between items-center mb-10">
-                <h2 className="text-2xl font-black text-slate-800 tracking-tight">Rating Trend</h2>
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative overflow-hidden group">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-xl font-black text-slate-800 tracking-tight">Rating Trend</h2>
                 <div className="flex gap-4">
-                  <span className="flex items-center gap-1.5 text-[9px] font-black text-amber-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full" /> Avg Star Rating</span>
+                  <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full" /> Avg Star Rating</span>
                 </div>
               </div>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={monthlyData}>
                     <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                    <YAxis domain={[0, 5]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                    <Tooltip contentStyle={{borderRadius: '2rem', border: 'none', padding: '1.5rem', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)'}} />
-                    <Line type="monotone" dataKey="avg_rating" stroke="#fbbf24" strokeWidth={4} dot={{r: 4, fill: '#fbbf24', strokeWidth: 2, stroke: '#fff'}} />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                    <YAxis domain={[0, 5]} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                    <Tooltip contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                    <Line type="monotone" dataKey="avg_rating" stroke="#f59e0b" strokeWidth={4} dot={{r: 4, fill: '#f59e0b', strokeWidth: 2, stroke: '#fff'}} animationDuration={1800} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2 w-full text-left">Rating Distribution</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10 w-full text-left">Spread of star ratings (1-5)</p>
-              <div className="flex-1 h-[280px] w-full">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50">
+              <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">Rating Distribution</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">Spread of star ratings (1-5)</p>
+              <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ratingDist}>
-                    <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                    <Tooltip cursor={{fill: '#f8fafc'}} />
-                    <Bar dataKey="count" fill="#fbbf24" radius={[6, 6, 0, 0]} barSize={30} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '1rem', border: 'none'}} />
+                    <Bar dataKey="count" fill="#fbbf24" radius={[6, 6, 0, 0]} barSize={24} animationDuration={1500} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -510,33 +529,33 @@ export default function UniversalHub() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2 text-emerald-600">Top Positive Issues</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">Common praises from users</p>
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group">
+              <h2 className="text-xl font-black text-teal-600 tracking-tight mb-2">Top Positive Keywords</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">Common praises from users</p>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart layout="vertical" data={topPositiveIssues} margin={{ left: 40 }}>
-                    <CartesianGrid strokeDasharray="5 5" horizontal={false} stroke="#f1f5f9" />
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                     <XAxis type="number" hide />
-                    <YAxis dataKey="word" type="category" axisLine={false} tickLine={false} tick={{fill: '#059669', fontSize: 12, fontWeight: 900}} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} barSize={20} />
+                    <YAxis dataKey="word" type="category" axisLine={false} tickLine={false} tick={{fill: '#0d9488', fontSize: 11, fontWeight: 800}} />
+                    <Tooltip contentStyle={{borderRadius: '1rem', border: 'none'}} />
+                    <Bar dataKey="count" fill="#14b8a6" radius={[0, 6, 6, 0]} barSize={16} animationDuration={2000} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2 text-rose-600">Top Negative Issues</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">AI-identified common complaints</p>
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group">
+              <h2 className="text-xl font-black text-coral-600 tracking-tight mb-2">Top Negative Keywords</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">AI-identified common complaints</p>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart layout="vertical" data={topIssues} margin={{ left: 40 }}>
-                    <CartesianGrid strokeDasharray="5 5" horizontal={false} stroke="#f1f5f9" />
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                     <XAxis type="number" hide />
-                    <YAxis dataKey="word" type="category" axisLine={false} tickLine={false} tick={{fill: '#e11d48', fontSize: 12, fontWeight: 900}} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#ef4444" radius={[0, 6, 6, 0]} barSize={20} />
+                    <YAxis dataKey="word" type="category" axisLine={false} tickLine={false} tick={{fill: '#e11d48', fontSize: 11, fontWeight: 800}} />
+                    <Tooltip contentStyle={{borderRadius: '1rem', border: 'none'}} />
+                    <Bar dataKey="count" fill="#f43f5e" radius={[0, 6, 6, 0]} barSize={16} animationDuration={2000} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -544,29 +563,29 @@ export default function UniversalHub() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Sentiment Trends by Version</h2>
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group">
+              <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">Version Intelligence</h2>
               <div className="flex gap-4 mb-10">
-                 <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Positivity %</span>
-                 <span className="flex items-center gap-1.5 text-[9px] font-black text-rose-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-rose-500 rounded-full" /> Negativity %</span>
+                 <span className="flex items-center gap-1.5 text-[9px] font-black text-teal-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-teal-500 rounded-full" /> Positivity %</span>
+                 <span className="flex items-center gap-1.5 text-[9px] font-black text-coral-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-coral-500 rounded-full" /> Negativity %</span>
               </div>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={versionData.map(v => ({...v, negative_rate: versionNegativeData.find(nv => nv.version === v.version)?.negative_rate || 0}))}>
-                    <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="version" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} unit="%" />
-                    <Tooltip />
-                    <Bar dataKey="positive_rate" fill="#10b981" radius={[4, 4, 0, 0]} name="Positive %" barSize={15} />
-                    <Bar dataKey="negative_rate" fill="#ef4444" radius={[4, 4, 0, 0]} name="Negative %" barSize={15} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="version" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} unit="%" />
+                    <Tooltip contentStyle={{borderRadius: '1rem', border: 'none'}} />
+                    <Bar dataKey="positive_rate" fill="#14b8a6" radius={[4, 4, 0, 0]} name="Positive %" barSize={12} animationDuration={1000} />
+                    <Bar dataKey="negative_rate" fill="#f43f5e" radius={[4, 4, 0, 0]} name="Negative %" barSize={12} animationDuration={1000} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Engagement Heatmap</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">Stacked hourly activity by day</p>
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group">
+              <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">Hourly Engagement</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">Stacked activity by day of week</p>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={Array.from({length: 24}, (_, i) => ({
@@ -576,13 +595,13 @@ export default function UniversalHub() {
                       [day]: heatmapData.find(d => d.hour === i && d.day === di)?.value || 0
                     }), {})
                   }))}>
-                    <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9}} />
                     <Tooltip contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                    <Legend iconType="circle" />
+                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }} />
                     {days.map((day, i) => (
-                      <Bar key={day} dataKey={day} stackId="a" fill={['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#ef4444'][i]} />
+                      <Bar key={day} dataKey={day} stackId="a" fill={[ '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#ef4444' ][i]} animationDuration={1500} />
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
@@ -650,12 +669,24 @@ export default function UniversalHub() {
             </div>
           </div>
 
-          <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-4 mb-10">
-              <div className="bg-slate-900 p-3 rounded-2xl text-brand shadow-lg shadow-brand/10"><Users className="w-6 h-6" /></div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase tracking-tight">Human-in-the-Loop Audit</h2>
+          <div className="bg-white p-10 rounded-[3rem] shadow-xl shadow-slate-100/50 border border-slate-50">
+            <div className="flex items-center justify-between mb-10">
+              <div className="flex items-center gap-4">
+                <div className="bg-slate-900 p-3 rounded-2xl text-brand shadow-lg shadow-brand/10"><Users className="w-6 h-6" /></div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Human-in-the-Loop Audit</h2>
+              </div>
+              {Object.keys(pendingCorrections).length > 0 && (
+                <button 
+                  onClick={submitChanges}
+                  disabled={submittingChanges}
+                  className="bg-brand text-slate-900 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-brand/20 hover:scale-105 transition-all flex items-center gap-2"
+                >
+                  {submittingChanges ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-slate-900" />}
+                  Submit {Object.keys(pendingCorrections).length} Corrections
+                </button>
+              )}
             </div>
-            {/* Scrollable Audit Window */}
+            
             <div className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar border border-slate-50 rounded-[2rem]">
               <table className="w-full text-left">
                 <thead>
@@ -667,22 +698,53 @@ export default function UniversalHub() {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {fullHistory.map((item) => (
-                    <tr key={item.id} className="group hover:bg-slate-50/50 transition-all">
+                    <tr key={item.id} className={clsx("group transition-all", pendingCorrections[item.id] ? "bg-brand/5" : "hover:bg-slate-50/50")}>
                       <td className="py-8 pr-10 pl-6">
-                        <p className="text-sm font-bold text-slate-700 leading-relaxed mb-1">{item.text}</p>
+                        <p className="text-sm font-bold text-slate-700 leading-relaxed mb-1 italic">"{item.text}"</p>
                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{new Date(item.timestamp).toLocaleString()} • {item.model_version}</p>
                       </td>
                       <td className="py-8">
-                        <span className={clsx("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border", item.sentiment === "positive" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : (item.sentiment === "negative" ? "bg-red-50 text-red-600 border-red-100" : "bg-blue-50 text-blue-600 border-blue-100"))}>{item.sentiment}</span>
-                        {item.sentiment_corrected && (
-                          <div className="mt-2 flex items-center gap-1.5 text-[9px] font-black text-brand uppercase animate-pulse"><CheckCircle2 className="w-3 h-3" /> Overridden: {item.sentiment_corrected}</div>
-                        )}
+                        <div className="flex flex-col gap-2">
+                          <span className={clsx("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border w-fit", 
+                            item.sentiment === "positive" ? "bg-teal-50 text-teal-600 border-teal-100" : 
+                            (item.sentiment === "negative" ? "bg-coral-50 text-coral-600 border-coral-100" : "bg-indigo-50 text-indigo-600 border-indigo-100")
+                          )}>
+                            {item.sentiment}
+                          </span>
+                          {item.sentiment_corrected && (
+                            <div className="flex items-center gap-1.5 text-[9px] font-black text-brand uppercase"><CheckCircle2 className="w-3 h-3" /> Audit: {item.sentiment_corrected}</div>
+                          )}
+                          {pendingCorrections[item.id] && (
+                            <div className="flex items-center gap-1.5 text-[9px] font-black text-amber-500 uppercase animate-pulse"><Zap className="w-3 h-3" /> Pending: {pendingCorrections[item.id]}</div>
+                          )}
+                        </div>
                       </td>
                       <td className="py-8">
-                         <div className="flex justify-center gap-3">
-                            <button onClick={() => handleCorrection(item.id, 'positive')} className="p-3 bg-white border border-slate-100 rounded-2xl hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-100 transition-all shadow-sm text-slate-300" title="Set Positive"><TrendingUp className="w-5 h-5" /></button>
-                            <button onClick={() => handleCorrection(item.id, 'negative')} className="p-3 bg-white border border-slate-100 rounded-2xl hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all shadow-sm text-slate-300" title="Set Negative"><TrendingUp className="w-5 h-5 rotate-180" /></button>
-                            <button onClick={() => handleCorrection(item.id, 'neutral')} className="p-3 bg-white border border-slate-100 rounded-2xl hover:bg-blue-50 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm text-slate-300" title="Set Neutral"><Activity className="w-5 h-5" /></button>
+                         <div className="flex justify-center gap-2">
+                            <button 
+                              onClick={() => handleCorrection(item.id, 'positive')} 
+                              className={clsx("p-3 rounded-2xl transition-all shadow-sm border", 
+                                pendingCorrections[item.id] === 'positive' ? "bg-teal-500 text-white border-teal-500 shadow-teal-200" : "bg-white border-slate-100 text-slate-300 hover:border-teal-200 hover:text-teal-500"
+                              )}
+                            >
+                              <TrendingUp className="w-5 h-5" />
+                            </button>
+                            <button 
+                              onClick={() => handleCorrection(item.id, 'negative')} 
+                              className={clsx("p-3 rounded-2xl transition-all shadow-sm border", 
+                                pendingCorrections[item.id] === 'negative' ? "bg-coral-500 text-white border-coral-500 shadow-coral-200" : "bg-white border-slate-100 text-slate-300 hover:border-coral-200 hover:text-coral-500"
+                              )}
+                            >
+                              <TrendingUp className="w-5 h-5 rotate-180" />
+                            </button>
+                            <button 
+                              onClick={() => handleCorrection(item.id, 'neutral')} 
+                              className={clsx("p-3 rounded-2xl transition-all shadow-sm border", 
+                                pendingCorrections[item.id] === 'neutral' ? "bg-indigo-500 text-white border-indigo-500 shadow-indigo-200" : "bg-white border-slate-100 text-slate-300 hover:border-indigo-200 hover:text-indigo-500"
+                              )}
+                            >
+                              <Activity className="w-5 h-5" />
+                            </button>
                          </div>
                       </td>
                     </tr>
