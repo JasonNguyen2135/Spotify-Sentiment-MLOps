@@ -703,11 +703,16 @@ def generate_professional_report(project_id: int, db: Session = Depends(get_db),
 @api_router.get("/history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
-    if project_id: 
+    if project_id and project_id != 0: 
         verify_project_access(project_id, current_user, db)
         query["project_id"] = {"$in": [project_id, str(project_id)]}
     else:
+        # Global HUB View: Show ad-hoc analysis (instant, bulk, csv)
         query["source"] = {"$in": ["instant_analysis", "Bulk Analysis", "csv_upload"]}
+        if current_user.role not in ["admin", "ai_engineer", "analyst"]:
+            # Regular users see their own projects' ad-hoc + global (id 0)
+            my_pids = [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]
+            query["project_id"] = {"$in": my_pids + [0, "0", None]}
     
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(100)
     history = []
