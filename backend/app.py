@@ -18,7 +18,7 @@ import redis
 import uuid
 import secrets
 from pymongo import MongoClient
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 from google_play_scraper import Sort, reviews
 import smtplib
 from email.mime.text import MIMEText
