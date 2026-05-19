@@ -4,7 +4,7 @@ import { useProject } from '@/context/ProjectContext';
 import { useRouter } from 'next/navigation';
 import { 
   Play, ExternalLink, Clock, CheckCircle2, 
-  AlertCircle, Database, Cpu, Zap, 
+  AlertCircle, Database, Cpu, Zap, LayoutGrid,
   Loader2, Terminal, List, X, Link as LinkIcon,
   Github, RefreshCw, Activity
 } from 'lucide-react';

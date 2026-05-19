@@ -4,7 +4,7 @@ import { useProject } from '@/context/ProjectContext';
 import { useRouter } from 'next/navigation';
 import { 
   Settings, ExternalLink, CheckCircle2, 
-  AlertCircle, Layers, Zap, 
+  AlertCircle, Layers, Zap, LayoutGrid,
   ShieldCheck, Loader2, List, Github, Activity
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
