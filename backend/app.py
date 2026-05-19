@@ -708,8 +708,8 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
         verify_project_access(project_id, current_user, db)
         query["project_id"] = {"$in": [project_id, str(project_id)]}
     else:
-        # Global HUB View: Show ad-hoc analysis (instant, bulk, csv)
-        query["source"] = {"$in": ["instant_analysis", "Bulk Analysis", "csv_upload"]}
+        # Global HUB View: Show all ad-hoc analysis sources
+        query["source"] = {"$in": ["instant_analysis", "Bulk Analysis", "csv_upload", "webhook_async", "crawler"]}
         if current_user.role not in ["admin", "ai_engineer", "analyst"]:
             # Regular users see their own projects' ad-hoc + global (id 0)
             my_pids = [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]

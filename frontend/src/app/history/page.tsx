@@ -111,11 +111,11 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
+        <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
           <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+            <thead className="sticky top-0 bg-slate-50/90 backdrop-blur-md z-10 border-b border-slate-100">
+              <tr className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">
                 <th className="px-10 py-6">Intelligence Snippet</th>
                 <th className="px-10 py-6">AI Classification</th>
                 <th className="px-10 py-6">Timestamp</th>
