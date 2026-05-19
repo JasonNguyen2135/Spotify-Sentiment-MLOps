@@ -711,14 +711,19 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
         verify_project_access(pid_val, current_user, db)
         query["project_id"] = {"$in": [pid_val, str(pid_val)]}
     else:
-        # Global HUB View: TRUE Platform-wide trail
+        # Global HUB View: Focus on manual/ad-hoc analysis
+        ad_hoc_sources = ["instant_analysis", "Bulk Analysis", "csv_upload"]
         if current_user.role not in ["admin", "ai_engineer", "analyst"]:
-            my_pids = [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]
+            # Regular users see their OWN projects + all Global ad-hoc (id 0/None)
+            my_pids = [r[0] for r in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]
             query["$or"] = [
                 {"project_id": {"$in": my_pids + [str(pid) for pid in my_pids]}},
                 {"project_id": {"$in": [0, "0", None]}},
-                {"source": {"$in": ["instant_analysis", "Bulk Analysis", "csv_upload"]}}
+                {"source": {"$in": ad_hoc_sources}}
             ]
+        else:
+            # Admins see ad-hoc sources first at HUB
+            query["source"] = {"$in": ad_hoc_sources + ["webhook_async", "crawler"]}
     
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(200)
     history = []
@@ -731,9 +736,6 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
             "timestamp": ts_str, "model_version": d.get("model_version", "Production")
         })
     print(f"[DEBUG] Found {len(history)} records for this HUB query")
-    return history
-
-    print(f"[DEBUG] Found {len(history)} history records")
     return history
 
 @api_router.post("/predict")
@@ -878,31 +880,43 @@ def github_runs(current_user: User = Depends(get_current_user)):
 
 @api_router.post("/analyze-csv")
 async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if project_id: verify_project_access(project_id, current_user, db)
+    pid_to_save = project_id if project_id else 0
+    if pid_to_save != 0: verify_project_access(pid_to_save, current_user, db)
+    
+    print(f"[DEBUG] Starting CSV analysis. project_id={pid_to_save}, user={current_user.username}")
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     summary, results, log_entries = {"positive": 0, "negative": 0, "neutral": 0}, [], []
-    col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
-    date_col = next((c for c in ["timestamp", "date", "at", "created_at"] if c in df.columns), None)
     
-    for i, row in df.head(100).iterrows():
+    col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
+    print(f"[DEBUG] CSV Columns: {df.columns.tolist()}. Using column: '{col}'")
+    
+    for i, row in df.head(150).iterrows():
         txt = str(row[col])
-        try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json().get("sentiment", "neutral")
-        except: sent = "neutral"
-        summary[sent] += 1
-        
-        row_ts = datetime.utcnow()
-        if date_col:
-            try:
-                row_ts = pd.to_datetime(row[date_col])
-                if pd.isna(row_ts): row_ts = datetime.utcnow()
-            except: pass
+        try:
+            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json()
+            sent = res.get("sentiment", "neutral")
+        except Exception as e:
+            print(f"[DEBUG] Prediction error for row {i}: {e}")
+            sent = "neutral"
             
-        rating = row.get('rating') or row.get('score') or row.get('stars')
-        version = row.get('version') or row.get('app_version')
+        summary[sent] += 1
+        row_ts = datetime.utcnow()
         
-        results.append({"id": i, "text": txt, "sentiment": sent, "time": row_ts.isoformat() if hasattr(row_ts, 'isoformat') else str(row_ts)})
-        log_entries.append({"text": txt, "sentiment": sent, "project_id": project_id, "user": current_user.username, "timestamp": row_ts, "model_version": "Bulk Analysis", "source": "csv_upload", "rating": rating, "app_version": version})
-    if log_entries: preds_log_col.insert_many(log_entries)
+        results.append({"id": i, "text": txt, "sentiment": sent, "time": row_ts.isoformat()})
+        log_entries.append({
+            "text": txt, "sentiment": sent, "project_id": pid_to_save, 
+            "user": current_user.username, "timestamp": row_ts, 
+            "model_version": "Batch AI", "source": "csv_upload",
+            "rating": row.get('rating') or row.get('score') or row.get('stars'),
+            "app_version": row.get('version') or row.get('app_version')
+        })
+        
+    if log_entries:
+        preds_log_col.insert_many(log_entries)
+        print(f"[DEBUG] Successfully inserted {len(log_entries)} CSV records into MongoDB")
+    else:
+        print("[DEBUG] WARNING: No log entries to insert")
+        
     return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
 # --- Infrastructure ---

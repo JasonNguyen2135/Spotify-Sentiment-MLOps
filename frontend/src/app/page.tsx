@@ -486,6 +486,48 @@ export default function UniversalHub() {
               ))}
             </div>
           </div>
+
+          <div className="bg-white p-10 rounded-[3rem] shadow-xl shadow-slate-100/50 border border-slate-50">
+            <div className="flex items-center gap-4 mb-10">
+              <div className="bg-slate-900 p-3 rounded-2xl text-brand shadow-lg shadow-brand/10"><MessageSquare className="w-6 h-6" /></div>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Platform-Wide Intelligence Logs</h2>
+            </div>
+            <div className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar border border-slate-50 rounded-[2rem]">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-50 sticky top-0 bg-white z-10">
+                    <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-6">Feedback Intelligence</th>
+                    <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Status</th>
+                    <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {fullHistory.map((item) => (
+                    <tr key={item.id} className="group hover:bg-slate-50/50 transition-all">
+                      <td className="py-8 pr-10 pl-6">
+                        <p className="text-sm font-bold text-slate-700 leading-relaxed mb-1 italic">"{item.text}"</p>
+                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{item.model_version}</p>
+                      </td>
+                      <td className="py-8">
+                        <span className={clsx("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border w-fit", 
+                          item.sentiment === "positive" ? "bg-teal-50 text-teal-600 border-teal-100" : 
+                          (item.sentiment === "negative" ? "bg-coral-50 text-coral-600 border-coral-100" : "bg-indigo-50 text-indigo-600 border-indigo-100")
+                        )}>
+                          {item.sentiment}
+                        </span>
+                      </td>
+                      <td className="py-8 text-center text-[10px] font-bold text-slate-400">
+                        {new Date(item.timestamp).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {fullHistory.length === 0 && (
+                <div className="py-20 text-center text-slate-300 italic font-medium">No global activity logged yet.</div>
+              )}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="animate-in slide-in-from-bottom duration-700 space-y-16">
