@@ -345,7 +345,15 @@ export default function UniversalHub() {
 
   return (
     <div className="animate-in fade-in duration-700 pb-20 max-w-7xl mx-auto px-4">
-      <div className="mb-12 flex justify-between items-end">
+      <style jsx global>{`
+        @media print {
+          @page { size: A4; margin: 1cm; }
+          body { background: white !important; }
+          .print-break-inside-avoid { break-inside: avoid; }
+          .animate-in { animation: none !important; }
+        }
+      `}</style>
+      <div className="mb-12 flex justify-between items-end print:hidden">
         <div>
           <h1 className="text-5xl font-black text-slate-900 tracking-tight mb-2">
             {activeProject ? activeProject.name : 'Universal Hub'}

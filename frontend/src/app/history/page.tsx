@@ -17,6 +17,8 @@ export default function HistoryPage() {
   const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportLimit, setExportLimit] = useState<number>(0);
+  const [exportSentiment, setExportSentiment] = useState<string>('all');
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
@@ -46,23 +48,31 @@ export default function HistoryPage() {
   );
 
   const handleDownloadLogs = async () => {
-    const projectId = activeProject?.id;
-    if (!projectId) return alert("Please select a workspace first from the Dashboard.");
-
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`/api/export/logs/${projectId}`, {
+      const url = activeProject 
+        ? `/api/export/excel/${activeProject.id}` 
+        : `/api/export/global/excel`;
+      
+      const res = await axios.get(url, {
+        params: { sentiment: exportSentiment, limit: exportLimit },
         headers: { 'Authorization': `Bearer ${token}` },
         responseType: 'blob'
       });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+      
+      const downloadUrl = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `logs_project_${projectId}.csv`);
+      link.href = downloadUrl;
+      const filename = activeProject 
+        ? `logs_project_${activeProject.name}.csv` 
+        : `global_intelligence_logs.csv`;
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
-    } catch (err) { alert("Download failed. Ensure you have selected a workspace."); }
+    } catch (err) { 
+      alert("Download failed. Please ensure you are logged in."); 
+    }
   };
 
   return (
@@ -72,12 +82,33 @@ export default function HistoryPage() {
           <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">Intelligence Logs</h1>
           <p className="text-slate-500 font-medium">Full audit trail of platform-wide sentiment classifications.</p>
         </div>
-        <button 
-          onClick={handleDownloadLogs}
-          className="bg-white border border-slate-100 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
-        >
-          <Download className="w-4 h-4" /> Download Logs CSV
-        </button>
+        <div className="flex items-center gap-3 bg-white p-2 rounded-[1.5rem] border border-slate-100 shadow-sm">
+          <select 
+            value={exportSentiment} 
+            onChange={(e) => setExportSentiment(e.target.value)}
+            className="bg-slate-50 text-[10px] font-black uppercase px-3 py-2 rounded-xl outline-none"
+          >
+            <option value="all">All Sentiments</option>
+            <option value="positive">Teal (Positive)</option>
+            <option value="negative">Coral (Negative)</option>
+          </select>
+          <select 
+            value={exportLimit} 
+            onChange={(e) => setExportLimit(parseInt(e.target.value))}
+            className="bg-slate-50 text-[10px] font-black uppercase px-3 py-2 rounded-xl outline-none"
+          >
+            <option value={0}>Download All</option>
+            <option value={100}>Last 100</option>
+            <option value={500}>Last 500</option>
+            <option value={1000}>Last 1000</option>
+          </select>
+          <button 
+            onClick={handleDownloadLogs}
+            className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+          >
+            <Download className="w-4 h-4" /> Download Logs CSV
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden">
