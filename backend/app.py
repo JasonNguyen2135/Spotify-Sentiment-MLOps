@@ -129,22 +129,32 @@ except Exception as e: print(f"MySQL Init Error: {e}")
 def migrate_db():
     db = SessionLocal()
     try:
-        for col in ["owner_id", "uuid", "api_key", "slack_webhook", "support_email", "monitor_strategy"]:
+        # Add columns if missing
+        for col in ["uuid", "api_key", "slack_webhook", "support_email", "monitor_strategy"]:
             try:
                 db.execute(text(f"ALTER TABLE projects ADD COLUMN {col} VARCHAR"))
                 db.commit()
             except: db.rollback()
         
+        # Special handling for owner_id as Integer
+        try:
+            db.execute(text("ALTER TABLE projects ADD COLUMN owner_id INTEGER"))
+            db.commit()
+        except: db.rollback()
+        
+        # Ensure admin user exists
+        admin = db.query(User).filter(User.username == "admin").first()
+        if not admin:
+            admin = User(username="admin", hashed_password=CryptContext(schemes=["bcrypt"]).hash("admin123"), role="admin")
+            db.add(admin); db.commit(); db.refresh(admin)
+        
+        # Migrate existing projects
         projects = db.query(Project).all()
         for p in projects:
             if not p.uuid: p.uuid = str(uuid.uuid4())[:8]
             if not p.api_key: p.api_key = secrets.token_hex(16)
+            if p.owner_id is None: p.owner_id = admin.id # Assign to admin
         db.commit()
-
-        admin = db.query(User).filter(User.username == "admin").first()
-        if not admin:
-            admin = User(username="admin", hashed_password=CryptContext(schemes=["bcrypt"]).hash("admin123"), role="admin")
-            db.add(admin); db.commit()
     finally: db.close()
 
 # Helpers
@@ -267,8 +277,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 # --- Projects ---
 @api_router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role in ["admin", "ai_engineer", "analyst"]: projects = db.query(Project).all()
-    else: projects = db.query(Project).filter(Project.owner_id == current_user.id).all()
+    from sqlalchemy import or_
+    if current_user.role in ["admin", "ai_engineer", "analyst"]: 
+        projects = db.query(Project).all()
+    else: 
+        # Show projects owned by user OR projects with no owner (legacy)
+        projects = db.query(Project).filter(or_(Project.owner_id == current_user.id, Project.owner_id == None)).all()
     return [{"id": p.id, "uuid": p.uuid, "name": p.name, "description": p.description, "api_key": p.api_key, "monitor_strategy": p.monitor_strategy} for p in projects]
 
 @api_router.get("/projects/{project_id}")
