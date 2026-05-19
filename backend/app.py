@@ -1147,7 +1147,14 @@ def export_global_csv(sentiment: str = None, limit: int = 0, current_user: User 
 @api_router.post("/collect/{project_uuid}")
 async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.uuid == project_uuid).first()
-    if not project or data.get("api_key") != project.api_key: raise HTTPException(status_code=401)
+    if not project:
+        print(f"[DEBUG] Webhook failed: Project UUID {project_uuid} not found")
+        raise HTTPException(status_code=401, detail="Project not found")
+        
+    client_key = data.get("api_key")
+    if client_key != project.api_key:
+        print(f"[DEBUG] Webhook failed: API Key mismatch for {project.name}. Received: {client_key}")
+        raise HTTPException(status_code=401, detail="Invalid API Key")
     
     # Robust field extraction
     text_content = data.get("text") or data.get("review_text") or data.get("content")
