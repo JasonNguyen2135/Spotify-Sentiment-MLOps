@@ -799,13 +799,52 @@ def get_audit_logs(db: Session = Depends(get_db), current_user: User = Depends(g
 
 # --- Reporting ---
 @api_router.get("/export/excel/{project_id}")
-def export_csv_report(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def export_csv_report(project_id: int, sentiment: str = None, limit: int = 0, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
-    cursor = preds_log_col.find({"project_id": {"$in": [project_id, str(project_id)]}}).sort("timestamp", -1)
-    data = [{"text": d.get("text"), "sentiment": d.get("sentiment_corrected") or d.get("sentiment"), "timestamp": d.get("timestamp").isoformat() if d.get("timestamp") else ""} for d in cursor]
+    query = {"project_id": {"$in": [project_id, str(project_id)]}}
+    if sentiment and sentiment != "all":
+        query["sentiment"] = sentiment
+    
+    cursor = preds_log_col.find(query).sort("timestamp", -1)
+    if limit > 0: cursor = cursor.limit(limit)
+    
+    data = []
+    for d in cursor:
+        data.append({
+            "text": d.get("text"),
+            "sentiment": d.get("sentiment_corrected") or d.get("sentiment"),
+            "rating": d.get("rating"),
+            "app_version": d.get("app_version"),
+            "timestamp": d.get("timestamp").isoformat() if d.get("timestamp") and hasattr(d.get("timestamp"), 'isoformat') else str(d.get("timestamp", ""))
+        })
+    
     df = pd.DataFrame(data)
-    output = io.BytesIO(); df.to_csv(output, index=False); output.seek(0)
-    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=project_{project_id}.csv"})
+    output = io.BytesIO(); df.to_csv(output, index=False, encoding='utf-8-sig'); output.seek(0)
+    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=project_{project_id}_export.csv"})
+
+@api_router.get("/export/global/excel")
+def export_global_csv(sentiment: str = None, limit: int = 0, current_user: User = Depends(get_current_user)):
+    # Global history export (Admin only or based on role)
+    query = {}
+    if sentiment and sentiment != "all":
+        query["sentiment"] = sentiment
+    
+    cursor = preds_log_col.find(query).sort("timestamp", -1)
+    if limit > 0: cursor = cursor.limit(limit)
+    
+    data = []
+    for d in cursor:
+        data.append({
+            "project_id": d.get("project_id"),
+            "text": d.get("text"),
+            "sentiment": d.get("sentiment_corrected") or d.get("sentiment"),
+            "rating": d.get("rating"),
+            "timestamp": d.get("timestamp").isoformat() if d.get("timestamp") and hasattr(d.get("timestamp"), 'isoformat') else str(d.get("timestamp", ""))
+        })
+    
+    df = pd.DataFrame(data)
+    output = io.BytesIO(); df.to_csv(output, index=False, encoding='utf-8-sig'); output.seek(0)
+    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=global_intelligence_logs.csv"})
 
 @api_router.post("/collect/{project_uuid}")
 async def collect_comment(project_uuid: str, data: dict, db: Session = Depends(get_db)):
