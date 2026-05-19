@@ -264,20 +264,48 @@ export default function UniversalHub() {
     }
   };
 
+  // Export & Reporting States
+  const [exportLimit, setExportLimit] = useState<number>(0);
+  const [exportSentiment, setExportSentiment] = useState<string>('all');
+  const [exportingReport, setExportingReport] = useState(false);
+
+  // ... rest of state ...
+
   const handleExport = async (type: 'excel' | 'pdf') => {
-    if (!activeProject) return;
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`/api/export/${type}/${activeProject.id}`, {
+      // Fix: If no activeProject, use global export endpoint
+      const url = activeProject 
+        ? `/api/export/excel/${activeProject.id}` 
+        : `/api/export/global/excel`;
+      
+      const response = await axios.get(url, {
+        params: { sentiment: exportSentiment, limit: exportLimit },
         headers: { 'Authorization': `Bearer ${token}` },
         responseType: 'blob'
       });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      
+      const downloadUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Project_${activeProject.name}_Report.${type === 'excel' ? 'csv' : 'pdf'}`);
+      link.href = downloadUrl;
+      const filename = activeProject 
+        ? `Project_${activeProject.name}_Logs.csv` 
+        : `Global_Intelligence_Logs.csv`;
+      link.setAttribute('download', filename);
       document.body.appendChild(link); link.click(); link.remove();
-    } catch (err) { alert("Export failed"); }
+    } catch (err) { 
+      console.error("Export failed", err);
+      alert("Export failed. Please ensure you are authorized."); 
+    }
+  };
+
+  const handleDownloadReport = () => {
+    setExportingReport(true);
+    // Simple delay to show loading state before print dialog
+    setTimeout(() => {
+      window.print();
+      setExportingReport(false);
+    }, 1000);
   };
 
   const handleHarvest = async (e: React.FormEvent) => {
@@ -429,25 +457,54 @@ export default function UniversalHub() {
         </div>
       ) : (
         <div className="animate-in slide-in-from-bottom duration-700 space-y-16">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center print:hidden">
             <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-5">
                <div className="bg-brand p-3 rounded-2xl text-white shadow-lg shadow-brand/20"><LayoutGrid className="w-7 h-7" /></div> Monitoring
             </h2>
-            <div className="flex gap-4">
-              <Link href="/admin/connectors" className="bg-white px-6 py-3 rounded-2xl border border-slate-200 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-slate-50 shadow-sm text-slate-600">
-                <RefreshCw className="w-4 h-4 text-brand" /> Change Strategy
-              </Link>
-              <button onClick={() => handleExport('excel')} className="bg-emerald-50 text-emerald-600 px-6 py-3 rounded-2xl border border-emerald-100 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-emerald-100 shadow-sm">
-                <FileText className="w-4 h-4" /> Download CSV
+            <div className="flex items-center gap-3 bg-white p-2 rounded-[1.5rem] border border-slate-100 shadow-sm">
+              <select 
+                value={exportSentiment} 
+                onChange={(e) => setExportSentiment(e.target.value)}
+                className="bg-slate-50 text-[10px] font-black uppercase px-3 py-2 rounded-xl outline-none"
+              >
+                <option value="all">All Sentiments</option>
+                <option value="positive">Teal (Positive)</option>
+                <option value="negative">Coral (Negative)</option>
+              </select>
+              <select 
+                value={exportLimit} 
+                onChange={(e) => setExportLimit(parseInt(e.target.value))}
+                className="bg-slate-50 text-[10px] font-black uppercase px-3 py-2 rounded-xl outline-none"
+              >
+                <option value={0}>Download All</option>
+                <option value={100}>Last 100</option>
+                <option value={500}>Last 500</option>
+                <option value={1000}>Last 1000</option>
+              </select>
+              <button 
+                onClick={() => handleExport('excel')} 
+                className="bg-teal-50 text-teal-600 px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-teal-100 transition-all flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" /> CSV
               </button>
-              <button onClick={() => window.print()} className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl border border-rose-100 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-rose-100 shadow-sm">
-                <PieChartIcon className="w-4 h-4" /> Export Charts
+              <button 
+                onClick={handleDownloadReport}
+                disabled={exportingReport}
+                className="bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg shadow-slate-200"
+              >
+                {exportingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                {exportingReport ? 'Generating...' : 'Download Report'}
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative overflow-hidden group">
+          <div className="hidden print:block mb-10 border-b-2 border-slate-100 pb-8 text-center">
+            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-2">Spotify Sentiment Analysis Report</h1>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Generated on {new Date().toLocaleDateString('vi-VN')} • Project: {activeProject?.name || 'Platform-Wide'}</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 print:grid-cols-2 print:gap-4">
+            <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative overflow-hidden group print:shadow-none print:border-slate-100">
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-xl font-black text-slate-800 tracking-tight">Intelligence Trends</h2>
                 <div className="flex gap-4">
@@ -455,7 +512,7 @@ export default function UniversalHub() {
                   <span className="flex items-center gap-1.5 text-[10px] font-black text-coral-500 uppercase tracking-widest"><div className="w-2 h-2 bg-coral-500 rounded-full" /> Negative</span>
                 </div>
               </div>
-              <div className="h-[350px] w-full">
+              <div className="h-[350px] w-full print:h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyData}>
                     <defs>
@@ -472,9 +529,9 @@ export default function UniversalHub() {
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 flex flex-col items-center justify-center">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 flex flex-col items-center justify-center print:shadow-none print:border-slate-100">
               <h2 className="text-xl font-black text-slate-800 tracking-tight mb-10 w-full text-left">Sentiment Split</h2>
-              <div className="flex-1 h-[280px] w-full relative">
+              <div className="flex-1 h-[280px] w-full relative print:h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={sentimentData} cx="50%" cy="50%" innerRadius={80} outerRadius={105} paddingAngle={8} dataKey="value" stroke="none">
@@ -485,21 +542,21 @@ export default function UniversalHub() {
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Analyzed</p>
-                  <p className="text-4xl font-black text-slate-900 tracking-tighter tabular-nums">{sentimentData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}</p>
+                  <p className="text-4xl font-black text-slate-900 tracking-tighter tabular-nums print:text-2xl">{sentimentData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString()}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative overflow-hidden group">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:grid-cols-2 print:gap-4">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative overflow-hidden group print:shadow-none print:border-slate-100">
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-xl font-black text-slate-800 tracking-tight">Rating Trend</h2>
                 <div className="flex gap-4">
                   <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full" /> Avg Star Rating</span>
                 </div>
               </div>
-              <div className="h-[300px] w-full">
+              <div className="h-[300px] w-full print:h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={monthlyData}>
                     <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
@@ -511,10 +568,10 @@ export default function UniversalHub() {
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 print:shadow-none print:border-slate-100">
               <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">Rating Distribution</h2>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">Spread of star ratings (1-5)</p>
-              <div className="h-[300px] w-full">
+              <div className="h-[300px] w-full print:h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ratingDist}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -528,11 +585,11 @@ export default function UniversalHub() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:grid-cols-2 print:gap-4">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group print:shadow-none print:border-slate-100">
               <h2 className="text-xl font-black text-teal-600 tracking-tight mb-2">Top Positive Keywords</h2>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">Common praises from users</p>
-              <div className="h-[300px] w-full">
+              <div className="h-[300px] w-full print:h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart layout="vertical" data={topPositiveIssues} margin={{ left: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
@@ -545,10 +602,10 @@ export default function UniversalHub() {
               </div>
             </div>
 
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group print:shadow-none print:border-slate-100">
               <h2 className="text-xl font-black text-coral-600 tracking-tight mb-2">Top Negative Keywords</h2>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">AI-identified common complaints</p>
-              <div className="h-[300px] w-full">
+              <div className="h-[300px] w-full print:h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart layout="vertical" data={topIssues} margin={{ left: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
@@ -562,14 +619,14 @@ export default function UniversalHub() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:grid-cols-2 print:gap-4">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group print:shadow-none print:border-slate-100">
               <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">Version Intelligence</h2>
               <div className="flex gap-4 mb-10">
                  <span className="flex items-center gap-1.5 text-[9px] font-black text-teal-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-teal-500 rounded-full" /> Positivity %</span>
                  <span className="flex items-center gap-1.5 text-[9px] font-black text-coral-500 uppercase tracking-widest"><div className="w-1.5 h-1.5 bg-coral-500 rounded-full" /> Negativity %</span>
               </div>
-              <div className="h-[300px] w-full">
+              <div className="h-[300px] w-full print:h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={versionData.map(v => ({...v, negative_rate: versionNegativeData.find(nv => nv.version === v.version)?.negative_rate || 0}))}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -583,10 +640,10 @@ export default function UniversalHub() {
               </div>
             </div>
 
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group">
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-50 relative group print:shadow-none print:border-slate-100">
               <h2 className="text-xl font-black text-slate-800 tracking-tight mb-2">Hourly Engagement</h2>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10">Stacked activity by day of week</p>
-              <div className="h-[300px] w-full">
+              <div className="h-[300px] w-full print:h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={Array.from({length: 24}, (_, i) => ({
                     hour: `${i}h`,
@@ -599,7 +656,7 @@ export default function UniversalHub() {
                     <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9}} />
                     <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9}} />
                     <Tooltip contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }} />
+                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '10px', fontSize: '8px', fontWeight: '800', textTransform: 'uppercase' }} />
                     {days.map((day, i) => (
                       <Bar key={day} dataKey={day} stackId="a" fill={[ '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#ef4444' ][i]} animationDuration={1500} />
                     ))}
