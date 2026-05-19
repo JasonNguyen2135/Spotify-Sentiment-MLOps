@@ -701,6 +701,7 @@ def generate_professional_report(project_id: int, db: Session = Depends(get_db),
     return HTMLResponse(content=html_content)
 
 @api_router.get("/history")
+@api_router.get("/user-history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
     if project_id and project_id != 0: 
