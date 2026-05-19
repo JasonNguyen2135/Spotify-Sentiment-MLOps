@@ -494,6 +494,9 @@ export default function UniversalHub() {
                <div className="bg-brand p-3 rounded-2xl text-white shadow-lg shadow-brand/20"><LayoutGrid className="w-7 h-7" /></div> Monitoring
             </h2>
             <div className="flex items-center gap-3 bg-white p-2 rounded-[1.5rem] border border-slate-100 shadow-sm">
+              <Link href="/admin/connectors" className="bg-white px-6 py-2 rounded-xl border border-slate-200 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-slate-50 shadow-sm text-slate-600">
+                <RefreshCw className="w-4 h-4 text-brand" /> Change Strategy
+              </Link>
               <select 
                 value={exportSentiment} 
                 onChange={(e) => setExportSentiment(e.target.value)}
@@ -520,12 +523,28 @@ export default function UniversalHub() {
                 <FileText className="w-4 h-4" /> CSV
               </button>
               <button 
-                onClick={handleDownloadReport}
+                onClick={async () => {
+                   if(!activeProject) return;
+                   setExportingReport(true);
+                   try {
+                     const token = localStorage.getItem('token');
+                     const res = await axios.get(`/api/export/report/${activeProject.id}`, {
+                       headers: { 'Authorization': `Bearer ${token}` },
+                       responseType: 'blob'
+                     });
+                     const url = window.URL.createObjectURL(new Blob([res.data]));
+                     const link = document.createElement('a');
+                     link.href = url;
+                     link.setAttribute('download', `SaaS_Report_${activeProject.name}.html`);
+                     document.body.appendChild(link); link.click(); link.remove();
+                   } catch { alert("Backend Report failed"); }
+                   finally { setExportingReport(false); }
+                }}
                 disabled={exportingReport}
                 className="bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg shadow-slate-200"
               >
                 {exportingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                {exportingReport ? 'Generating...' : 'Download Report'}
+                {exportingReport ? 'Building...' : 'Download Report'}
               </button>
             </div>
           </div>

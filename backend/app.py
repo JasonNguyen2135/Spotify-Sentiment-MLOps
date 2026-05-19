@@ -525,6 +525,164 @@ def get_daily_analytics(project_id: int = None, db: Session = Depends(get_db), c
 
 # --- HITL ---
 @api_router.get("/history")
+from fastapi.responses import StreamingResponse, HTMLResponse
+
+# ... (other imports) ...
+
+@api_router.get("/export/report/{project_id}")
+def generate_professional_report(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = verify_project_access(project_id, current_user, db)
+    
+    # 1. Fetch Data
+    cursor = preds_log_col.find({"project_id": {"$in": [project_id, str(project_id)]}}).sort("timestamp", 1)
+    logs = list(cursor)
+    total = len(logs)
+    
+    # Aggregations
+    pos = sum(1 for l in logs if (l.get("sentiment_corrected") or l.get("sentiment")) == "positive")
+    neg = sum(1 for l in logs if (l.get("sentiment_corrected") or l.get("sentiment")) == "negative")
+    neu = total - pos - neg
+    
+    # Trend Data (by day)
+    trend = {}
+    for l in logs:
+        ts = l.get("timestamp")
+        if not ts: continue
+        if hasattr(ts, 'strftime'): d = ts.strftime("%Y-%m-%d")
+        else: d = str(ts)[:10]
+        if d not in trend: trend[d] = {"p": 0, "n": 0}
+        s = (l.get("sentiment_corrected") or l.get("sentiment"))
+        if s == "positive": trend[d]["p"] += 1
+        elif s == "negative": trend[d]["n"] += 1
+    
+    trend_labels = list(trend.keys())[-15:] # Last 15 days
+    trend_pos = [trend[d]["p"] for d in trend_labels]
+    trend_neg = [trend[d]["n"] for d in trend_labels]
+    
+    ratings = [int(l.get("rating")) for l in logs if l.get("rating") is not None]
+    avg_r = sum(ratings)/len(ratings) if ratings else 0
+    
+    # 2. Build High-Fidelity SaaS HTML Report
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>SaaS Sentiment Report - {p.name}</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+            body {{ font-family: 'Inter', sans-serif; background: #fdfdfd; color: #1e293b; }}
+            .report-card {{ background: white; border-radius: 2rem; border: 1px solid #f1f5f9; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); padding: 2.5rem; }}
+            .stat-box {{ border-left: 4px solid #e2e8f0; padding-left: 1.5rem; }}
+            @media print {{ .no-print {{ display: none; }} body {{ background: white; padding: 0; }} .report-card {{ box-shadow: none; border: 1px solid #e2e8f0; }} }}
+        </style>
+    </head>
+    <body class="p-10">
+        <div class="max-w-6xl mx-auto">
+            <header class="flex justify-between items-center mb-16 border-b border-slate-100 pb-10">
+                <div>
+                    <h1 class="text-5xl font-black tracking-tighter text-slate-900 mb-2">INTELLIGENCE REPORT</h1>
+                    <p class="text-slate-400 font-bold uppercase tracking-[0.3em] text-xs">Generated for {p.name} • {datetime.now().strftime('%Y-%m-%d')}</p>
+                </div>
+                <div class="bg-slate-900 text-white p-6 rounded-3xl text-center min-w-[150px]">
+                    <p class="text-[10px] font-black opacity-50 uppercase mb-1">Status</p>
+                    <p class="text-xl font-bold">CERTIFIED</p>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-4 gap-8 mb-12">
+                <div class="report-card stat-box border-slate-900">
+                    <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Feedback Volume</p>
+                    <p class="text-4xl font-black text-slate-900">{total}</p>
+                </div>
+                <div class="report-card stat-box border-teal-500">
+                    <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Positivity Score</p>
+                    <p class="text-4xl font-black text-teal-600">{round(pos/total*100, 1) if total > 0 else 0}%</p>
+                </div>
+                <div class="report-card stat-box border-rose-500">
+                    <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Negativity Score</p>
+                    <p class="text-4xl font-black text-rose-600">{round(neg/total*100, 1) if total > 0 else 0}%</p>
+                </div>
+                <div class="report-card stat-box border-amber-500">
+                    <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Average Rating</p>
+                    <p class="text-4xl font-black text-amber-500">{round(avg_r, 1)}★</p>
+                </div>
+            </div>
+
+            <div class="report-card mb-12">
+                <h3 class="text-xl font-black text-slate-800 mb-10 flex items-center gap-3">
+                    <div class="w-2 h-8 bg-indigo-500 rounded-full"></div> INTELLIGENCE TRENDS (LAST 15 DAYS)
+                </h3>
+                <div class="h-[400px]">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-8 mb-12">
+                <div class="report-card">
+                    <h3 class="text-xl font-black text-slate-800 mb-8 uppercase tracking-tight">Sentiment Split</h3>
+                    <div class="h-[300px]">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+                <div class="report-card">
+                    <h3 class="text-xl font-black text-slate-800 mb-8 uppercase tracking-tight">Rating Spread</h3>
+                    <div class="h-[300px]">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="report-card mb-20">
+                <h3 class="text-xl font-black text-slate-800 mb-8 uppercase tracking-tight">Key Negative Drivers</h3>
+                <div class="space-y-4">
+                    {"".join([f'<div class="p-6 bg-slate-50 rounded-[1.5rem] border border-slate-100 italic text-sm text-slate-600">"{l.get("text")}"</div>' for l in logs if (l.get("sentiment_corrected") or l.get("sentiment")) == "negative"][-5:])}
+                </div>
+            </div>
+
+            <div class="text-center no-print">
+                <button onclick="window.print()" class="bg-slate-900 text-white px-12 py-5 rounded-full font-black uppercase text-xs tracking-widest hover:scale-105 transition-all shadow-2xl">Export to PDF</button>
+            </div>
+        </div>
+
+        <script>
+            new Chart(document.getElementById('trendChart'), {{
+                type: 'line',
+                data: {{
+                    labels: {trend_labels},
+                    datasets: [
+                        {{ label: 'Positive', data: {trend_pos}, borderColor: '#14b8a6', backgroundColor: '#14b8a633', fill: true, tension: 0.4, borderWidth: 4 }},
+                        {{ label: 'Negative', data: {trend_neg}, borderColor: '#f43f5e', backgroundColor: '#f43f5e33', fill: true, tension: 0.4, borderWidth: 4 }}
+                    ]
+                }},
+                options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }}, scales: {{ y: {{ grid: {{ display: false }} }}, x: {{ grid: {{ display: false }} }} }} }}
+            }});
+
+            new Chart(document.getElementById('pieChart'), {{
+                type: 'doughnut',
+                data: {{
+                    labels: ['Positive', 'Negative', 'Neutral'],
+                    datasets: [{{ data: [{pos}, {neg}, {neu}], backgroundColor: ['#14b8a6', '#f43f5e', '#6366f1'], borderWidth: 0 }}]
+                }},
+                options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
+            }});
+
+            new Chart(document.getElementById('barChart'), {{
+                type: 'bar',
+                data: {{
+                    labels: ['1★', '2★', '3★', '4★', '5★'],
+                    datasets: [{{ data: [{ratings.count(1)}, {ratings.count(2)}, {ratings.count(3)}, {ratings.count(4)}, {ratings.count(5)}], backgroundColor: '#fbbf24', borderRadius: 10 }}]
+                }},
+                options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }}, scales: {{ y: {{ display: false }}, x: {{ grid: {{ display: false }} }} }} }}
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
 @api_router.get("/user-history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
