@@ -14,9 +14,10 @@ import { clsx } from 'clsx';
 
 export default function TrainingPage() {
   const { user, loading: authLoading } = useAuth();
-  const { activeProject } = useProject();
+  const { activeProject, setActiveProject } = useProject();
   const router = useRouter();
   const [datasets, setDatasets] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedDataset, setSelectedDataset] = useState<string>('');
   const [customDataset, setCustomDataset] = useState<string>('');
@@ -33,13 +34,15 @@ export default function TrainingPage() {
       const headers = { 'Authorization': `Bearer ${token}` };
       const params = { project_id: activeProject?.id || null };
       
-      const [datasetsRes, airflowRunsRes, githubRunsRes] = await Promise.all([
+      const [datasetsRes, airflowRunsRes, githubRunsRes, projectsRes] = await Promise.all([
         axios.get('/api/datasets', { headers, params }),
         axios.get('/api/airflow/runs', { headers }),
-        axios.get('/api/github/runs', { headers })
+        axios.get('/api/github/runs', { headers }),
+        axios.get('/api/projects', { headers })
       ]);
       
       setDatasets(datasetsRes.data);
+      setProjects(projectsRes.data || []);
       
       const airflowRuns = (airflowRunsRes.data || []).map((r: any) => ({
         id: r.dag_run_id,
@@ -147,7 +150,21 @@ export default function TrainingPage() {
           </h1>
           <p className="text-gray-500 mt-2">Automated model training and pipeline monitoring.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3 items-center justify-end">
+          <div className="flex items-center gap-3 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
+            <LayoutGrid className="w-4 h-4 text-brand" />
+            <select 
+              value={activeProject?.id || ''} 
+              onChange={(e) => {
+                const p = projects.find(p => p.id === parseInt(e.target.value));
+                setActiveProject(p || null);
+              }}
+              className="text-xs font-bold bg-transparent outline-none cursor-pointer min-w-[150px]"
+            >
+              <option value="">Select Workspace...</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
           <a href="http://localhost:31190/" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
              <Activity className="w-4 h-4 text-emerald-500" /> Airflow UI
           </a>

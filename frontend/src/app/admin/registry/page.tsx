@@ -116,7 +116,21 @@ export default function RegistryPage() {
           </h1>
           <p className="text-gray-500 mt-2 font-medium">Manage model versions, stages, and production deployments.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3 items-center justify-end">
+          <div className="flex items-center gap-3 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
+            <LayoutGrid className="w-4 h-4 text-brand" />
+            <select 
+              value={activeProject?.id || ''} 
+              onChange={(e) => {
+                const p = projects.find(p => p.id === parseInt(e.target.value));
+                setActiveProject(p || null);
+              }}
+              className="text-xs font-bold bg-transparent outline-none cursor-pointer min-w-[150px]"
+            >
+              <option value="">Select Workspace...</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
           <a href="http://localhost:31453/" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
             <Activity className="w-4 h-4 text-emerald-500" /> Evidently
           </a>
