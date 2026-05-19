@@ -51,6 +51,13 @@ export default function UniversalHub() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [pendingCorrections, setPendingCorrections] = useState<Record<string, string>>({});
   const [submittingChanges, setSubmittingChanges] = useState(false);
+  const [forwarding, setForwarding] = useState(false);
+
+  const alertTemplates = [
+    { name: "Critical Negativity (>30%)", threshold: 30 },
+    { name: "High Volume Alert (>50%)", threshold: 50 },
+    { name: "App Crash Warning", threshold: 15 }
+  ];
 
   // Harvester
   const [harvestId, setHarvestId] = useState('');
@@ -296,6 +303,23 @@ export default function UniversalHub() {
     } catch (err) { 
       console.error("Export failed", err);
       alert("Export failed. Please ensure you are authorized."); 
+    }
+  };
+
+  const handleForwardTickets = async () => {
+    if (!activeProject || !supportEmail) return alert("Please save a support email first.");
+    setForwarding(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/tickets/forward', null, {
+        params: { project_id: activeProject.id },
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      alert(`Successfully forwarded ${res.data.forwarded_count} critical comments to ${supportEmail}`);
+    } catch (err) {
+      alert("Forwarding failed. Check if SMTP is configured.");
+    } finally {
+      setForwarding(false);
     }
   };
 
@@ -687,6 +711,16 @@ export default function UniversalHub() {
                 </div>
                 {slackUrl && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-top duration-500 pt-4 border-t border-white/5">
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5 mb-4">
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Quick Templates</p>
+                      <div className="flex flex-wrap gap-2">
+                        {alertTemplates.map(t => (
+                          <button key={t.name} onClick={() => setNewRule({name: t.name, threshold: t.threshold})} className="px-3 py-1.5 bg-white/10 hover:bg-brand hover:text-slate-900 rounded-lg text-[9px] font-black uppercase transition-all">
+                            {t.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="flex gap-3">
                       <input type="text" value={newRule.name} onChange={(e) => setNewRule({...newRule, name: e.target.value})} placeholder="Rule Name" className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs" />
                       <input type="number" value={newRule.threshold} onChange={(e) => setNewRule({...newRule, threshold: parseInt(e.target.value)})} placeholder="Threshold %" className="w-24 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs" />
@@ -716,7 +750,15 @@ export default function UniversalHub() {
                   <input type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} placeholder="support@company.com" className="w-full bg-white border border-slate-100 rounded-xl px-4 py-2 text-xs font-bold outline-none" />
                 </div>
                 {supportEmail && (
-                  <div className="space-y-4 max-h-[300px] overflow-auto pr-2 animate-in fade-in duration-500 flex-1">
+                  <div className="space-y-4 max-h-[400px] overflow-auto pr-2 animate-in fade-in duration-500 flex-1">
+                    <button 
+                      onClick={handleForwardTickets}
+                      disabled={forwarding}
+                      className="w-full bg-rose-500 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-rose-600 transition-all flex items-center justify-center gap-2 mb-4 shadow-lg shadow-rose-200"
+                    >
+                      {forwarding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {forwarding ? 'Forwarding...' : 'Forward 100 Negative to Support'}
+                    </button>
                     {tickets.length > 0 ? tickets.map(t => (
                       <div key={t.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 group transition-all hover:bg-white hover:shadow-lg">
                         <p className="text-xs font-bold text-slate-700 mb-4 leading-relaxed italic">"{t.review_text}"</p>

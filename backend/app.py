@@ -20,6 +20,9 @@ import secrets
 from pymongo import MongoClient
 from fastapi.responses import StreamingResponse
 from google_play_scraper import Sort, reviews
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # ====== CONFIG ======
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@postgres:5432/mlops_auth")
@@ -206,9 +209,16 @@ def redis_worker():
                 if sent == "negative": 
                     db_session.add(Ticket(project_id=pid, review_text=txt, sentiment_score="negative"))
                     project = db_session.query(Project).filter(Project.id == pid).first()
-                    if project and project.slack_webhook:
-                        try: requests.post(project.slack_webhook, json={"text": f"🚨 Negative Sentiment Detected in Project {pid}: {txt[:100]}..."})
-                        except: pass
+                    if project:
+                        # 1. Real Slack Notification
+                        if project.slack_webhook:
+                            try: requests.post(project.slack_webhook, json={"text": f"🚨 *[ALERT]* Critical feedback detected for *{project.name}*\n> {txt[:200]}"})
+                            except: pass
+                        
+                        # 2. Real Email Notification
+                        if project.support_email:
+                            send_email(project.support_email, f"🚨 Critical Feedback: {project.name}", f"Dear Support Team,\n\nA new negative feedback has been detected for project {project.name}.\n\nContent: {txt}\nTime: {msg_ts}\n\nPlease check the dashboard for more details.")
+                    
                     db_session.commit()
         except: time.sleep(2)
 
@@ -787,10 +797,67 @@ def delete_alert(alert_id: int, db: Session = Depends(get_db), current_user: Use
     verify_project_access(rule.project_id, current_user, db)
     db.delete(rule); db.commit(); return {"status": "success"}
 
+# Email Config
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+
+def send_email(to_email, subject, body):
+    if not SMTP_USER or not SMTP_PASS:
+        print(f"[LOG] SMTP credentials missing. Mocking email to {to_email}")
+        return False
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USER
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASS)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Email Error: {e}")
+        return False
+
 @api_router.get("/tickets")
 def get_tickets(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
     return db.query(Ticket).filter(Ticket.project_id == project_id).all()
+
+@api_router.post("/tickets/forward")
+def forward_tickets_to_support(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = verify_project_access(project_id, current_user, db)
+    if not p.support_email:
+        raise HTTPException(status_code=400, detail="Support email not configured")
+    
+    # Fetch 100 most recent negative comments
+    cursor = preds_log_col.find({
+        "project_id": {"$in": [project_id, str(project_id)]},
+        "sentiment": "negative"
+    }).sort("timestamp", -1).limit(100)
+    
+    negative_feedbacks = list(cursor)
+    if not negative_feedbacks:
+        return {"status": "success", "message": "No negative feedback found to forward"}
+    
+    report_body = f"Critical Sentiment Report for {p.name}\n"
+    report_body += "="*40 + "\n\n"
+    for i, f in enumerate(negative_feedbacks, 1):
+        ts = f.get('timestamp').strftime('%Y-%m-%d %H:%M') if f.get('timestamp') and hasattr(f.get('timestamp'), 'strftime') else "N/A"
+        report_body += f"{i}. [{ts}] Rating: {f.get('rating', 'N/A')}\n"
+        report_body += f"   Text: {f.get('text')}\n\n"
+    
+    success = send_email(p.support_email, f"🚨 Critical Feedback Batch: {p.name}", report_body)
+    
+    if p.slack_webhook:
+        try: requests.post(p.slack_webhook, json={"text": f"✅ Forwarded {len(negative_feedbacks)} negative comments to support: {p.support_email}"})
+        except: pass
+        
+    return {"status": "success", "forwarded_count": len(negative_feedbacks), "email_sent": success}
 
 @api_router.get("/audit-logs")
 def get_audit_logs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
