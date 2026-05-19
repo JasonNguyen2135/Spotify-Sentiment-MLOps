@@ -704,11 +704,12 @@ def generate_professional_report(project_id: int, db: Session = Depends(get_db),
 @api_router.get("/user-history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
-    print(f"[DEBUG] get_history called. project_id={project_id}, user={current_user.username}, role={current_user.role}")
+    pid_val = 0 if project_id is None or project_id == 0 else project_id
+    print(f"[DEBUG] get_history for pid={pid_val}, user={current_user.username}")
     
-    if project_id and project_id != 0: 
-        verify_project_access(project_id, current_user, db)
-        query["project_id"] = {"$in": [project_id, str(project_id)]}
+    if pid_val != 0: 
+        verify_project_access(pid_val, current_user, db)
+        query["project_id"] = {"$in": [pid_val, str(pid_val)]}
     else:
         # Global HUB View: TRUE Platform-wide trail
         if current_user.role not in ["admin", "ai_engineer", "analyst"]:
@@ -718,26 +719,20 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
                 {"project_id": {"$in": [0, "0", None]}},
                 {"source": {"$in": ["instant_analysis", "Bulk Analysis", "csv_upload"]}}
             ]
-        else:
-            # Admins see EVERYTHING (no filter)
-            pass 
     
-    print(f"[DEBUG] MongoDB History Query: {query}")
     cursor = preds_log_col.find(query).sort("timestamp", -1).limit(200)
     history = []
     for d in cursor:
         ts = d.get("timestamp")
-        ts_str = ""
-        if ts:
-            if hasattr(ts, 'isoformat'): ts_str = ts.isoformat()
-            else: ts_str = str(ts)
-            
+        ts_str = ts.isoformat() if ts and hasattr(ts, 'isoformat') else str(ts or "")
         history.append({
-            "id": str(d["_id"]), "text": d.get("text", ""), 
+            "id": str(d["_id"]), "text": d.get("text", "No Content"), 
             "sentiment": d.get("sentiment", "neutral"), "sentiment_corrected": d.get("sentiment_corrected"), 
-            "timestamp": ts_str, 
-            "model_version": d.get("model_version", "Production")
+            "timestamp": ts_str, "model_version": d.get("model_version", "Production")
         })
+    print(f"[DEBUG] Found {len(history)} records for this HUB query")
+    return history
+
     print(f"[DEBUG] Found {len(history)} history records")
     return history
 
