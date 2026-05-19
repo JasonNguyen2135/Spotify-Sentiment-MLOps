@@ -729,8 +729,26 @@ export default function UniversalHub() {
                     <div className="space-y-2">
                       {alertRules.map(rule => (
                         <div key={rule.id} className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center group">
-                          <div><p className="text-xs font-bold">{rule.name}</p><p className="text-[9px] text-slate-500 uppercase">Trigger: {">"}{rule.threshold}% Negative</p></div>
-                          <button onClick={() => handleDeleteRule(rule.id)} className="opacity-0 group-hover:opacity-100 text-rose-500 p-1 hover:bg-rose-500/10 rounded-lg"><X className="w-4 h-4" /></button>
+                          <div>
+                            <p className="text-xs font-bold">{rule.name}</p>
+                            <p className="text-[9px] text-slate-500 uppercase">Trigger: {">"}{rule.threshold}% Negative</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  const token = localStorage.getItem('token');
+                                  const res = await axios.post(`/api/alerts/test/${rule.id}`, null, { headers: { 'Authorization': `Bearer ${token}` }});
+                                  alert(`Test success! Slack: ${res.data.slack_notified}, Email: ${res.data.email_notified}`);
+                                } catch { alert("Test failed. Check your config."); }
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-brand p-1 hover:bg-brand/10 rounded-lg transition-all"
+                              title="Test Rule"
+                            >
+                              <Zap className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDeleteRule(rule.id)} className="opacity-0 group-hover:opacity-100 text-rose-500 p-1 hover:bg-rose-500/10 rounded-lg"><X className="w-4 h-4" /></button>
+                          </div>
                         </div>
                       ))}
                     </div>

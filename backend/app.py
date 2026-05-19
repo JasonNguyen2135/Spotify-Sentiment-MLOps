@@ -823,6 +823,32 @@ def send_email(to_email, subject, body):
         print(f"Email Error: {e}")
         return False
 
+@api_router.post("/alerts/test/{alert_id}")
+def test_alert_rule(alert_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    rule = db.query(AlertRule).filter(AlertRule.id == alert_id).first()
+    if not rule: raise HTTPException(status_code=404, detail="Alert rule not found")
+    p = verify_project_access(rule.project_id, current_user, db)
+    
+    msg = f"🧪 *[TEST ALERT]* Triggered for *{p.name}*\nRule: {rule.name} (Threshold: {rule.threshold}%)"
+    
+    slack_success = False
+    if p.slack_webhook:
+        try: 
+            res = requests.post(p.slack_webhook, json={"text": msg}, timeout=5)
+            slack_success = res.status_code == 200
+        except: pass
+        
+    email_success = False
+    if p.support_email:
+        email_success = send_email(p.support_email, f"🧪 Test Alert: {p.name}", f"This is a test notification for your alert rule: {rule.name}\n\nProject: {p.name}\nThreshold: {rule.threshold}%")
+        
+    return {
+        "status": "success", 
+        "slack_notified": slack_success, 
+        "email_notified": email_success,
+        "details": f"Attempted Slack: {bool(p.slack_webhook)}, Email: {bool(p.support_email)}"
+    }
+
 @api_router.get("/tickets")
 def get_tickets(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
