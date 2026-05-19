@@ -210,7 +210,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-service
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:ab607d17057a5bf7ca7a0b4baea7c29d674fcf22
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:06c7978aa9820bba643eaae208c557097e98a043
           imagePullPolicy: IfNotPresent
           env:
             - name: MLFLOW_TRACKING_URI
@@ -237,7 +237,7 @@ spec:
             - name: RABBITMQ_PASS
               value: "mlops123"
             - name: MODEL_TARGET
-              value: "Production"
+              value: "26"
           ports:
             - containerPort: 8000
           resources:
