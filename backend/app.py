@@ -523,12 +523,7 @@ def get_daily_analytics(project_id: int = None, db: Session = Depends(get_db), c
         
     return sorted([{"date": d, **c} for d, c in results.items()], key=lambda x: x["date"])
 
-# --- HITL ---
-@api_router.get("/history")
-from fastapi.responses import StreamingResponse, HTMLResponse
-
-# ... (other imports) ...
-
+# --- Reporting ---
 @api_router.get("/export/report/{project_id}")
 def generate_professional_report(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = verify_project_access(project_id, current_user, db)
