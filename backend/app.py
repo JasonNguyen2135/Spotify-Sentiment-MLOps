@@ -315,6 +315,13 @@ def delete_project(project_id: int, db: Session = Depends(get_db), current_user:
 @api_router.put("/projects/{project_id}/config")
 def update_project_config(project_id: int, slack_webhook: str = None, support_email: str = None, monitor_strategy: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = verify_project_access(project_id, current_user, db)
+    
+    # If strategy is changing, clear existing project data as requested
+    if monitor_strategy is not None and monitor_strategy != p.monitor_strategy:
+        preds_log_col.delete_many({"project_id": {"$in": [project_id, str(project_id)]}})
+        db.query(Ticket).filter(Ticket.project_id == project_id).delete()
+        print(f"[DEBUG] Cleared data for project {project_id} due to strategy change to {monitor_strategy}")
+    
     if slack_webhook is not None: p.slack_webhook = slack_webhook
     if support_email is not None: p.support_email = support_email
     if monitor_strategy is not None: p.monitor_strategy = monitor_strategy
@@ -324,6 +331,7 @@ def update_project_config(project_id: int, slack_webhook: str = None, support_em
 def reset_project_strategy(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = verify_project_access(project_id, current_user, db)
     db.query(DataSource).filter(DataSource.project_id == project_id).delete()
+    preds_log_col.delete_many({"project_id": {"$in": [project_id, str(project_id)]}})
     p.monitor_strategy = None
     db.commit(); return {"status": "success"}
 
@@ -692,7 +700,7 @@ def generate_professional_report(project_id: int, db: Session = Depends(get_db),
     """
     return HTMLResponse(content=html_content)
 
-@api_router.get("/user-history")
+@api_router.get("/history")
 def get_history(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = {}
     if project_id: 
