@@ -6,7 +6,7 @@ import {
   CheckCircle2, ShieldAlert, Target, TrendingUp, 
   PieChart as PieChartIcon, ArrowUpRight, 
   ArrowDownRight, Info, Download, Calendar, Sparkles,
-  LayoutGrid, Plus, FolderPlus, ArrowRight,
+  LayoutGrid, Plus, FolderPlus, ArrowRight, MessageSquare,
   FileText, ArrowLeftRight, ChevronRight, BellRing, Ticket as TicketIcon, Settings, RefreshCw, Trash2, X
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
