@@ -861,9 +861,9 @@ def add_hitl_audit(project_id: int, text: str, sentiment: str, notes: str = "", 
     return comment
 
 # --- MLOps ---
-def get_mlflow_metrics_internal(version):
+def get_mlflow_metrics_internal(model_name, version):
     try:
-        v_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/get", params={"name": "Spotify_Production_Model", "version": version}, timeout=5).json()
+        v_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/get", params={"name": model_name, "version": version}, timeout=5).json()
         run_id = v_res.get("model_version", {}).get("run_id")
         if not run_id: return {"accuracy": 0.94, "f1": 0.92, "precision": 0.91, "latency": 42}
         r_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/runs/get", params={"run_id": run_id}, timeout=5).json()
@@ -880,23 +880,28 @@ def get_mlflow_metrics_internal(version):
 @api_router.get("/models")
 def get_models(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
+    tier_names = ["Sentiment_Basic_Model", "Sentiment_Standard_Model", "Sentiment_Pro_Model", "Sentiment_Premium_Model", "Sentiment_Vip_Model", "Spotify_Production_Model"]
+    all_versions = []
     try:
-        versions = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search", params={"filter": "name='Spotify_Production_Model'"}, timeout=5).json().get("model_versions", [])
-        results = []
-        for v in versions:
-            metrics = get_mlflow_metrics_internal(v['version'])
-            results.append({**v, "metrics": metrics})
-        return results
-    except: return []
+        for name in tier_names:
+            v_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search", params={"filter": f"name='{name}'"}, timeout=5).json()
+            versions = v_res.get("model_versions", [])
+            for v in versions:
+                metrics = get_mlflow_metrics_internal(name, v['version'])
+                all_versions.append({**v, "metrics": metrics})
+        return all_versions
+    except Exception as e:
+        print(f"MLflow Fetch Error: {e}")
+        return []
 
 @api_router.get("/models/compare")
-def compare_models(v1: str, v2: str, current_user: User = Depends(get_current_user)):
+def compare_models(v1: str, v2: str, m1_name: str = "Sentiment_Basic_Model", m2_name: str = "Sentiment_Basic_Model", current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
-    m1 = get_mlflow_metrics_internal(v1)
-    m2 = get_mlflow_metrics_internal(v2)
+    met1 = get_mlflow_metrics_internal(m1_name, v1)
+    met2 = get_mlflow_metrics_internal(m2_name, v2)
     return {
-        "model1": {**m1, "version": v1, "latency": f"{m1['latency']}ms"},
-        "model2": {**m2, "version": v2, "latency": f"{m2['latency']}ms"}
+        "model1": {**met1, "version": v1, "name": m1_name, "latency": f"{met1['latency']}ms"},
+        "model2": {**met2, "version": v2, "name": m2_name, "latency": f"{met2['latency']}ms"}
     }
 
 @api_router.post("/deploy-model")
@@ -918,10 +923,11 @@ def get_datasets(project_id: int = None, db: Session = Depends(get_db), current_
     return [{"name": "MongoDB Data", "source": "mongodb", "count": preds_log_col.count_documents({"project_id": project_id} if project_id else {})} ]
 
 @api_router.post("/train")
-def train(dataset_source: str, project_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def train(dataset_source: str, project_id: int, tier: str = "basic", current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
-    requests.post(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", json={"ref": "main", "inputs": {"data_source": dataset_source, "project_id": str(project_id)}}, headers={"Authorization": f"token {tk}"}, timeout=10)
+    # Trigger manual_train.yml with tier input
+    requests.post(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", json={"ref": "main", "inputs": {"data_source": dataset_source, "project_id": str(project_id), "tier": tier}}, headers={"Authorization": f"token {tk}"}, timeout=10)
     return {"status": "success"}
 
 @api_router.get("/airflow/runs")

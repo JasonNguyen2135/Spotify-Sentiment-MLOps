@@ -20,6 +20,7 @@ export default function TrainingPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [runs, setRuns] = useState<any[]>([]);
   const [selectedDataset, setSelectedDataset] = useState<string>('');
+  const [selectedTier, setSelectedTier] = useState<string>('basic');
   const [customDataset, setCustomDataset] = useState<string>('');
   const [triggering, setTriggering] = useState(false);
   const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
@@ -100,10 +101,10 @@ export default function TrainingPage() {
       const token = localStorage.getItem('token');
       const source = customDataset || selectedDataset;
       await axios.post('/api/train', null, {
-        params: { dataset_source: source, project_id: projectId },
+        params: { dataset_source: source, project_id: projectId, tier: selectedTier },
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      setStatus({ type: 'success', msg: 'Training pipeline triggered successfully!' });
+      setStatus({ type: 'success', msg: `${selectedTier.toUpperCase()} training pipeline triggered successfully!` });
       await fetchData();
     } catch (err: any) {
       setStatus({ type: 'error', msg: err.response?.data?.detail || 'Failed to trigger pipeline' });
@@ -212,6 +213,22 @@ export default function TrainingPage() {
                         <p className="text-[10px] text-brand-600 font-black mt-0.5">{(ds.count || 0).toLocaleString()} records</p>
                       </div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mb-8">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Select Model Architecture (Tier)</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'basic', name: 'Basic' },
+                  { id: 'standard', name: 'Standard' },
+                  { id: 'pro', name: 'Pro' },
+                  { id: 'premium', name: 'Premium' },
+                  { id: 'vip', name: 'VIP' }
+                ].map((tier) => (
+                  <div key={tier.id} onClick={() => setSelectedTier(tier.id)} className={clsx("p-3 rounded-xl border-2 cursor-pointer text-center transition-all", selectedTier === tier.id ? "border-brand bg-brand/5" : "border-slate-50 bg-slate-50")}>
+                    <p className="text-[10px] font-black uppercase">{tier.name}</p>
                   </div>
                 ))}
               </div>
