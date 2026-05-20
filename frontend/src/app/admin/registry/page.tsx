@@ -165,6 +165,7 @@ export default function RegistryPage() {
                 <thead className="sticky top-0 bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest z-10">
                   <tr>
                     <th className="px-8 py-4">Version</th>
+                    <th className="px-8 py-4">Metrics</th>
                     <th className="px-8 py-4">Stage</th>
                     <th className="px-8 py-4 text-right">Action</th>
                   </tr>
@@ -178,6 +179,19 @@ export default function RegistryPage() {
                           <div>
                             <p className="text-sm font-bold text-slate-900">{model.name}</p>
                           </div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <div className="flex gap-4 text-xs">
+                          {model.metrics ? (
+                            <>
+                              <div className="flex flex-col"><span className="text-slate-400 text-[9px] uppercase font-bold">Accuracy</span><span className="font-black text-slate-800">{model.metrics.accuracy || 'N/A'}</span></div>
+                              <div className="flex flex-col"><span className="text-slate-400 text-[9px] uppercase font-bold">F1 Score</span><span className="font-black text-slate-800">{model.metrics.f1 || 'N/A'}</span></div>
+                              <div className="flex flex-col"><span className="text-slate-400 text-[9px] uppercase font-bold">Latency</span><span className="font-black text-slate-800">{model.metrics.latency ? `${model.metrics.latency}ms` : 'N/A'}</span></div>
+                            </>
+                          ) : (
+                            <span className="text-slate-400 italic">No metrics</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-8 py-5">

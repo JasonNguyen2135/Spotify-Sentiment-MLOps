@@ -165,32 +165,44 @@ def predict(review: str, project_id: str = "default"):
         return {
             "error": "Model not initialized", 
             "project_id": project_id,
-            "sentiment": "neutral", # Trả về neutral kèm lỗi để backend biết
+            "sentiment": "neutral", 
+            "confidence": 0.0,
             "fallback": True
         }
     
     try:
-        # Dự đoán
+        # Predict class
         prediction = model.predict([review])[0]
         sentiment = str(prediction)
-        print(f"Kết quả dự đoán: {sentiment} (Model: {meta.get('model_name')})")
         
-        # Log vào queue
+        # Calculate confidence if predict_proba is available
+        confidence = 1.0
+        try:
+            if hasattr(model, "predict_proba"):
+                probs = model.predict_proba([review])[0]
+                confidence = float(max(probs))
+        except: pass
+
+        print(f"Kết quả dự đoán: {sentiment} ({confidence*100:.1f}%) (Model: {meta.get('model_name')})")
+        
+        # Log into queue
         log_data = {
             "text": review,
             "prediction": sentiment,
+            "confidence": confidence,
             "project_id": project_id,
             "model_version": meta.get("version"),
-            "timestamp": time.time() if "time" in globals() else None
+            "timestamp": time.time()
         }
         publish_to_queue(log_data)
         
         return {
             "input": review, 
             "sentiment": sentiment, 
+            "confidence": confidence,
             "project_id": project_id,
             "model_info": meta
         }
     except Exception as e:
         print(f"Lỗi trong quá trình dự đoán: {e}")
-        return {"error": str(e), "sentiment": "neutral"}
+        return {"error": str(e), "sentiment": "neutral", "confidence": 0.0}

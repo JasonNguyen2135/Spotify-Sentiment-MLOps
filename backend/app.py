@@ -240,14 +240,17 @@ def redis_worker():
                     msg_ts = datetime.fromisoformat(raw_ts) if raw_ts else datetime.utcnow()
                 except: msg_ts = datetime.utcnow()
                 try:
-                    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=10).json()
-                    sent = res["sentiment"]
-                except: sent = "neutral"
+                    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt, "project_id": str(pid)}, timeout=10).json()
+                    sent = res.get("sentiment", "neutral")
+                    conf = res.get("confidence", 1.0)
+                    m_version = res.get("model_info", {}).get("version", "Unknown")
+                except: 
+                    sent, conf, m_version = "neutral", 0.0, "Error"
                 
                 preds_log_col.insert_one({
-                    "text": txt, "sentiment": sent, "project_id": pid, 
+                    "text": txt, "sentiment": sent, "confidence": conf, "project_id": pid, 
                     "user": data.get("user_id", "worker"), "timestamp": msg_ts, 
-                    "source": "webhook_async", "model_version": "Production (Async)",
+                    "source": "webhook_async", "model_version": m_version,
                     "rating": data.get("rating"), "app_version": data.get("app_version")
                 })
                 
@@ -733,6 +736,7 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
         history.append({
             "id": str(d["_id"]), "text": d.get("text", "No Content"), 
             "sentiment": d.get("sentiment", "neutral"), "sentiment_corrected": d.get("sentiment_corrected"), 
+            "confidence": d.get("confidence", 1.0),
             "timestamp": ts_str, "model_version": d.get("model_version", "Production")
         })
     print(f"[DEBUG] Found {len(history)} records for this HUB query")
@@ -741,8 +745,21 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
 @api_router.post("/predict")
 async def predict(review_text: str, project_id: int, model_version: str = "Production", rating: int = None, app_version: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
-    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text}, timeout=10).json()
-    preds_log_col.insert_one({"text": review_text, "sentiment": res["sentiment"], "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), "model_version": model_version, "source": "instant_analysis", "rating": rating, "app_version": app_version})
+    try:
+        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text, "project_id": str(project_id)}, timeout=10).json()
+        sent = res.get("sentiment", "neutral")
+        conf = res.get("confidence", 1.0)
+        actual_v = res.get("model_info", {}).get("version", model_version)
+    except:
+        res = {"sentiment": "neutral"}
+        sent, conf, actual_v = "neutral", 0.0, "Error"
+        
+    preds_log_col.insert_one({
+        "text": review_text, "sentiment": sent, "confidence": conf,
+        "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), 
+        "model_version": actual_v, "source": "instant_analysis", 
+        "rating": rating, "app_version": app_version
+    })
     return res
 
 @api_router.post("/correction")
@@ -839,7 +856,7 @@ def compare_models(v1: str, v2: str, current_user: User = Depends(get_current_us
 @api_router.post("/deploy-model")
 def deploy_model(version: str, model_name: str, current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
-    requests.post(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/transition-stage", json={"name": model_name, "version": version, "stage": "Production"}, timeout=5)
+    requests.post(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/transition-stage", json={"name": model_name, "version": version, "stage": "Production", "archive_existing_versions": True}, timeout=5)
     return {"status": "success"}
 
 @api_router.post("/build-deploy")
@@ -893,20 +910,22 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
     for i, row in df.head(150).iterrows():
         txt = str(row[col])
         try:
-            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, timeout=5).json()
+            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt, "project_id": str(pid_to_save)}, timeout=5).json()
             sent = res.get("sentiment", "neutral")
+            conf = res.get("confidence", 1.0)
+            m_version = res.get("model_info", {}).get("version", "Batch AI")
         except Exception as e:
             print(f"[DEBUG] Prediction error for row {i}: {e}")
-            sent = "neutral"
+            sent, conf, m_version = "neutral", 0.0, "Error"
             
         summary[sent] += 1
         row_ts = datetime.utcnow()
         
         results.append({"id": i, "text": txt, "sentiment": sent, "time": row_ts.isoformat()})
         log_entries.append({
-            "text": txt, "sentiment": sent, "project_id": pid_to_save, 
+            "text": txt, "sentiment": sent, "confidence": conf, "project_id": pid_to_save, 
             "user": current_user.username, "timestamp": row_ts, 
-            "model_version": "Batch AI", "source": "csv_upload",
+            "model_version": m_version, "source": "csv_upload",
             "rating": row.get('rating') or row.get('score') or row.get('stars'),
             "app_version": row.get('version') or row.get('app_version')
         })
@@ -964,12 +983,17 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
                 print(f"[DEBUG] Processing review at {item_ts}: {txt[:50]}...")
                 
                 # Internal prediction bypass
-                try: sent = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt}, headers={"Authorization": "Bearer SYSTEM_INTERNAL_SECRET"}, timeout=5).json().get("sentiment", "neutral")
-                except: sent = "neutral"
+                try: 
+                    pred_res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt, "project_id": str(ds.project_id)}, headers={"Authorization": "Bearer SYSTEM_INTERNAL_SECRET"}, timeout=5).json()
+                    sent = pred_res.get("sentiment", "neutral")
+                    conf = pred_res.get("confidence", 1.0)
+                    m_ver = pred_res.get("model_info", {}).get("version", "Production")
+                except: 
+                    sent, conf, m_ver = "neutral", 0.0, "Error"
                 
                 batch.append({
-                    "text": txt, "sentiment": sent, "project_id": ds.project_id,
-                    "timestamp": item_ts, "source": "crawler", "model_version": "Production",
+                    "text": txt, "sentiment": sent, "confidence": conf, "project_id": ds.project_id,
+                    "timestamp": item_ts, "source": "crawler", "model_version": m_ver,
                     "rating": item.get('score'), "app_version": item.get('reviewCreatedVersion')
                 })
             

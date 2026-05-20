@@ -879,6 +879,7 @@ export default function UniversalHub() {
                   <tr className="border-b border-slate-50 sticky top-0 bg-white z-10">
                     <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-6">Feedback Intelligence</th>
                     <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Status</th>
+                    <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Confidence</th>
                     <th className="pb-6 pt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Correct Sentiment</th>
                   </tr>
                 </thead>
@@ -904,6 +905,9 @@ export default function UniversalHub() {
                             <div className="flex items-center gap-1.5 text-[9px] font-black text-amber-500 uppercase animate-pulse"><Zap className="w-3 h-3" /> Pending: {pendingCorrections[item.id]}</div>
                           )}
                         </div>
+                      </td>
+                      <td className="py-8 text-[10px] font-bold text-slate-500">
+                        {item.confidence ? `${(item.confidence * 100).toFixed(1)}%` : 'N/A'}
                       </td>
                       <td className="py-8">
                          <div className="flex justify-center gap-2">

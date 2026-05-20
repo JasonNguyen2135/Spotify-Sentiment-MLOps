@@ -151,7 +151,7 @@ export default function HistoryPage() {
                     </div>
                   </td>
                   <td className="px-10 py-6 text-right font-black text-slate-900 text-sm">
-                    {(90 + Math.random() * 9).toFixed(1)}%
+                    {item.confidence ? `${(item.confidence * 100).toFixed(1)}%` : 'N/A'}
                   </td>
                 </tr>
               ))}
