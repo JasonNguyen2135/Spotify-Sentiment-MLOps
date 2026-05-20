@@ -405,7 +405,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: crawler
-          image: registry.ntdevopsregistry.io.vn/mlops/crawler:350a0a3ab33476b80f1dc80a8d2c4de8f7e4e2b0
+          image: registry.ntdevopsregistry.io.vn/mlops/crawler:64d086b66db52043e6a581a9459be1c995f7dfd6
           imagePullPolicy: IfNotPresent
           env:
             - name: MONGO_URL
