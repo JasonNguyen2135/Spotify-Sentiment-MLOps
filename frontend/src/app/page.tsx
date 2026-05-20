@@ -72,6 +72,10 @@ export default function UniversalHub() {
   const [newRule, setNewRule] = useState({ name: '', threshold: 10 });
   const [tickets, setTickets] = useState<any[]>([]);
 
+  // Global Model State
+  const [globalModel, setGlobalModel] = useState('basic');
+  const [savingGlobalModel, setSavingGlobalModel] = useState(false);
+
   // Ad-hoc Analysis States
   const [review, setReview] = useState('');
   const [prediction, setPrediction] = useState<any>(null);
@@ -98,13 +102,14 @@ export default function UniversalHub() {
       const headers = { 'Authorization': `Bearer ${token}` };
       const params = { project_id: activeProject?.id || null };
       
-      const [statsRes, analyticsRes, projectsRes, historyRes, auditRes, modelsRes] = await Promise.all([
+      const [statsRes, analyticsRes, projectsRes, historyRes, auditRes, modelsRes, configRes] = await Promise.all([
         axios.get('/api/stats', { headers, params }),
         axios.get('/api/monthly-analytics', { headers, params }),
         axios.get('/api/projects', { headers }),
         axios.get('/api/history', { headers, params }),
         user?.role === 'admin' ? axios.get('/api/audit-logs', { headers }) : Promise.resolve({ data: [] }),
-        axios.get('/api/models', { headers }).catch(() => ({ data: [] }))
+        axios.get('/api/models', { headers }).catch(() => ({ data: [] })),
+        user?.role === 'admin' ? axios.get('/api/system/config', { headers }).catch(() => ({ data: { current_model_key: 'basic' } })) : Promise.resolve({ data: { current_model_key: 'basic' } })
       ]);
       
       setStats(statsRes.data);
@@ -113,6 +118,7 @@ export default function UniversalHub() {
       setFullHistory(historyRes.data || []);
       setAuditLogs(auditRes.data || []);
       setModelOptions(modelsRes.data || []);
+      if (configRes.data?.current_model_key) setGlobalModel(configRes.data.current_model_key);
 
       if (activeProject) {
         const [alertsRes, ticketsRes, detailsRes, issuesRes, posIssuesRes, versionRes, versionNegRes, heatmapRes, ratingRes] = await Promise.all([
@@ -204,6 +210,23 @@ export default function UniversalHub() {
       setProjects(projects.filter(p => p.id !== id));
       setActiveProject(null);
     } catch (err) { alert("Delete failed"); }
+  };
+
+  const handleSaveGlobalModel = async () => {
+    setSavingGlobalModel(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('/api/system/config', null, {
+        params: { model_key: globalModel },
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      alert(`Successfully routed all future predictions to ${globalModel.toUpperCase()} model.`);
+      fetchData();
+    } catch (err) {
+      alert("Failed to apply global model. You might not have admin permission.");
+    } finally {
+      setSavingGlobalModel(false);
+    }
   };
 
   const handleSaveConfig = async () => {
@@ -461,6 +484,49 @@ export default function UniversalHub() {
                   <p className="text-slate-400 text-xs font-medium italic pl-4 border-l-2 border-brand/50">Results here are platform-wide.</p>
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-10 rounded-[3rem] shadow-xl shadow-slate-100/50 border border-slate-50 mb-10">
+            <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-4">
+                <div className="bg-slate-900 p-3 rounded-2xl text-brand shadow-lg shadow-brand/10"><Settings className="w-6 h-6" /></div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Global AI Gateway</h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Route all project predictions to a specific model tier</p>
+                </div>
+              </div>
+              <button 
+                onClick={handleSaveGlobalModel}
+                disabled={savingGlobalModel}
+                className="bg-brand text-slate-900 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-brand/20 hover:scale-105 transition-all flex items-center gap-2"
+              >
+                {savingGlobalModel ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-slate-900" />}
+                Apply Globally
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-5 gap-4">
+              {[
+                { id: 'basic', name: 'Basic', desc: 'Logistic Regression. Extremely fast, low RAM.', color: 'border-slate-200 hover:border-slate-400' },
+                { id: 'standard', name: 'Standard', desc: 'LightGBM. Good balance of speed and accuracy.', color: 'border-blue-200 hover:border-blue-400' },
+                { id: 'pro', name: 'Pro', desc: 'FastText. Handles slang and misspellings.', color: 'border-indigo-200 hover:border-indigo-400' },
+                { id: 'premium', name: 'Premium', desc: 'Bi-LSTM Deep Learning. Deep context understanding.', color: 'border-rose-200 hover:border-rose-400' },
+                { id: 'vip', name: 'Enterprise VIP', desc: 'DistilBERT Transformer. State-of-the-art accuracy.', color: 'border-amber-200 hover:border-amber-400 bg-gradient-to-br from-amber-50 to-transparent' }
+              ].map(tier => (
+                <div 
+                  key={tier.id}
+                  onClick={() => setGlobalModel(tier.id)}
+                  className={clsx(
+                    "p-6 rounded-[2rem] border-2 cursor-pointer transition-all relative overflow-hidden",
+                    globalModel === tier.id ? "border-brand bg-brand/5 shadow-lg shadow-brand/10 scale-105 z-10" : tier.color
+                  )}
+                >
+                  {globalModel === tier.id && <div className="absolute top-4 right-4 text-brand"><CheckCircle2 className="w-4 h-4" /></div>}
+                  <p className="font-black text-sm text-slate-900 mb-2 uppercase">{tier.name}</p>
+                  <p className="text-[9px] font-bold text-slate-500 leading-relaxed">{tier.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
 

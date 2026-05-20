@@ -126,6 +126,12 @@ Base.metadata.create_all(bind=engine)
 try: BaseHitl.metadata.create_all(bind=engine_hitl)
 except Exception as e: print(f"MySQL Init Error: {e}")
 
+class SystemConfig(Base):
+    __tablename__ = "system_config"
+    id = Column(Integer, primary_key=True)
+    current_model_key = Column(String, default="basic") # basic, standard, pro, premium, vip
+    model_url = Column(String, default="http://model-service:8000")
+
 def migrate_db():
     db = SessionLocal()
     try:
@@ -141,6 +147,15 @@ def migrate_db():
             db.execute(text("ALTER TABLE projects ADD COLUMN owner_id INTEGER"))
             db.commit()
         except: db.rollback()
+
+        # Create system_config table if not exists
+        Base.metadata.create_all(bind=engine)
+        
+        # Initialize default config
+        cfg = db.query(SystemConfig).first()
+        if not cfg:
+            cfg = SystemConfig(current_model_key="basic", model_url="http://model-service:8000")
+            db.add(cfg); db.commit()
         
         # Ensure admin user exists
         admin = db.query(User).filter(User.username == "admin").first()
@@ -337,6 +352,37 @@ def reset_project_strategy(project_id: int, db: Session = Depends(get_db), curre
     preds_log_col.delete_many({"project_id": {"$in": [project_id, str(project_id)]}})
     p.monitor_strategy = None
     db.commit(); return {"status": "success"}
+
+# --- System Config ---
+@api_router.get("/system/config")
+def get_sys_config(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin": raise HTTPException(status_code=403)
+    return db.query(SystemConfig).first()
+
+@api_router.post("/system/config")
+def update_sys_config(model_key: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin": raise HTTPException(status_code=403)
+    cfg = db.query(SystemConfig).first()
+    
+    mapping = {
+        "basic": "http://model-service:8000",
+        "standard": "http://model-standard-service:8000",
+        "pro": "http://model-pro-service:8000",
+        "premium": "http://model-premium-service:8000",
+        "vip": "http://model-vip-service:8000"
+    }
+    
+    if model_key not in mapping: raise HTTPException(status_code=400, detail="Invalid model key")
+    
+    cfg.current_model_key = model_key
+    cfg.model_url = mapping[model_key]
+    db.commit()
+    log_audit(db, current_user, "UPDATE_GLOBAL_MODEL", f"Changed system model to {model_key}")
+    return cfg
+
+def get_current_model_url(db: Session):
+    cfg = db.query(SystemConfig).first()
+    return cfg.model_url if cfg else MODEL_API_URL
 
 # --- Analytics ---
 @api_router.get("/stats")
