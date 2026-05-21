@@ -135,6 +135,13 @@ class SystemConfig(Base):
 def migrate_db():
     db = SessionLocal()
     try:
+        # MongoDB Index for de-duplication
+        try:
+            # Ensure unique index on reviewId to prevent duplicate scrapes
+            preds_log_col.create_index("reviewId", unique=True, sparse=True)
+            mongo_db["training_datasets"].create_index([("text", 1), ("dataset_name", 1)], unique=True)
+        except: pass
+
         # Add columns if missing
         for col in ["uuid", "api_key", "slack_webhook", "support_email", "monitor_strategy"]:
             try:
@@ -1030,6 +1037,46 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, data
         
     return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
+@api_router.post("/correction/submit-audit")
+def submit_audit_batch(dataset_name: str, project_id: int, prediction_ids: list[str], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    verify_project_access(project_id, current_user, db)
+    from bson import ObjectId
+    
+    count = 0
+    for p_id in prediction_ids:
+        # 1. Find the record in logs
+        record = preds_log_col.find_one({"_id": ObjectId(p_id)})
+        if not record: continue
+        
+        # 2. Prepare for training_datasets (Use corrected sentiment if exists)
+        final_sentiment = record.get("sentiment_corrected") or record.get("sentiment", "neutral")
+        
+        entry = {
+            "text": record.get("text"),
+            "sentiment": final_sentiment,
+            "confidence": 1.0, # Human verified
+            "project_id": project_id,
+            "dataset_name": dataset_name,
+            "timestamp": datetime.utcnow(),
+            "source": "hitl_audit",
+            "rating": record.get("rating"),
+            "app_version": record.get("app_version")
+        }
+        
+        # 3. Insert into global training collection (Upsert by text and dataset name)
+        mongo_db["training_datasets"].update_one(
+            {"text": entry["text"], "dataset_name": dataset_name},
+            {"$set": entry},
+            upsert=True
+        )
+        
+        # 4. Mark original as audited
+        preds_log_col.update_one({"_id": ObjectId(p_id)}, {"$set": {"is_audited": True}})
+        count += 1
+        
+    log_audit(db, current_user, "SUBMIT_HITL_BATCH", f"Submitted {count} records to dataset {dataset_name}", project_id)
+    return {"status": "success", "count": count}
+
 # --- Infrastructure ---
 @api_router.get("/connectors")
 def get_connectors(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -1061,20 +1108,20 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
         print(f"[DEBUG] Syncing Google Play for {ds.app_id} (Project {ds.project_id})")
         try:
             # Fetch Newest and Most Relevant to get better distribution
-            res_new, _ = reviews(ds.app_id, lang='en', country='us', sort=Sort.NEWEST, count=500)
-            res_rel, _ = reviews(ds.app_id, lang='en', country='us', sort=Sort.MOST_RELEVANT, count=500)
+            res_new, _ = reviews(ds.app_id, lang='en', country='us', sort=Sort.NEWEST, count=250)
+            res_rel, _ = reviews(ds.app_id, lang='en', country='us', sort=Sort.MOST_RELEVANT, count=250)
             
             seen_ids = set()
-            batch = []
+            count = 0
             for item in res_new + res_rel:
-                if item['reviewId'] in seen_ids: continue
-                seen_ids.add(item['reviewId'])
+                r_id = item.get('reviewId')
+                if not r_id or r_id in seen_ids: continue
+                seen_ids.add(r_id)
                 
                 txt = str(item['content'])
                 item_ts = item['at']
-                print(f"[DEBUG] Processing review at {item_ts}: {txt[:50]}...")
                 
-                # Internal prediction bypass
+                # Dynamic Routing: Use the globally selected model
                 try: 
                     target_url = get_current_model_url(db)
                     pred_res = requests.post(f"{target_url}/predict", params={"review": txt, "project_id": str(ds.project_id)}, headers={"Authorization": "Bearer SYSTEM_INTERNAL_SECRET"}, timeout=5).json()
@@ -1084,42 +1131,42 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
                 except: 
                     sent, conf, m_ver = "neutral", 0.0, "Error"
                 
-                batch.append({
+                entry = {
+                    "reviewId": r_id,
                     "text": txt, "sentiment": sent, "confidence": conf, "project_id": ds.project_id,
                     "timestamp": item_ts, "source": "crawler", "model_version": m_ver,
                     "rating": item.get('score'), "app_version": item.get('reviewCreatedVersion')
-                })
+                }
+                
+                # UPSERT logic: Update if exists, else insert
+                preds_log_col.update_one({"reviewId": r_id}, {"$set": entry}, upsert=True)
+                count += 1
             
-            if batch: 
-                preds_log_col.insert_many(batch)
-                print(f"[DEBUG] Inserted {len(batch)} records into MongoDB")
-            return {"synced_count": len(batch)}
+            print(f"[DEBUG] Upserted {count} records into MongoDB")
+            return {"synced_count": count}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Crawl failed: {str(e)}")
 
-    # Fallback/Mock
-    for i in range(5):
-        sents = ["positive", "negative", "neutral"]
-        preds_log_col.insert_one({
-            "text": f"Scraped review #{i} for {ds.app_id}",
-            "sentiment": sents[i % 3],
-            "project_id": ds.project_id,
-            "timestamp": datetime.utcnow(),
-            "source": "crawler",
-            "model_version": "Production"
-        })
-    return {"synced_count": 5}
+    return {"synced_count": 0}
 
 @api_router.get("/connectors/harvest")
 def harvest_data(platform: str, app_id: str, limit: int = 100, current_user: User = Depends(get_current_user)):
     if platform != "Google Play":
         raise HTTPException(status_code=400, detail="Only Google Play supported for harvest")
     try:
+        # Use provided limit for flexibility
         res_reviews, _ = reviews(app_id, lang='en', country='us', sort=Sort.NEWEST, count=limit)
         data = []
         for item in res_reviews:
             sent = "positive" if item['score'] >= 4 else "negative" if item['score'] <= 2 else "neutral"
-            data.append({"text": str(item['content']), "sentiment": sent, "rating": item['score'], "timestamp": item['at']})
+            data.append({
+                "reviewId": item.get('reviewId'),
+                "text": str(item['content']), 
+                "sentiment": sent, 
+                "rating": item['score'], 
+                "timestamp": item['at'],
+                "app_version": item.get('reviewCreatedVersion')
+            })
         df = pd.DataFrame(data)
         output = io.BytesIO(); df.to_csv(output, index=False, encoding='utf-8-sig'); output.seek(0)
         return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={app_id}_harvest.csv"})

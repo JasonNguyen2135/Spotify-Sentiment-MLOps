@@ -84,7 +84,7 @@ export default function RegistryPage() {
       });
       
       const buildRes = await axios.post('/api/build-deploy', null, {
-        params: { version },
+        params: { version, model_name: modelName },
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

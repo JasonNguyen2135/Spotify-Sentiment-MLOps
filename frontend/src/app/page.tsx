@@ -269,26 +269,32 @@ export default function UniversalHub() {
     setPendingCorrections(prev => ({ ...prev, [id]: corrected }));
   };
 
+  const [auditBatchName, setAuditBatchName] = useState('');
+  const [showAuditModal, setShowAuditModal] = useState(false);
+
   const submitChanges = async () => {
+    setShowAuditModal(true);
+  };
+
+  const submitAuditBatch = async () => {
     const ids = Object.keys(pendingCorrections);
-    if (ids.length === 0 || !activeProject) return;
+    if (ids.length === 0 || !activeProject || !auditBatchName) return;
     
     setSubmittingChanges(true);
     try {
       const token = localStorage.getItem('token');
-      // Process all pending corrections
-      await Promise.all(ids.map(id => 
-        axios.post('/api/correction', null, {
-          params: { prediction_id: id, corrected_sentiment: pendingCorrections[id], project_id: activeProject.id },
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-      ));
+      await axios.post('/api/correction/submit-audit', ids, {
+        params: { dataset_name: auditBatchName, project_id: activeProject.id },
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       
       setPendingCorrections({});
+      setAuditBatchName('');
+      setShowAuditModal(false);
       fetchData();
-      alert("All corrections synchronized to MySQL successfully!");
+      alert(`Successfully consolidated ${ids.length} records into dataset: ${auditBatchName}`);
     } catch (err) {
-      alert("Failed to sync some corrections.");
+      alert("Failed to submit audit batch.");
     } finally {
       setSubmittingChanges(false);
     }
@@ -355,22 +361,26 @@ export default function UniversalHub() {
     }, 1000);
   };
 
-  const handleHarvest = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const [showHarvestModal, setShowHarvestModal] = useState(false);
+  const [harvestLimit, setHarvestLimit] = useState(500);
+
+  const handleHarvest = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!harvestId.trim()) return;
     setHarvesting(true);
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get(`/api/connectors/harvest`, {
-        params: { platform: harvestPlatform, app_id: harvestId, limit: 1000 },
+        params: { platform: harvestPlatform, app_id: harvestId, limit: harvestLimit },
         headers: { 'Authorization': `Bearer ${token}` },
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${harvestPlatform}_harvest.csv`);
+      link.setAttribute('download', `${harvestPlatform}_${harvestId}_harvest.csv`);
       document.body.appendChild(link); link.click(); link.remove();
+      setShowHarvestModal(false);
     } catch (err) { alert("Harvest failed"); }
     finally { setHarvesting(false); }
   };
@@ -420,7 +430,7 @@ export default function UniversalHub() {
                   <div className="bg-emerald-500/20 p-2.5 rounded-xl text-emerald-400"><Database className="w-5 h-5" /></div>
                   <h2 className="text-2xl font-black text-white tracking-tight">Harvester</h2>
                 </div>
-                <form onSubmit={handleHarvest} className="space-y-4">
+                <form onSubmit={(e) => { e.preventDefault(); setShowHarvestModal(true); }} className="space-y-4">
                   <select value={harvestPlatform} onChange={(e) => setHarvestPlatform(e.target.value)} className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-sm appearance-none">
                     <option className="bg-slate-900">Google Play</option>
                     <option className="bg-slate-900">App Store</option>
@@ -1056,6 +1066,72 @@ export default function UniversalHub() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Harvest Options Modal */}
+      {showHarvestModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[110] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-5 bg-emerald-500 rounded-bl-[3rem]"><Database className="w-20 h-20" /></div>
+            <h2 className="text-2xl font-black text-slate-900 mb-2 tracking-tight">Harvest Options</h2>
+            <p className="text-xs font-medium text-slate-500 mb-8 italic">Choose how deep the scraper should dive.</p>
+            
+            <div className="space-y-6 relative z-10">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Target Volume</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[100, 500, 1000, 5000].map(val => (
+                    <button key={val} onClick={() => setHarvestLimit(val)} className={clsx("py-3 rounded-xl border-2 font-black text-xs transition-all", harvestLimit === val ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-100")}>
+                      {val} Reviews
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="pt-4 flex gap-3">
+                <button onClick={() => setShowHarvestModal(false)} className="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-slate-50 transition-all">Cancel</button>
+                <button onClick={() => handleHarvest()} disabled={harvesting} className="flex-[2] bg-emerald-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2">
+                   {harvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />} Start Extraction
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Audit Batch Modal */}
+      {showAuditModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[110] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden border border-slate-100">
+            <div className="absolute top-0 right-0 p-4 opacity-5 bg-brand rounded-bl-[3rem]"><Sparkles className="w-20 h-20" /></div>
+            <h2 className="text-2xl font-black text-slate-900 mb-2 tracking-tight uppercase">Consolidate Audit</h2>
+            <p className="text-xs font-medium text-slate-500 mb-8">Save {Object.keys(pendingCorrections).length} corrections as a new training batch.</p>
+            
+            <div className="space-y-6 relative z-10">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Dataset Name (Tag)</label>
+                <input 
+                  type="text" 
+                  value={auditBatchName} 
+                  onChange={(e) => setAuditBatchName(e.target.value)} 
+                  placeholder="e.g. Q2_Feedback_Audited" 
+                  className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm focus:ring-2 focus:ring-brand"
+                />
+              </div>
+              
+              <div className="pt-4 flex gap-3">
+                <button onClick={() => setShowAuditModal(false)} className="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-slate-50 transition-all">Discard</button>
+                <button 
+                  onClick={submitAuditBatch} 
+                  disabled={submittingChanges || !auditBatchName.trim()} 
+                  className="flex-[2] bg-brand text-slate-900 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-brand/20 flex items-center justify-center gap-2"
+                >
+                   {submittingChanges ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Commit to Training
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
