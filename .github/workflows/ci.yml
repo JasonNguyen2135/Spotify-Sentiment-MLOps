@@ -185,11 +185,7 @@ jobs:
           update_image "crawler" "$TAG" "$OLD_CRAWLER_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.crawler }}"
           update_image "collector" "$TAG" "$OLD_COLLECTOR_TAG" "k8s/collector.yaml" "${{ needs.check-changes.outputs.collector }}"
           update_image "spotify-monitoring" "$TAG" "$OLD_MONITORING_TAG" "k8s/monitoring-service.yaml" "${{ needs.check-changes.outputs.monitoring_consumer }}"
-
-          # Giữ nguyên tag của model-service từ nhánh deploy
-          if [ -n "$OLD_MODEL_TAG" ]; then
-            sed -i "s|image: registry.ntdevopsregistry.io.vn/mlops/model-service:.*|image: registry.ntdevopsregistry.io.vn/mlops/model-service:$OLD_MODEL_TAG|g" k8s/spotify-app.yaml
-          fi
+          update_image "model-service" "$TAG" "$OLD_MODEL_TAG" "k8s/spotify-app.yaml" "${{ needs.check-changes.outputs.model_service }}"
 
           git add k8s/
           git commit -m "deploy: update manifests with tag preservation [skip ci]" || echo "No changes"
