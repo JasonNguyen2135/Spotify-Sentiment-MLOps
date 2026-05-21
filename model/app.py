@@ -15,11 +15,24 @@ mlflow.set_tracking_uri(TRACKING_URI)
 POD_MODEL_NAME = os.getenv("MODEL_NAME")
 print(f"🚀 Model Service Startup. Target Pod Model: {POD_MODEL_NAME or 'Dynamic/Project-based'}")
 
+# Verify Credentials Presence (Sanitized)
+print(f"🔐 AWS_ACCESS_KEY_ID present: {bool(os.getenv('AWS_ACCESS_KEY_ID'))}")
+print(f"🔐 AWS_DEFAULT_REGION: {os.getenv('AWS_DEFAULT_REGION', 'not set')}")
+print(f"📡 MLFLOW_TRACKING_URI: {TRACKING_URI}")
+
+# Eager loading: Attempt to load the model on startup if POD_MODEL_NAME is set
+@app.on_event("startup")
+def preload_model():
+    if POD_MODEL_NAME:
+        print(f"📦 Pre-loading assigned model tier: {POD_MODEL_NAME}...")
+        load_model_for_project("default")
+
 # Cache for loaded models and metadata
 models_cache = {}
 metadata_cache = {}
 
 def load_model_for_project(project_id: str, target: str = "Production"):
+    # ... (logic remains same)
     # Normalize project_id
     pid_str = str(project_id).lower()
     is_global = not project_id or pid_str in ["none", "undefined", "null", "", "default", "0"]
