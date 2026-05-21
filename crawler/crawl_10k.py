@@ -7,10 +7,12 @@ import pandas as pd
 # Configuration
 APP_ID = 'com.spotify.music'
 MAX_COUNT = 10000
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
+# Try local first if environment variable is not set, otherwise fallback to k8s internal DNS
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017") 
 
 def crawl_and_label():
     print(f"🚀 Starting crawl for {MAX_COUNT} reviews from app: {APP_ID}...")
+    print(f"🔗 Target Database: {MONGO_URL}")
     
     try:
         # Fetch reviews

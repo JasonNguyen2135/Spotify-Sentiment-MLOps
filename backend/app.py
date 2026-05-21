@@ -880,16 +880,20 @@ def get_mlflow_metrics_internal(model_name, version):
 @api_router.get("/models")
 def get_models(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
-    tier_names = ["Sentiment_Basic_Model", "Sentiment_Standard_Model", "Sentiment_Pro_Model", "Sentiment_Premium_Model", "Sentiment_Vip_Model", "Spotify_Production_Model"]
-    all_versions = []
+    tier_names = ["Sentiment_Basic_Model", "Sentiment_Standard_Model", "Sentiment_Pro_Model", "Sentiment_Premium_Model", "Sentiment_Vip_Model"]
+    latest_models = []
     try:
         for name in tier_names:
             v_res = requests.get(f"{MLFLOW_URL}/api/2.0/mlflow/model-versions/search", params={"filter": f"name='{name}'"}, timeout=5).json()
             versions = v_res.get("model_versions", [])
-            for v in versions:
-                metrics = get_mlflow_metrics_internal(name, v['version'])
-                all_versions.append({**v, "metrics": metrics})
-        return all_versions
+            if versions:
+                # Sort by version number (descending) to get the latest
+                latest_v = sorted(versions, key=lambda x: int(x['version']), reverse=True)[0]
+                metrics = get_mlflow_metrics_internal(name, latest_v['version'])
+                # Tag it with the tier name for frontend UI
+                tier_label = name.replace("Sentiment_", "").replace("_Model", "").upper()
+                latest_models.append({**latest_v, "metrics": metrics, "tier_label": tier_label})
+        return latest_models
     except Exception as e:
         print(f"MLflow Fetch Error: {e}")
         return []
