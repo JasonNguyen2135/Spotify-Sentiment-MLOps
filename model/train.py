@@ -31,28 +31,49 @@ REPO_NAME = "Spotify-Sentiment-MLOps"
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
 
 def get_data():
-    if args.data_source == "mongodb":
-        print(f"Fetching data from MongoDB for project: {args.project_id}")
-        client = MongoClient(MONGO_URL)
-        db = client["sentiment_db"]
-        # Try both collections for robustness
-        df_raw = pd.DataFrame(list(db["raw_reviews"].find({})))
+    client = MongoClient(MONGO_URL)
+    db = client["sentiment_db"]
+    
+    if args.data_source.startswith("mongo_train:"):
+        # Targeted training from a specific dataset (e.g. the 10k crawl)
+        ds_name = args.data_source.split(":")[1]
+        print(f"📦 Fetching targeted dataset: {ds_name} from training_datasets")
+        df = pd.DataFrame(list(db["training_datasets"].find({"dataset_name": ds_name})))
+    elif args.data_source == "mongodb":
+        print(f"Fetching all available logs for project: {args.project_id}")
+        # Priority 1: Dedicated training collection
+        df_train = pd.DataFrame(list(db["training_datasets"].find({})))
+        # Priority 2: Standard logs
         df_log = pd.DataFrame(list(db["predictions_log"].find({})))
+        # Priority 3: Legacy raw reviews
+        df_raw = pd.DataFrame(list(db["raw_reviews"].find({})))
         
-        df = pd.concat([df_raw, df_log], ignore_index=True)
-        
-        if df.empty:
-            print("⚠️ Warning: MongoDB empty. Using baseline CSV.")
-            url = f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv"
-            response = requests.get(url, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
-            df = pd.read_csv(io.StringIO(response.text))
-        else:
-            # Handle corrected sentiment
-            df['sentiment'] = df.apply(lambda x: x.get('sentiment_corrected') or x.get('sentiment', 'neutral'), axis=1)
+        df = pd.concat([df_train, df_log, df_raw], ignore_index=True)
     else:
+        # URL or direct CSV path
+        print(f"🔗 Fetching data from source: {args.data_source}")
         response = requests.get(args.data_source, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
         df = pd.read_csv(io.StringIO(response.text))
     
+    if df.empty or 'sentiment' not in df.columns and 'sentiment_corrected' not in df.columns:
+        print("⚠️ Warning: Source data empty or invalid. Using baseline CSV.")
+        url = f"https://dagshub.com/{DAGSHUB_USERNAME}/{REPO_NAME}/raw/main/model/dataset/spotify_db.raw_reviews.csv"
+        response = requests.get(url, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
+        df = pd.read_csv(io.StringIO(response.text))
+        # Ensure baseline CSV has 3 classes if missing
+        if 'sentiment' in df.columns and df['sentiment'].nunique() < 3:
+            print("💡 Note: Baseline CSV is binary. Future crawls will expand this.")
+    
+    # Standardize sentiment column
+    if not df.empty:
+        # Use corrected sentiment if available, otherwise original, default to neutral
+        df['sentiment'] = df.apply(lambda x: str(x.get('sentiment_corrected') or x.get('sentiment', 'neutral')).lower(), axis=1)
+    
+    # Filter for standard classes
+    valid_classes = ["positive", "negative", "neutral"]
+    df = df[df['sentiment'].isin(valid_classes)]
+    
+    print(f"📊 Final Dataset Distribution: {df['sentiment'].value_counts().to_dict()}")
     return df[['text', 'sentiment']].dropna()
 
 def train_and_deploy():
