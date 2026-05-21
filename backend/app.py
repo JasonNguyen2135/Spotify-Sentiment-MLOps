@@ -978,9 +978,9 @@ def github_runs(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer", "analyst"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
     try: 
-        # Target specific workflow: manual_train.yml
-        url = "https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/runs"
-        return requests.get(url, headers={"Authorization": f"token {tk}"}, params={"per_page": 30}, timeout=5).json().get("workflow_runs", [])
+        # Fetch all runs to allow frontend filtering
+        url = "https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/runs"
+        return requests.get(url, headers={"Authorization": f"token {tk}"}, params={"per_page": 50}, timeout=5).json().get("workflow_runs", [])
     except: return []
 
 @api_router.post("/analyze-csv")
