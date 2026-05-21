@@ -13,28 +13,34 @@ TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow.ntdevopsmlflow.io
 mlflow.set_tracking_uri(TRACKING_URI)
 # New: Environment variable to specify which model this pod serves (e.g., Sentiment_Vip_Model)
 POD_MODEL_NAME = os.getenv("MODEL_NAME")
+print(f"🚀 Model Service Startup. Target Pod Model: {POD_MODEL_NAME or 'Dynamic/Project-based'}")
 
 # Cache for loaded models and metadata
 models_cache = {}
 metadata_cache = {}
 
 def load_model_for_project(project_id: str, target: str = "Production"):
-    # Priority 1: Model name specified for this pod
+    # Normalize project_id
+    pid_str = str(project_id).lower()
+    is_global = not project_id or pid_str in ["none", "undefined", "null", "", "default", "0"]
+    
+    if is_global:
+        project_id = "default"
+    
+    # Priority 1: Model name specified for this pod (Global Switcher override)
     if POD_MODEL_NAME:
         model_names_to_try = [POD_MODEL_NAME]
     else:
         # Priority 2: Project-specific models
         model_names_to_try = [f"Sentiment_Analysis_Model_{project_id}"]
     
-    # Priority 3: Fallbacks
-    if not project_id or str(project_id).lower() in ["none", "undefined", "null", "", "default"]:
-        project_id = "default"
-        if not POD_MODEL_NAME:
-            model_names_to_try.extend([
-                "Sentiment_Basic_Model", # Default to basic if nothing else specified
-                "Spotify_Production_Model",
-                "Sentiment_Analysis_Model_default"
-            ])
+    # Priority 3: Fallbacks for global/default project
+    if is_global and not POD_MODEL_NAME:
+        model_names_to_try.extend([
+            "Sentiment_Basic_Model",
+            "Spotify_Production_Model",
+            "Sentiment_Analysis_Model_default"
+        ])
 
     cache_key = f"{model_names_to_try[0]}_{target}"
 
