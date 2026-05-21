@@ -188,8 +188,10 @@ spec:
       targetPort: 3306
 
 # ==========================================
-# 2. MODEL SERVICE
+# 2. MODEL SERVICES (5 TIERS)
 # ==========================================
+
+# --- BASIC TIER ---
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -210,51 +212,229 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-service
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:944d520a7912fb9d7a695c9ad1c59e25a7a075a4
-          imagePullPolicy: IfNotPresent
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
               value: "http://mlflow.ntdevopsmlflow.io.vn"
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: aws-creds
-                  key: AWS_ACCESS_KEY_ID
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: aws-creds
-                  key: AWS_SECRET_ACCESS_KEY
-            - name: AWS_DEFAULT_REGION
-              valueFrom:
-                secretKeyRef:
-                  name: aws-creds
-                  key: AWS_DEFAULT_REGION
+            - name: MODEL_NAME
+              value: "Sentiment_Basic_Model"
             - name: RABBITMQ_HOST
               value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
-            - name: RABBITMQ_USER
-              value: "mlops"
-            - name: RABBITMQ_PASS
-              value: "mlops123"
-            - name: MODEL_TARGET
-              value: "Production"
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-service
+  namespace: mlops-sentiment
+spec:
+  selector:
+    app: model-service
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+# --- STANDARD TIER ---
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-standard
+  namespace: mlops-sentiment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-standard
+  template:
+    metadata:
+      labels:
+        app: model-standard
+    spec:
+      imagePullSecrets:
+        - name: harbor-secret
+      containers:
+        - name: model-standard
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          imagePullPolicy: Always
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
+            - name: MODEL_NAME
+              value: "Sentiment_Standard_Model"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-standard-service
+  namespace: mlops-sentiment
+spec:
+  selector:
+    app: model-standard
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+# --- PRO TIER ---
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-pro
+  namespace: mlops-sentiment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-pro
+  template:
+    metadata:
+      labels:
+        app: model-pro
+    spec:
+      imagePullSecrets:
+        - name: harbor-secret
+      containers:
+        - name: model-pro
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          imagePullPolicy: Always
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
+            - name: MODEL_NAME
+              value: "Sentiment_Pro_Model"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-pro-service
+  namespace: mlops-sentiment
+spec:
+  selector:
+    app: model-pro
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+# --- PREMIUM TIER ---
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-premium
+  namespace: mlops-sentiment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-premium
+  template:
+    metadata:
+      labels:
+        app: model-premium
+    spec:
+      imagePullSecrets:
+        - name: harbor-secret
+      containers:
+        - name: model-premium
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          imagePullPolicy: Always
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
+            - name: MODEL_NAME
+              value: "Sentiment_Premium_Model"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
           ports:
             - containerPort: 8000
           resources:
             requests:
               cpu: 200m
               memory: 512Mi
-            limits:
-              cpu: 1000m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-premium-service
+  namespace: mlops-sentiment
+spec:
+  selector:
+    app: model-premium
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+# --- VIP TIER ---
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-vip
+  namespace: mlops-sentiment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-vip
+  template:
+    metadata:
+      labels:
+        app: model-vip
+    spec:
+      imagePullSecrets:
+        - name: harbor-secret
+      containers:
+        - name: model-vip
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          imagePullPolicy: Always
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
+            - name: MODEL_NAME
+              value: "Sentiment_Vip_Model"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 300m
               memory: 1Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: model-service
+  name: model-vip-service
+  namespace: mlops-sentiment
 spec:
   selector:
-    app: model-service
+    app: model-vip
   ports:
     - port: 8000
       targetPort: 8000

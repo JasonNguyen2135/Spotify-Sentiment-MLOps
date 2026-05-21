@@ -11,38 +11,32 @@ app = FastAPI(title="Sentiment Analysis Service")
 # Configuration
 TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow.ntdevopsmlflow.io.vn")
 mlflow.set_tracking_uri(TRACKING_URI)
+# New: Environment variable to specify which model this pod serves (e.g., Sentiment_Vip_Model)
+POD_MODEL_NAME = os.getenv("MODEL_NAME")
 
 # Cache for loaded models and metadata
 models_cache = {}
 metadata_cache = {}
 
 def load_model_for_project(project_id: str, target: str = "Production"):
-    # Chuẩn hóa project_id (xử lý None, "None", hoặc chuỗi rỗng)
-    if not project_id or str(project_id).lower() in ["none", "undefined", "null", ""]:
-        project_id = "default"
+    # Priority 1: Model name specified for this pod
+    if POD_MODEL_NAME:
+        model_names_to_try = [POD_MODEL_NAME]
     else:
-        project_id = str(project_id)
-
-    cache_key = f"{project_id}_{target}"
-    if cache_key in models_cache:
-        return models_cache[cache_key], metadata_cache.get(cache_key, {})
-
-    # Danh sách các tên model có thể thử (theo thứ tự ưu tiên)
-    model_names_to_try = [
-        f"Sentiment_Analysis_Model_{project_id}"
-    ]
+        # Priority 2: Project-specific models
+        model_names_to_try = [f"Sentiment_Analysis_Model_{project_id}"]
     
-    # Chỉ thêm fallback nếu không phải project cụ thể hoặc project_id là default
-    if project_id == "default":
-        model_names_to_try.extend([
-            "Sentiment_Analysis_Model_default",
-            "Sentiment_Analysis_Model",
-            "Spotify_Production_Model",
-            "Spotify_Sentiment_Model"
-        ])
-    
-    client = mlflow.tracking.MlflowClient()
-    last_error = None
+    # Priority 3: Fallbacks
+    if not project_id or str(project_id).lower() in ["none", "undefined", "null", "", "default"]:
+        project_id = "default"
+        if not POD_MODEL_NAME:
+            model_names_to_try.extend([
+                "Sentiment_Basic_Model", # Default to basic if nothing else specified
+                "Spotify_Production_Model",
+                "Sentiment_Analysis_Model_default"
+            ])
+
+    cache_key = f"{model_names_to_try[0]}_{target}"
 
     for model_name in model_names_to_try:
         # Danh sách các stage để thử load

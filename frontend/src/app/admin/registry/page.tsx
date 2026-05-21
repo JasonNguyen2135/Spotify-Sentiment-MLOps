@@ -175,9 +175,12 @@ export default function RegistryPage() {
                     <tr key={`${model.name}-${model.version}`} className="hover:bg-slate-50/30 transition-colors">
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-black text-slate-500 shadow-inner">v{model.version}</div>
+                          <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-xs font-black text-slate-500 shadow-inner">
+                             {model.tier_label || 'DEF'}
+                          </div>
                           <div>
-                            <p className="text-sm font-bold text-slate-900">{model.name}</p>
+                            <p className="text-sm font-black text-slate-900">{model.name}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Version {model.version}</p>
                           </div>
                         </div>
                       </td>
