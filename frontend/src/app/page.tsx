@@ -7,7 +7,7 @@ import {
   PieChart as PieChartIcon, ArrowUpRight, 
   ArrowDownRight, Info, Download, Calendar, Sparkles,
   LayoutGrid, Plus, FolderPlus, ArrowRight, MessageSquare,
-  FileText, ArrowLeftRight, ChevronRight, BellRing, Ticket as TicketIcon, Settings, RefreshCw, Trash2, X
+  FileText, ArrowLeftRight, ChevronRight, BellRing, Ticket as TicketIcon, Settings, RefreshCw, Trash2, X, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';

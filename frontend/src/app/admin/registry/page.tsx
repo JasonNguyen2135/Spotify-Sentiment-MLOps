@@ -14,7 +14,14 @@ import axios from 'axios';
 import { clsx } from 'clsx';
 
 export default function RegistryPage() {
-// ... existing state ...
+  const { user, loading: authLoading } = useAuth();
+  const { activeProject, setActiveProject } = useProject();
+  const router = useRouter();
+  const [models, setModels] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [runs, setRuns] = useState<any[]>([]);
+  const [deploying, setDeploying] = useState<string | null>(null);
+  const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Comparison State
