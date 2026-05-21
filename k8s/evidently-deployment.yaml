@@ -24,7 +24,7 @@ spec:
         # Dùng image Python gốc để chạy thẳng lệnh evidently ui, đảm bảo khớp version
         image: python:3.12-slim
         command: ["/bin/sh", "-c"]
-        args: ["pip install evidently==0.4.33 && evidently ui --host 0.0.0.0 --port 8085 --workspace /app/workspace"]
+        args: ["pip install litestar==2.8.2 evidently==0.4.33 && evidently ui --host 0.0.0.0 --port 8085 --workspace /app/workspace"]
         ports:
         - containerPort: 8085
 ---
