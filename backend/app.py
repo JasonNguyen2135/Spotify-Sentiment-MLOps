@@ -249,15 +249,10 @@ def redis_worker():
             if msg:
                 _, data_json = msg; data = json.loads(data_json)
                 pid, txt = data["project_id"], data["text"]
-                raw_ts = data.get("timestamp")
-                try:
-                    if raw_ts and raw_ts.endswith('Z'): raw_ts = raw_ts.replace('Z', '+00:00')
-                    msg_ts = datetime.fromisoformat(raw_ts) if raw_ts else datetime.utcnow()
-                except: msg_ts = datetime.utcnow()
                 # Dynamic Routing based on Global Config
                 target_url = get_current_model_url(db_session)
                 pid_param = str(pid) if pid != 0 else "default"
-                print(f"📡 [WORKER] Routing task to: {target_url} (Project: {pid})")
+                print(f"📡 [WORKER] Routing Task to Model Service: {target_url} (Project: {pid})")
                 
                 try:
                     res = requests.post(f"{target_url}/predict", params={"review": txt, "project_id": pid_param}, timeout=10).json()
