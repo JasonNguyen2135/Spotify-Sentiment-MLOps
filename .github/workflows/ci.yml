@@ -17,6 +17,7 @@ jobs:
       crawler: ${{ steps.filter.outputs.crawler }}
       collector: ${{ steps.filter.outputs.collector }}
       monitoring_consumer: ${{ steps.filter.outputs.monitoring_consumer }}
+      model_service: ${{ steps.filter.outputs.model_service }}
       trainer_logic: ${{ steps.filter.outputs.trainer_logic }}
     steps:
       - uses: actions/checkout@v3
@@ -29,6 +30,7 @@ jobs:
             crawler: ['crawler/**']
             collector: ['collector/**']
             monitoring_consumer: ['model/monitoring/**']
+            model_service: ['model/app.py', 'model/requirements.txt']
             trainer_logic: ['model/train.py', 'model/Dockerfile.train', 'model/requirements.txt', 'dags/spotify_training_dag.py']
 
   build-and-gitops:
@@ -91,6 +93,14 @@ jobs:
           for i in {1..5}; do 
             docker build -t registry.ntdevopsregistry.io.vn/mlops/collector:${{ github.sha }} ./collector && \
             docker push registry.ntdevopsregistry.io.vn/mlops/collector:${{ github.sha }} && break || sleep 15
+          done
+
+      - name: Build and Push Model Service
+        if: needs.check-changes.outputs.model_service == 'true'
+        run: |
+          for i in {1..5}; do 
+            docker build -t registry.ntdevopsregistry.io.vn/mlops/model-service:${{ github.sha }} ./model && \
+            docker push registry.ntdevopsregistry.io.vn/mlops/model-service:${{ github.sha }} && break || sleep 15
           done
 
       # 2. TRIỂN KHAI DAG VÀ KÍCH HOẠT (Dùng kubectl trực tiếp)

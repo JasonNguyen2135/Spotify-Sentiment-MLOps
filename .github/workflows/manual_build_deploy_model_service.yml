@@ -7,6 +7,10 @@ on:
         description: 'Model version (e.g., 5) or stage (Production, Staging)'
         required: true
         default: 'Production'
+      model_name:
+        description: 'Model tier name from MLflow (e.g., Sentiment_Vip_Model)'
+        required: false
+        default: 'Sentiment_Basic_Model'
 
 permissions:
   contents: write
@@ -26,6 +30,7 @@ jobs:
       - name: Build and Push Model Service
         run: |
           TAG="${{ github.sha }}"
+          # Single build for all tiers since logic is shared
           docker build -t registry.ntdevopsregistry.io.vn/mlops/model-service:$TAG ./model
           docker push registry.ntdevopsregistry.io.vn/mlops/model-service:$TAG
 
@@ -35,6 +40,19 @@ jobs:
           git config --global user.name "CI Bot Registry"
           TAG="${{ github.sha }}"
           MODEL_TARGET="${{ github.event.inputs.model_target }}"
+          MLFLOW_NAME="${{ github.event.inputs.model_name }}"
+
+          # Map MLflow Model Name to K8s Deployment Name
+          case "$MLFLOW_NAME" in
+            "Sentiment_Basic_Model") K8S_DEPLOY="model-service" ;;
+            "Sentiment_Standard_Model") K8S_DEPLOY="model-standard" ;;
+            "Sentiment_Pro_Model") K8S_DEPLOY="model-pro" ;;
+            "Sentiment_Premium_Model") K8S_DEPLOY="model-premium" ;;
+            "Sentiment_Vip_Model") K8S_DEPLOY="model-vip" ;;
+            *) K8S_DEPLOY="model-service" ;;
+          esac
+
+          echo "Targeting K8s Deployment: $K8S_DEPLOY for Model: $MLFLOW_NAME (Version/Stage: $MODEL_TARGET)"
 
           # 1. Save the new manifest structure from main
           mkdir -p /tmp/k8s-main
@@ -53,32 +71,24 @@ jobs:
           OLD_FRONTEND_TAG=$(get_tag "frontend")
           OLD_CRAWLER_TAG=$(get_tag "crawler")
 
-          echo "Preserving tags: Backend=$OLD_BACKEND_TAG, Frontend=$OLD_FRONTEND_TAG, Crawler=$OLD_CRAWLER_TAG"
-          
           # 4. Sync manifest structure from main
           cp /tmp/k8s-main/spotify-app.yaml k8s/
           
           # 5. Apply updates
-          # Update Model Service Image Tag
+          # Update ALL Model Service Image Tags to the latest built version
           sed -i "s|image: registry.ntdevopsregistry.io.vn/mlops/model-service:.*|image: registry.ntdevopsregistry.io.vn/mlops/model-service:$TAG|g" k8s/spotify-app.yaml
           
-          # Update MODEL_TARGET env var
-          if grep -q "name: MODEL_TARGET" k8s/spotify-app.yaml; then
-            # If exists, update the value in the next line
-            sed -i "/name: MODEL_TARGET/,/value: .*/ s/value: .*/value: \"$MODEL_TARGET\"/" k8s/spotify-app.yaml
-          else
-            # If not exists, append it after the MLFLOW_TRACKING_URI block
-            sed -i "/name: MLFLOW_TRACKING_URI/,/value: .*/ { /value: .*/ a\            - name: MODEL_TARGET\n              value: \"$MODEL_TARGET\"
-            }" k8s/spotify-app.yaml
-          fi
+          # Update MODEL_TARGET for the SPECIFIC deployment
+          # We use a block-based sed to find the right deployment and update its MODEL_TARGET
+          sed -i "/name: $K8S_DEPLOY/,/---/ { /name: MODEL_TARGET/,/value: .*/ s/value: .*/value: \"$MODEL_TARGET\"/ }" k8s/spotify-app.yaml
 
-          # 6. Restore other service tags to what was running on deploy branch
+          # 6. Restore other service tags
           sed -i "s|image: registry.ntdevopsregistry.io.vn/mlops/backend:.*|image: registry.ntdevopsregistry.io.vn/mlops/backend:$OLD_BACKEND_TAG|g" k8s/spotify-app.yaml
           sed -i "s|image: registry.ntdevopsregistry.io.vn/mlops/frontend:.*|image: registry.ntdevopsregistry.io.vn/mlops/frontend:$OLD_FRONTEND_TAG|g" k8s/spotify-app.yaml
           sed -i "s|image: registry.ntdevopsregistry.io.vn/mlops/crawler:.*|image: registry.ntdevopsregistry.io.vn/mlops/crawler:$OLD_CRAWLER_TAG|g" k8s/spotify-app.yaml
 
           git add k8s/spotify-app.yaml
-          git commit -m "deploy: manual model service image update to $TAG and target $MODEL_TARGET [skip ci]" || echo "No changes"
+          git commit -m "deploy: update $K8S_DEPLOY to $MODEL_TARGET (image: $TAG) [skip ci]" || echo "No changes"
           git push origin HEAD:deploy --force
 
       - name: Slack Notification
@@ -87,5 +97,5 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_MESSAGE: "Manual Model Service Build/Deploy: ${{ job.status }}"
+          SLACK_MESSAGE: "Manual Model Service Deploy: Tier $MLFLOW_NAME set to $MODEL_TARGET"
           SLACK_TITLE: "Application Update Status"
