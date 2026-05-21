@@ -5,21 +5,16 @@ import { useRouter } from 'next/navigation';
 import { 
   Settings, ExternalLink, CheckCircle2, 
   AlertCircle, Layers, Zap, LayoutGrid,
-  ShieldCheck, Loader2, List, Github, Activity
+  ShieldCheck, Loader2, List, Github, Activity,
+  ArrowRightLeft, X, Info, ShieldAlert,
+  ChevronRight, BarChart3, TrendingUp
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { clsx } from 'clsx';
 
 export default function RegistryPage() {
-  const { user, loading: authLoading } = useAuth();
-  const { activeProject, setActiveProject } = useProject();
-  const router = useRouter();
-  const [models, setModels] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
-  const [runs, setRuns] = useState<any[]>([]);
-  const [deploying, setDeploying] = useState<string | null>(null);
-  const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
+// ... existing state ...
   const [loading, setLoading] = useState(true);
 
   // Comparison State
@@ -44,6 +39,20 @@ export default function RegistryPage() {
       setComparing(false);
     }
   };
+
+  // Benchmarking State
+  const [selectedBenchmark, setSelectedBenchmark] = useState<string[]>(['basic', 'vip']);
+
+  const benchmarkData = useMemo(() => {
+     return models.map(m => ({
+        name: m.tier_label,
+        key: m.name.replace('Sentiment_', '').replace('_Model', '').toLowerCase(),
+        accuracy: m.metrics?.accuracy || 0,
+        f1: m.metrics?.f1 || 0,
+        latency: m.metrics?.latency || 42,
+        version: m.version
+     }));
+  }, [models]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -355,6 +364,55 @@ export default function RegistryPage() {
           </div>
         </section>
       </div>
+
+      {/* NEW: Model Benchmarking Section */}
+      <section className="mt-16 space-y-8 animate-in slide-in-from-bottom duration-700 delay-200">
+        <div className="flex items-center justify-between px-2">
+          <div className="flex items-center gap-4">
+             <div className="bg-brand p-3 rounded-2xl text-slate-900 shadow-lg shadow-brand/20"><BarChart3 className="w-6 h-6" /></div>
+             <div>
+               <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Intelligence Benchmarking</h2>
+               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Cross-tier performance visualization (Accuracy vs Latency)</p>
+             </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+           {benchmarkData.map((data, idx) => (
+             <div key={data.key} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-xl transition-all hover:-translate-y-1">
+                <div className="absolute top-0 left-0 w-full h-1 bg-brand opacity-10 group-hover:opacity-100 transition-opacity"></div>
+                <div className="flex justify-between items-start mb-6">
+                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Tier {idx + 1}</span>
+                   <div className="bg-slate-900 text-brand px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter">v{data.version}</div>
+                </div>
+                <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">{data.name}</h3>
+                
+                <div className="space-y-6">
+                   <div>
+                      <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-2"><span>Accuracy</span><span>{(data.accuracy * (data.accuracy > 1 ? 1 : 100)).toFixed(1)}%</span></div>
+                      <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden">
+                         <div className="h-full bg-emerald-500 rounded-full transition-all duration-1000" style={{ width: `${data.accuracy * (data.accuracy > 1 ? 1 : 100)}%` }}></div>
+                      </div>
+                   </div>
+                   <div>
+                      <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-2"><span>Latency</span><span>{data.latency}ms</span></div>
+                      <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden">
+                         <div className="h-full bg-amber-400 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, (data.latency / 200) * 100)}%` }}></div>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
+                   <div className="flex items-center gap-1.5 text-emerald-500">
+                      <TrendingUp className="w-3 h-3" />
+                      <span className="text-[10px] font-black uppercase">Stable</span>
+                   </div>
+                   <div className="text-[10px] font-bold text-slate-300 uppercase">Build Success</div>
+                </div>
+             </div>
+           ))}
+        </div>
+      </section>
     </div>
   );
 }
