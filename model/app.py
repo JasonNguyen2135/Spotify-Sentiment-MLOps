@@ -43,7 +43,10 @@ def load_model_for_project(project_id: str, target: str = "Production"):
         ])
 
     cache_key = f"{model_names_to_try[0]}_{target}"
+    if cache_key in models_cache:
+        return models_cache[cache_key], metadata_cache.get(cache_key, {})
 
+    client = mlflow.tracking.MlflowClient()
     for model_name in model_names_to_try:
         # Danh sách các stage để thử load
         targets_to_try = [target]
