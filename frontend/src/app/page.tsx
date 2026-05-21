@@ -1080,6 +1080,18 @@ export default function UniversalHub() {
             
             <div className="space-y-6 relative z-10">
               <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Application ID (Target)</label>
+                <input 
+                  type="text" 
+                  value={harvestId} 
+                  onChange={(e) => setHarvestId(e.target.value)} 
+                  placeholder="e.g. com.spotify.music" 
+                  className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm mb-2"
+                />
+                <p className="text-[9px] text-slate-400 font-bold px-2 italic">Tip: Use "com.spotify.music" for Spotify or similar IDs from Google Play.</p>
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Target Volume</label>
                 <div className="grid grid-cols-2 gap-3">
                   {[100, 500, 1000, 5000].map(val => (

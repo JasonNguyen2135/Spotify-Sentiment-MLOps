@@ -1149,6 +1149,29 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
 
     return {"synced_count": 0}
 
+MODEL_TIER_URLS = {
+    "basic": "http://model-service:8000",
+    "standard": "http://model-standard-service:8000",
+    "pro": "http://model-pro-service:8000",
+    "premium": "http://model-premium-service:8000",
+    "vip": "http://model-vip-service:8000"
+}
+
+@api_router.get("/compare-tiers")
+def compare_tiers(review_text: str, current_user: User = Depends(get_current_user)):
+    results = {}
+    for tier, url in MODEL_TIER_URLS.items():
+        try:
+            res = requests.post(f"{url}/predict", params={"review": review_text, "project_id": "default"}, timeout=5).json()
+            results[tier] = {
+                "sentiment": res.get("sentiment", "neutral"),
+                "confidence": res.get("confidence", 0.0),
+                "version": res.get("model_info", {}).get("version", "N/A")
+            }
+        except:
+            results[tier] = {"sentiment": "error", "confidence": 0.0, "version": "offline"}
+    return results
+
 @api_router.get("/connectors/harvest")
 def harvest_data(platform: str, app_id: str, limit: int = 100, current_user: User = Depends(get_current_user)):
     if platform != "Google Play":
@@ -1156,6 +1179,9 @@ def harvest_data(platform: str, app_id: str, limit: int = 100, current_user: Use
     try:
         # Use provided limit for flexibility
         res_reviews, _ = reviews(app_id, lang='en', country='us', sort=Sort.NEWEST, count=limit)
+        if not res_reviews:
+            raise HTTPException(status_code=404, detail=f"No data found for App ID: {app_id}. Please check the ID (e.g. com.spotify.music)")
+            
         data = []
         for item in res_reviews:
             sent = "positive" if item['score'] >= 4 else "negative" if item['score'] <= 2 else "neutral"
@@ -1170,6 +1196,7 @@ def harvest_data(platform: str, app_id: str, limit: int = 100, current_user: Use
         df = pd.DataFrame(data)
         output = io.BytesIO(); df.to_csv(output, index=False, encoding='utf-8-sig'); output.seek(0)
         return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={app_id}_harvest.csv"})
+    except HTTPException: raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Harvest failed: {str(e)}")
 
