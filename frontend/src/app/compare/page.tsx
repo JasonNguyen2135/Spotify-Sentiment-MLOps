@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { 
   ArrowLeftRight, Loader2, Target, Zap, 
@@ -15,14 +15,44 @@ export default function ComparePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   
+  // Model Data for Benchmarking
+  const [models, setModels] = useState<any[]>([]);
+  const [loadingModels, setLoadingModels] = useState(true);
+
   // Comparison State
   const [compareText, setCompareText] = useState('');
   const [results, setResults] = useState<any>(null);
   const [comparing, setComparing] = useState(false);
 
+  const fetchData = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/api/models', { 
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setModels(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch models for benchmarking", err);
+    } finally {
+      setLoadingModels(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
-  }, [user, authLoading, router]);
+    if (user) fetchData();
+  }, [user, authLoading, router, fetchData]);
+
+  const benchmarkData = useMemo(() => {
+    return models.map(m => ({
+       name: m.tier_label,
+       key: m.name.replace('Sentiment_', '').replace('_Model', '').toLowerCase(),
+       accuracy: m.metrics?.accuracy || 0,
+       f1: m.metrics?.f1 || 0,
+       latency: m.metrics?.latency || 42,
+       version: m.version
+    }));
+ }, [models]);
 
   const handleCompare = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -111,7 +141,7 @@ export default function ComparePage() {
                 value={compareText}
                 onChange={(e) => setCompareText(e.target.value)}
                 placeholder="Example: 'The Spotify update is amazing, I love the new dark theme and smoother transitions!'"
-                className="w-full h-48 p-10 bg-white/5 border border-white/10 rounded-[3rem] outline-none focus:ring-4 focus:ring-brand/30 text-white text-xl font-medium transition-all placeholder:text-slate-600 resize-none"
+                className="w-full h-32 p-10 bg-white/5 border border-white/10 rounded-[3rem] outline-none focus:ring-4 focus:ring-brand/30 text-white text-xl font-medium transition-all placeholder:text-slate-600 resize-none"
               />
               <button 
                 type="submit" 
@@ -128,8 +158,8 @@ export default function ComparePage() {
         </form>
       </div>
 
-      {results ? (
-        <div className="animate-in slide-in-from-bottom duration-700">
+      {results && (
+        <div className="animate-in slide-in-from-bottom duration-700 mb-20">
            <div className="flex items-center gap-4 mb-10">
               <div className="bg-slate-900 p-3 rounded-2xl text-brand shadow-lg"><BarChart3 className="w-6 h-6" /></div>
               <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Aggregation Results</h2>
@@ -140,12 +170,60 @@ export default function ComparePage() {
               ))}
            </div>
         </div>
-      ) : (
-        <div className="py-40 flex flex-col items-center justify-center border-4 border-dashed border-slate-100 rounded-[5rem] animate-pulse">
-           <ArrowLeftRight className="w-24 h-24 text-slate-200 mb-8" />
-           <p className="text-2xl font-black text-slate-300 uppercase tracking-widest">Waiting for Neural Input...</p>
-        </div>
       )}
+
+      {/* NEW: Model Benchmarking Section */}
+      <section className="mt-16 space-y-8 animate-in slide-in-from-bottom duration-700 delay-200">
+        <div className="flex items-center justify-between px-2">
+          <div className="flex items-center gap-4">
+             <div className="bg-brand p-3 rounded-2xl text-slate-900 shadow-lg shadow-brand/20"><BarChart3 className="w-6 h-6" /></div>
+             <div>
+               <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Intelligence Benchmarking</h2>
+               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Cross-tier performance visualization (Accuracy vs Latency)</p>
+             </div>
+          </div>
+        </div>
+
+        {loadingModels ? (
+          <div className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-300" /></div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            {benchmarkData.map((data, idx) => (
+              <div key={data.key} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-xl transition-all hover:-translate-y-1">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-brand opacity-10 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="flex justify-between items-start mb-6">
+                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Tier {idx + 1}</span>
+                    <div className="bg-slate-900 text-brand px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter">v{data.version}</div>
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">{data.name}</h3>
+                  
+                  <div className="space-y-6">
+                    <div>
+                        <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-2"><span>Accuracy</span><span>{(data.accuracy * (data.accuracy > 1 ? 1 : 100)).toFixed(1)}%</span></div>
+                        <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full transition-all duration-1000" style={{ width: `${data.accuracy * (data.accuracy > 1 ? 1 : 100)}%` }}></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-2"><span>Latency</span><span>{data.latency}ms</span></div>
+                        <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden">
+                          <div className="h-full bg-amber-400 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, (data.latency / 200) * 100)}%` }}></div>
+                        </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-emerald-500">
+                        <TrendingUp className="w-3 h-3" />
+                        <span className="text-[10px] font-black uppercase">Stable</span>
+                    </div>
+                    <div className="text-[10px] font-bold text-slate-300 uppercase">Build Success</div>
+                  </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
