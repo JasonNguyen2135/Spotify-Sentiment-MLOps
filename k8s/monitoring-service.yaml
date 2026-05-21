@@ -17,9 +17,11 @@ spec:
         - name: harbor-secret
       containers:
         - name: monitoring
-          image: registry.ntdevopsregistry.io.vn/mlops/spotify-monitoring:350a0a3ab33476b80f1dc80a8d2c4de8f7e4e2b0
+          image: registry.ntdevopsregistry.io.vn/mlops/spotify-monitoring:acc3ea2469daef8585407f6623d67869f0a81f50
           env:
             - name: RABBITMQ_HOST
               value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
             - name: EVIDENTLY_URL
               value: "http://evidently-service.mlops-sentiment.svc.cluster.local:8000"
+            - name: REFERENCE_DATA_URL
+              value: "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/reference_data.csv"
