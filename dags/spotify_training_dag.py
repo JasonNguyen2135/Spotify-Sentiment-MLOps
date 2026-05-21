@@ -105,6 +105,10 @@ with DAG(
                 value="{{ dag_run.conf.get('project_id', 'default') }}"
             ),
             k8s.V1EnvVar(
+                name="MODEL_TIER",
+                value="{{ dag_run.conf.get('tier', 'basic') }}"
+            ),
+            k8s.V1EnvVar(
                 name="MONGO_URL",
                 value="mongodb://mongodb.mlops-sentiment.svc.cluster.local:27017"
             )

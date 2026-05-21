@@ -11,6 +11,10 @@ on:
         description: 'Project ID for model registration'
         required: false
         default: 'default'
+      tier:
+        description: 'Model Tier (basic, standard, pro, premium, vip)'
+        required: false
+        default: 'basic'
 
 jobs:
   trigger-airflow:
@@ -31,8 +35,8 @@ jobs:
 
       - name: Execute Airflow Trigger
         run: |
-          echo "Triggering training pipeline for Project: ${{ github.event.inputs.project_id }} with source: ${{ github.event.inputs.data_source }}"
-          kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k8s_native -c "{\"data_source\": \"${{ github.event.inputs.data_source }}\", \"project_id\": \"${{ github.event.inputs.project_id }}\"}"
+          echo "Triggering training pipeline for Project: ${{ github.event.inputs.project_id }} with source: ${{ github.event.inputs.data_source }} and tier: ${{ github.event.inputs.tier }}"
+          kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k8s_native -c "{\"data_source\": \"${{ github.event.inputs.data_source }}\", \"project_id\": \"${{ github.event.inputs.project_id }}\", \"tier\": \"${{ github.event.inputs.tier }}\"}"
 
       - name: Slack Notification
         if: always()
