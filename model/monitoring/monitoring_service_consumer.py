@@ -31,7 +31,8 @@ report_counter = 1
 
 # Nạp sẵn tập Tiêu chuẩn (Reference)
 REF_FILE_PATH = "reference_data.csv"
-DAGSHUB_CSV_URL = "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/reference_data.csv"
+# Get URL from environment variable to avoid hardcoding
+DAGSHUB_CSV_URL = os.getenv("REFERENCE_DATA_URL", "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/reference_data.csv")
 
 if not os.path.exists(REF_FILE_PATH):
     print(f"📥 Đang tải tập Reference từ DagsHub: {DAGSHUB_CSV_URL}")

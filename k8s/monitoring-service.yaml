@@ -23,3 +23,5 @@ spec:
               value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
             - name: EVIDENTLY_URL
               value: "http://evidently-service.mlops-sentiment.svc.cluster.local:8000"
+            - name: REFERENCE_DATA_URL
+              value: "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/reference_data.csv"
