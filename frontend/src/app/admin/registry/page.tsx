@@ -2,6 +2,7 @@
 import { useAuth } from '@/context/AuthContext';
 import { useProject } from '@/context/ProjectContext';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
   Settings, ExternalLink, CheckCircle2, 
   AlertCircle, Layers, Zap, LayoutGrid,
@@ -23,29 +24,6 @@ export default function RegistryPage() {
   const [deploying, setDeploying] = useState<string | null>(null);
   const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Comparison State
-  const [showCompareModal, setShowCompareModal] = useState(false);
-  const [compareText, setCompareText] = useState('');
-  const [compareResults, setCompareResults] = useState<any>(null);
-  const [comparing, setComparing] = useState(false);
-
-  const handleCompare = async () => {
-    if (!compareText.trim()) return;
-    setComparing(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('/api/compare-tiers', {
-        params: { review_text: compareText },
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setCompareResults(res.data);
-    } catch (err) {
-      alert("Comparison failed");
-    } finally {
-      setComparing(false);
-    }
-  };
 
   // Benchmarking State
   const [selectedBenchmark, setSelectedBenchmark] = useState<string[]>(['basic', 'vip']);
@@ -181,77 +159,11 @@ export default function RegistryPage() {
           <a href="http://mlflow.ntdevopsmlflow.io.vn" target="_blank" className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
             <Settings className="w-4 h-4" /> MLflow UI
           </a>
-          <button onClick={() => setShowCompareModal(true)} className="bg-brand text-slate-900 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-brand/20">
+          <Link href="/compare" className="bg-brand text-slate-900 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-brand/20">
             <ArrowRightLeft className="w-4 h-4" /> Compare Tiers
-          </button>
+          </Link>
         </div>
       </div>
-
-      {/* NEW: 5-Tier Comparison Modal */}
-      {showCompareModal && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[110] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-5xl rounded-[3rem] p-12 shadow-2xl relative overflow-hidden">
-             <button onClick={() => { setShowCompareModal(false); setCompareResults(null); }} className="absolute top-8 right-8 text-slate-300 hover:text-slate-900 transition-colors"><X className="w-8 h-8" /></button>
-             <h2 className="text-3xl font-black text-slate-900 mb-2">Cross-Tier <span className="text-brand">Comparison</span></h2>
-             <p className="text-slate-500 font-medium mb-10 italic">Analyze how different model tiers interpret the same feedback.</p>
-             
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                <div className="lg:col-span-1 space-y-6">
-                   <div>
-                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Feedback Text</label>
-                     <textarea 
-                        value={compareText} 
-                        onChange={(e) => setCompareText(e.target.value)}
-                        placeholder="Type something like: 'App is great but sometimes it crashes on startup'..." 
-                        className="w-full h-40 p-6 bg-slate-50 border border-slate-100 rounded-3xl outline-none focus:ring-2 focus:ring-brand font-bold text-sm resize-none"
-                     />
-                   </div>
-                   <button 
-                      onClick={handleCompare} 
-                      disabled={comparing || !compareText.trim()}
-                      className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-brand hover:text-slate-900 transition-all shadow-xl flex items-center justify-center gap-3"
-                   >
-                      {comparing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5 fill-current" />} Run Analysis
-                   </button>
-                </div>
-
-                <div className="lg:col-span-2">
-                   {compareResults ? (
-                     <div className="grid grid-cols-5 gap-4 h-full">
-                        {['basic', 'standard', 'pro', 'premium', 'vip'].map(tier => {
-                          const res = compareResults[tier];
-                          return (
-                            <div key={tier} className="bg-slate-50 rounded-[2rem] p-6 border border-slate-100 flex flex-col items-center text-center animate-in zoom-in-95">
-                               <span className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-tighter">{tier}</span>
-                               <div className={clsx(
-                                 "w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-lg",
-                                 res.sentiment === 'positive' ? "bg-emerald-500 text-white" : 
-                                 res.sentiment === 'negative' ? "bg-rose-500 text-white" : 
-                                 res.sentiment === 'neutral' ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-400"
-                               )}>
-                                  {res.sentiment === 'positive' ? <CheckCircle2 /> : res.sentiment === 'negative' ? <ShieldAlert /> : <Info />}
-                               </div>
-                               <p className="font-black text-slate-900 uppercase text-xs mb-1">{res.sentiment}</p>
-                               <p className="text-[9px] font-bold text-slate-400 mb-4 tracking-widest">{(res.confidence * 100).toFixed(1)}%</p>
-                               <div className="mt-auto pt-4 border-t border-slate-200 w-full">
-                                  <p className="text-[8px] font-black text-slate-300 uppercase">Version</p>
-                                  <p className="text-[10px] font-bold text-slate-500">{res.version}</p>
-                               </div>
-                            </div>
-                          );
-                        })}
-                     </div>
-                   ) : (
-                     <div className="h-full border-2 border-dashed border-slate-100 rounded-[3rem] flex flex-col items-center justify-center text-slate-300 space-y-4">
-                        <ArrowRightLeft className="w-16 h-16 opacity-20" />
-                        <p className="font-bold italic">Enter text and run analysis to see results</p>
-                     </div>
-                   )}
-                </div>
-             </div>
-          </div>
-        </div>
-      )}
 
       {status && (
         <div className={clsx("mb-10 p-6 rounded-2xl flex items-center justify-between border animate-in slide-in-from-top", status.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100')}>
