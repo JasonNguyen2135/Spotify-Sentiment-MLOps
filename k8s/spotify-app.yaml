@@ -219,6 +219,8 @@ spec:
               value: "http://mlflow.ntdevopsmlflow.io.vn"
             - name: MODEL_NAME
               value: "Sentiment_Basic_Model"
+            - name: MODEL_TARGET
+              value: "Production"
             - name: RABBITMQ_HOST
               value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
           ports:
