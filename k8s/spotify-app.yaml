@@ -220,7 +220,7 @@ spec:
             - name: MODEL_NAME
               value: "Sentiment_Basic_Model"
             - name: MODEL_TARGET
-              value: "2"
+              value: "3"
             - name: RABBITMQ_HOST
               value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
           ports:
