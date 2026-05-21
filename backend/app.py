@@ -919,16 +919,43 @@ def build_deploy(version: str, current_user: User = Depends(get_current_user)):
 
 @api_router.get("/datasets")
 def get_datasets(project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if project_id: verify_project_access(project_id, current_user, db)
-    return [{"name": "MongoDB Data", "source": "mongodb", "count": preds_log_col.count_documents({"project_id": project_id} if project_id else {})} ]
+    if project_id and project_id != 0: verify_project_access(project_id, current_user, db)
+    
+    # 1. Standard MongoDB logs
+    datasets = [{"name": "Live Predictions Log", "source": "mongodb_logs", "count": preds_log_col.count_documents({"project_id": project_id} if project_id else {})}]
+    
+    # 2. Dedicated Training Datasets Collection
+    try:
+        train_col = mongo_db["training_datasets"]
+        distinct_names = train_col.distinct("dataset_name")
+        for name in distinct_names:
+            count = train_col.count_documents({"dataset_name": name})
+            datasets.append({"name": f"Dataset: {name}", "source": f"mongo_train:{name}", "count": count})
+    except: pass
+        
+    return datasets
 
 @api_router.post("/train")
 def train(dataset_source: str, project_id: int, tier: str = "basic", current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
-    # Trigger manual_train.yml with tier input
-    requests.post(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", json={"ref": "main", "inputs": {"data_source": dataset_source, "project_id": str(project_id), "tier": tier}}, headers={"Authorization": f"token {tk}"}, timeout=10)
-    return {"status": "success"}
+    
+    payload = {"ref": "main", "inputs": {"data_source": dataset_source, "project_id": str(project_id), "tier": tier}}
+    print(f"[DEBUG] Triggering GitHub Training with payload: {payload}")
+    
+    # Trigger manual_train.yml
+    res = requests.post(
+        f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", 
+        json=payload, 
+        headers={"Authorization": f"token {tk}", "Accept": "application/vnd.github.v3+json"}, 
+        timeout=10
+    )
+    
+    if res.status_code != 204:
+        print(f"[ERROR] GitHub Dispatch Failed: {res.status_code} - {res.text}")
+        raise HTTPException(status_code=res.status_code, detail=f"GitHub Error: {res.text}")
+        
+    return {"status": "success", "message": "Pipeline triggered successfully"}
 
 @api_router.get("/airflow/runs")
 def airflow_runs(current_user: User = Depends(get_current_user)):
@@ -948,16 +975,15 @@ def github_runs(current_user: User = Depends(get_current_user)):
     except: return []
 
 @api_router.post("/analyze-csv")
-async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def analyze_csv(file: UploadFile = File(...), project_id: int = None, dataset_name: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     pid_to_save = project_id if project_id else 0
     if pid_to_save != 0: verify_project_access(pid_to_save, current_user, db)
     
-    print(f"[DEBUG] Starting CSV analysis. project_id={pid_to_save}, user={current_user.username}")
+    print(f"[DEBUG] Starting CSV analysis. project_id={pid_to_save}, user={current_user.username}, dataset_name={dataset_name}")
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     summary, results, log_entries = {"positive": 0, "negative": 0, "neutral": 0}, [], []
     
     col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
-    print(f"[DEBUG] CSV Columns: {df.columns.tolist()}. Using column: '{col}'")
     
     for i, row in df.head(150).iterrows():
         txt = str(row[col])
@@ -967,26 +993,29 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, db: 
             conf = res.get("confidence", 1.0)
             m_version = res.get("model_info", {}).get("version", "Batch AI")
         except Exception as e:
-            print(f"[DEBUG] Prediction error for row {i}: {e}")
             sent, conf, m_version = "neutral", 0.0, "Error"
             
         summary[sent] += 1
         row_ts = datetime.utcnow()
         
-        results.append({"id": i, "text": txt, "sentiment": sent, "time": row_ts.isoformat()})
-        log_entries.append({
+        entry = {
             "text": txt, "sentiment": sent, "confidence": conf, "project_id": pid_to_save, 
             "user": current_user.username, "timestamp": row_ts, 
             "model_version": m_version, "source": "csv_upload",
             "rating": row.get('rating') or row.get('score') or row.get('stars'),
             "app_version": row.get('version') or row.get('app_version')
-        })
+        }
+
+        if dataset_name:
+            entry["dataset_name"] = dataset_name
+            mongo_db["training_datasets"].insert_one(entry)
         
-    if log_entries:
+        log_entries.append(entry)
+        results.append({"id": i, "text": txt, "sentiment": sent, "time": row_ts.isoformat()})
+        
+    if not dataset_name and log_entries:
         preds_log_col.insert_many(log_entries)
         print(f"[DEBUG] Successfully inserted {len(log_entries)} CSV records into MongoDB")
-    else:
-        print("[DEBUG] WARNING: No log entries to insert")
         
     return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
 
