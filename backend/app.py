@@ -992,7 +992,9 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, data
     for i, row in df.head(150).iterrows():
         txt = str(row[col])
         try:
-            res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt, "project_id": str(pid_to_save)}, timeout=5).json()
+            # Dynamic Routing: Use the globally selected model
+            target_url = get_current_model_url(db)
+            res = requests.post(f"{target_url}/predict", params={"review": txt, "project_id": "default"}, timeout=5).json()
             sent = res.get("sentiment", "neutral")
             conf = res.get("confidence", 1.0)
             m_version = res.get("model_info", {}).get("version", "Batch AI")
