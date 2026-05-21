@@ -57,7 +57,7 @@ spec:
       volumes:
         - name: mongo-storage
           persistentVolumeClaim:
-            claimName: mongodb-pvc
+            claimName: mongo-pvc
 
 ---
 apiVersion: apps/v1
