@@ -254,8 +254,12 @@ def redis_worker():
                     if raw_ts and raw_ts.endswith('Z'): raw_ts = raw_ts.replace('Z', '+00:00')
                     msg_ts = datetime.fromisoformat(raw_ts) if raw_ts else datetime.utcnow()
                 except: msg_ts = datetime.utcnow()
+                # Dynamic Routing based on Global Config
+                target_url = get_current_model_url(db_session)
+                pid_param = str(pid) if pid != 0 else "default"
+                
                 try:
-                    res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt, "project_id": str(pid)}, timeout=10).json()
+                    res = requests.post(f"{target_url}/predict", params={"review": txt, "project_id": pid_param}, timeout=10).json()
                     sent = res.get("sentiment", "neutral")
                     conf = res.get("confidence", 1.0)
                     m_version = res.get("model_info", {}).get("version", "Unknown")
