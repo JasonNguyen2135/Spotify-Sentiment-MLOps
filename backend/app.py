@@ -1099,9 +1099,10 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
 
     # Fallback/Mock
     for i in range(5):
+        sents = ["positive", "negative", "neutral"]
         preds_log_col.insert_one({
             "text": f"Scraped review #{i} for {ds.app_id}",
-            "sentiment": "positive" if i % 2 == 0 else "negative",
+            "sentiment": sents[i % 3],
             "project_id": ds.project_id,
             "timestamp": datetime.utcnow(),
             "source": "crawler",
