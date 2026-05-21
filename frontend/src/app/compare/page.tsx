@@ -111,10 +111,10 @@ export default function ComparePage() {
   return (
     <div className="max-w-[1600px] mx-auto py-10 px-8 animate-in fade-in duration-700 pb-20">
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16 items-stretch">
         {/* LEFT COLUMN: Header & Input */}
-        <div className="space-y-10">
-          <div>
+        <div className="flex flex-col h-full">
+          <div className="mb-10">
             <div className="inline-flex items-center gap-3 bg-brand/10 text-brand px-5 py-1.5 rounded-full font-black text-[9px] uppercase tracking-widest mb-6">
               <Sparkles className="w-3.5 h-4 fill-brand" /> AI Neural Comparison
             </div>
@@ -124,32 +124,34 @@ export default function ComparePage() {
             <p className="text-slate-500 text-base font-medium italic">Enter feedback to see how all 5 model tiers interpret sentiment side-by-side.</p>
           </div>
 
-          <div className="bg-slate-900 p-10 rounded-[3.5rem] shadow-2xl shadow-slate-200 border border-white/5 relative overflow-hidden group">
+          <div className="bg-slate-900 p-10 rounded-[3.5rem] shadow-2xl shadow-slate-200 border border-white/5 relative overflow-hidden group flex-1 flex flex-col">
             <div className="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-brand opacity-10 blur-[100px] transition-all group-hover:opacity-20"></div>
-            <form onSubmit={handleCompare} className="relative z-10 space-y-6">
-              <div className="flex items-center gap-4 text-white mb-2">
+            <form onSubmit={handleCompare} className="relative z-10 flex flex-col h-full">
+              <div className="flex items-center gap-4 text-white mb-6">
                   <MessageSquare className="w-5 h-5 text-brand" />
                   <label className="text-lg font-black uppercase tracking-tight">Input Live Feedback</label>
               </div>
-              <div className="space-y-4">
-                  <textarea 
-                    value={compareText}
-                    onChange={(e) => setCompareText(e.target.value)}
-                    placeholder="Example: 'The Spotify update is amazing...'"
-                    className="w-full h-28 p-8 bg-white/5 border border-white/10 rounded-[2.5rem] outline-none focus:ring-4 focus:ring-brand/30 text-white text-lg font-medium transition-all placeholder:text-slate-600 resize-none"
-                  />
-                  <button 
-                    type="submit" 
-                    disabled={comparing || !compareText.trim()}
-                    className="w-full bg-brand text-slate-900 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] transition-all shadow-2xl shadow-brand/40 flex items-center justify-center gap-3 disabled:bg-slate-800 disabled:text-slate-500"
-                  >
-                    {comparing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5 fill-slate-900" />}
-                    {comparing ? 'Neural Processing...' : 'Run Benchmarking'}
-                  </button>
+              
+              <textarea 
+                value={compareText}
+                onChange={(e) => setCompareText(e.target.value)}
+                placeholder="Example: 'The Spotify update is amazing...'"
+                className="w-full flex-1 min-h-[150px] p-8 bg-white/5 border border-white/10 rounded-[2.5rem] outline-none focus:ring-4 focus:ring-brand/30 text-white text-lg font-medium transition-all placeholder:text-slate-600 resize-none mb-8"
+              />
+              
+              <div className="mt-auto space-y-4">
+                <button 
+                  type="submit" 
+                  disabled={comparing || !compareText.trim()}
+                  className="w-full bg-brand text-slate-900 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] transition-all shadow-2xl shadow-brand/40 flex items-center justify-center gap-3 disabled:bg-slate-800 disabled:text-slate-500"
+                >
+                  {comparing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5 fill-slate-900" />}
+                  {comparing ? 'Neural Processing...' : 'Run Benchmarking'}
+                </button>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest text-center">
+                    Broadcasts to 5 independent Kubernetes pods.
+                </p>
               </div>
-              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest text-center">
-                  Broadcasts to 5 independent Kubernetes pods.
-              </p>
             </form>
           </div>
         </div>
@@ -199,22 +201,17 @@ export default function ComparePage() {
       </div>
 
       {/* BOTTOM SECTION: Aggregation Results */}
-      {results ? (
-        <div className="animate-in slide-in-from-bottom duration-700">
-           <div className="flex items-center gap-4 mb-8">
-              <div className="bg-slate-900 p-2.5 rounded-xl text-brand shadow-lg"><Sparkles className="w-5 h-5" /></div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Aggregation Results</h2>
+      {results && (
+        <div className="animate-in slide-in-from-bottom duration-700 mb-20">
+           <div className="flex items-center gap-4 mb-10">
+              <div className="bg-slate-900 p-3 rounded-2xl text-brand shadow-lg"><Sparkles className="w-6 h-6 fill-brand" /></div>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Aggregation Results</h2>
            </div>
-           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
               {['basic', 'standard', 'pro', 'premium', 'vip'].map(tier => (
                 <TierResultCard key={tier} tier={tier} data={results[tier]} />
               ))}
            </div>
-        </div>
-      ) : (
-        <div className="py-24 flex flex-col items-center justify-center border-4 border-dashed border-slate-100 rounded-[4rem] animate-pulse">
-           <ArrowLeftRight className="w-16 h-16 text-slate-200 mb-6" />
-           <p className="text-xl font-black text-slate-300 uppercase tracking-widest">Waiting for Neural Input...</p>
         </div>
       )}
     </div>
