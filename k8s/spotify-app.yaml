@@ -220,7 +220,7 @@ spec:
             - name: MODEL_NAME
               value: "Sentiment_Basic_Model"
             - name: MODEL_TARGET
-              value: "2"
+              value: "Production"
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -546,7 +546,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: backend
-          image: registry.ntdevopsregistry.io.vn/mlops/backend:73ab557a00fb156538d7aecaccc76c62235626fa
+          image: registry.ntdevopsregistry.io.vn/mlops/backend:d0dc3a6ec356cf6a6fedc4b5d5233f2489a97271
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -621,7 +621,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: frontend
-          image: registry.ntdevopsregistry.io.vn/mlops/frontend:98934443b817fd81674c4700795598ac496c0e34
+          image: registry.ntdevopsregistry.io.vn/mlops/frontend:d0dc3a6ec356cf6a6fedc4b5d5233f2489a97271
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
