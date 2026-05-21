@@ -461,7 +461,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: backend
-          image: registry.ntdevopsregistry.io.vn/mlops/backend:a1a992ff8df48f77a31d579fe4525d4605477288
+          image: registry.ntdevopsregistry.io.vn/mlops/backend:f89c5d9a60d6ddd6d233ab4e3ce27ac21bd49086
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
