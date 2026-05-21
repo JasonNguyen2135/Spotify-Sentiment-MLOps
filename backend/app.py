@@ -257,6 +257,7 @@ def redis_worker():
                 # Dynamic Routing based on Global Config
                 target_url = get_current_model_url(db_session)
                 pid_param = str(pid) if pid != 0 else "default"
+                print(f"📡 [WORKER] Routing task to: {target_url} (Project: {pid})")
                 
                 try:
                     res = requests.post(f"{target_url}/predict", params={"review": txt, "project_id": pid_param}, timeout=10).json()
@@ -795,8 +796,13 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
 @api_router.post("/predict")
 async def predict(review_text: str, project_id: int, model_version: str = "Production", rating: int = None, app_version: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
+    # Dynamic Routing: Use the globally selected model
+    target_url = get_current_model_url(db)
+    pid_param = str(project_id) if project_id != 0 else "default"
+    print(f"🔀 [GATEWAY] Target URL: {target_url} (PID: {project_id})")
+    
     try:
-        res = requests.post(f"{MODEL_API_URL}/predict", params={"review": review_text, "project_id": str(project_id)}, timeout=10).json()
+        res = requests.post(f"{target_url}/predict", params={"review": review_text, "project_id": pid_param}, timeout=10).json()
         sent = res.get("sentiment", "neutral")
         conf = res.get("confidence", 1.0)
         actual_v = res.get("model_info", {}).get("version", model_version)
@@ -1075,7 +1081,8 @@ def sync_connector(connector_id: int, db: Session = Depends(get_db), current_use
                 
                 # Internal prediction bypass
                 try: 
-                    pred_res = requests.post(f"{MODEL_API_URL}/predict", params={"review": txt, "project_id": str(ds.project_id)}, headers={"Authorization": "Bearer SYSTEM_INTERNAL_SECRET"}, timeout=5).json()
+                    target_url = get_current_model_url(db)
+                    pred_res = requests.post(f"{target_url}/predict", params={"review": txt, "project_id": str(ds.project_id)}, headers={"Authorization": "Bearer SYSTEM_INTERNAL_SECRET"}, timeout=5).json()
                     sent = pred_res.get("sentiment", "neutral")
                     conf = pred_res.get("confidence", 1.0)
                     m_ver = pred_res.get("model_info", {}).get("version", "Production")
