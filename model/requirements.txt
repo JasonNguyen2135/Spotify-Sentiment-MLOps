@@ -33,3 +33,7 @@ pymongo
 lightgbm
 transformers
 torch
+psutil
+requests
+joblib
+numpy
