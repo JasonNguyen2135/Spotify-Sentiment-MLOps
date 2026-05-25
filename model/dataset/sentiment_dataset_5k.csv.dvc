@@ -1,0 +1,6 @@
+outs:
+- md5: d9638eee4fc301715f57b2e0cf7f1d3c
+  size: 747432
+  isexec: true
+  hash: md5
+  path: sentiment_dataset_5k.csv
