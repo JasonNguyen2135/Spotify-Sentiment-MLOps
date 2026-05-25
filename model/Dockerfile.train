@@ -1,15 +1,7 @@
-FROM python:3.10-slim
+FROM registry.ntdevopsregistry.io.vn/mlops/sentiment-base:latest
 
 WORKDIR /app
 
-# Cài đặt git và các thư viện hệ thống cần thiết cho LightGBM/Torch
-RUN apt-get update && apt-get install -y git libgomp1 && rm -rf /var/lib/apt/lists/*
-
-# Copy file requirements.txt từ thư mục model vào image
-COPY requirements.txt .
-
-# Cài đặt toàn bộ thư viện từ file requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-
-# CMD mặc định (Airflow sẽ override lệnh này nhưng ta cứ để lại cho chuẩn)
+# Vì thư viện đã có sẵn trong Base Image, ta chỉ cần copy code vào nếu cần
+# Hoặc giữ nguyên để Airflow tự clone code qua InitContainer
 CMD ["python", "train.py"]
