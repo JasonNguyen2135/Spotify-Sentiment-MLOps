@@ -117,6 +117,7 @@ with DAG(
         get_logs=True,
         in_cluster=True,
         is_delete_operator_pod=False,
-    )
+        )
+
 
     training_task
