@@ -188,9 +188,11 @@ def predict(review: str, project_id: str = "default"):
     
     try:
         # Predict class
+        t_start = time.time()
         prediction = model.predict([review])[0]
+        inference_duration_ms = (time.time() - t_start) * 1000
         sentiment = str(prediction)
-        
+
         # Calculate confidence if predict_proba is available
         confidence = 1.0
         try:
@@ -200,7 +202,7 @@ def predict(review: str, project_id: str = "default"):
         except: pass
 
         print(f"Kết quả dự đoán: {sentiment} ({confidence*100:.1f}%) (Model: {meta.get('model_name')})")
-        
+
         # Log into queue
         log_data = {
             "text": review,
@@ -211,14 +213,18 @@ def predict(review: str, project_id: str = "default"):
             "timestamp": time.time()
         }
         publish_to_queue(log_data)
-        
+
         return {
             "input": review, 
             "sentiment": sentiment, 
             "confidence": confidence,
             "project_id": project_id,
-            "model_info": meta
+            "model_info": {
+                **meta,
+                "inference_time_ms": round(inference_duration_ms, 2)
+            }
         }
+
     except Exception as e:
         print(f"Lỗi trong quá trình dự đoán: {e}")
         return {"error": str(e), "sentiment": "neutral", "confidence": 0.0}

@@ -30,3 +30,6 @@ pandas
 scikit-learn
 pika
 pymongo
+lightgbm
+transformers
+torch
