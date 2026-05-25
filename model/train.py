@@ -99,6 +99,17 @@ def get_and_prepare_data():
     df = df[df['clean_text'].str.len() > 2] # Remove empty strings after cleaning
     
     print(f"📊 Class Distribution: {df['sentiment'].value_counts().to_dict()}")
+    
+    # --- AUTO-SAMPLING FOR VIP TIER (CPU OPTIMIZATION) ---
+    if args.tier == "vip" and len(df) > 5000:
+        print(f"⚠️ VIP Tier detected with large dataset ({len(df)} rows).")
+        print(f"💡 Auto-sampling 5,000 high-quality rows to ensure CPU-stable training...")
+        # Stratified sampling to maintain class ratio
+        df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), 2000), random_state=42))
+        # Shuffle
+        df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+        print(f"✅ Sub-sampling complete. New Distribution: {df['sentiment'].value_counts().to_dict()}")
+
     return df
 
 # --- TRAINING LOGIC ---
