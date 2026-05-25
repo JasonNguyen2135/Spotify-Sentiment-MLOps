@@ -106,6 +106,8 @@ def train_and_deploy():
     y_train_num = np.array([label_map[label] for label in y_train])
     y_test_num = np.array([label_map[label] for label in y_test])
 
+    t_start = time.time() # Đặt ở đây để dùng chung cho cả VIP và Classic
+
     with mlflow.start_run():
         mlflow.log_param("dataset_size", len(df))
         
