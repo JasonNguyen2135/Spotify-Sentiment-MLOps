@@ -25,7 +25,8 @@ import lightgbm as lgb
 # PyTorch & HuggingFace
 import torch
 from torch.utils.data import DataLoader, TensorDataset, RandomSampler, SequentialSampler
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AdamW, get_linear_schedule_with_warmup
+from torch.optim import AdamW
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, get_linear_schedule_with_warmup
 
 # --- CONFIGURATION ---
 parser = argparse.ArgumentParser(description="Robust 5-Tier Sentiment Analysis Training")
