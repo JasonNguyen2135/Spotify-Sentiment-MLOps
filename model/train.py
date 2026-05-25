@@ -57,20 +57,34 @@ def get_and_prepare_data():
     client = MongoClient(MONGO_URL)
     db = client["sentiment_db"]
     
-    # 1. Fetch Data
-    if args.data_source.startswith("mongo_train:"):
+    # 1. Ưu tiên 1: Lấy từ URL nếu là link http (DagsHub/GitHub)
+    if args.data_source.startswith("http"):
+        print(f"🔗 Fetching data from URL: {args.data_source}")
+        try:
+            response = requests.get(args.data_source, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN), timeout=30)
+            df = pd.read_csv(io.StringIO(response.text))
+        except Exception as e:
+            print(f"⚠️ Failed to fetch from URL, falling back to MongoDB: {e}")
+            df = pd.DataFrame()
+
+    # 2. Ưu tiên 2: Lấy theo tên dataset trong MongoDB
+    elif args.data_source.startswith("mongo_train:"):
         ds_name = args.data_source.split(":")[1]
         print(f"📦 Fetching targeted dataset: {ds_name} from MongoDB")
         df = pd.DataFrame(list(db["training_datasets"].find({"dataset_name": ds_name})))
-    elif args.data_source == "mongodb":
+    
+    # 3. Ưu tiên 3: Quét sạch MongoDB (Logs + Feedback)
+    else:
         print(f"Fetching merged corpus from MongoDB")
         df_train = pd.DataFrame(list(db["training_datasets"].find({})))
         df_log = pd.DataFrame(list(db["predictions_log"].find({"sentiment_corrected": {"$exists": True}})))
         df = pd.concat([df_train, df_log], ignore_index=True)
-    else:
-        print(f"🔗 Fetching fallback data from DagsHub")
-        url = f"https://dagshub.com/{DAGSHUB_USERNAME}/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv"
-        response = requests.get(url, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
+    
+    # 4. Fallback cuối cùng nếu tất cả đều trống
+    if df.empty:
+        print("🚨 ALL SOURCES EMPTY. Using hardcoded fallback URL.")
+        fallback_url = "https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/sentiment_dataset_150k.csv"
+        response = requests.get(fallback_url, auth=(DAGSHUB_USERNAME, DAGSHUB_TOKEN))
         df = pd.read_csv(io.StringIO(response.text))
     
     if df.empty:
