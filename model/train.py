@@ -264,28 +264,31 @@ def train_and_deploy():
                 mlflow.log_metric(f"f1_{label}", metrics['f1-score'])
 
         # --- IN RA LOG BẢNG ĐẸP CHO LATEX ---
-        print("\n" + "="*80)
-        print(f"📊 FINAL SUMMARY REPORT FOR TIER: {args.tier.upper()}")
-        print("="*80)
-        
-        print("\n--- BẢNG 1: HIỆU NĂNG PHÂN LOẠI (Classification Metrics) ---")
-        print(f"{'Tầng (Tier)':<15} | {'Macro-F1':<10} | {'Accuracy':<10} | {'F1-Negative':<12} | {'F1-Neutral':<10}")
-        print("-" * 75)
-        print(f"{args.tier.upper():<15} | {f1:.4f}     | {acc:.4f}     | {f1_neg:.4f}       | {f1_neu:.4f}")
-        
-        print("\n--- BẢNG 2: CHI PHÍ HUẤN LUYỆN & TÀI NGUYÊN (MLOps Cost) ---")
-        print(f"{'Tầng (Tier)':<15} | {'Dataset Size':<12} | {'Train Time(s)':<14} | {'Peak RAM(MB)':<12} | {'Model Size(MB)':<12}")
-        print("-" * 80)
-        
-        # Lấy RAM thực tế hiện tại
-        import psutil
-        current_ram = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
-        t_time = train_duration if args.tier != "vip" else (time.time() - t_start)
-        m_size = model_size_mb if args.tier != "vip" else 260.5
-        d_size = len(df)
-        
-        print(f"{args.tier.upper():<15} | {d_size:<12} | {t_time:<14.2f} | {current_ram:<12.1f} | {m_size:<12.2f}")
-        print("="*80 + "\n")
+        try:
+            print("\n" + "="*80, flush=True)
+            print(f"📊 FINAL SUMMARY REPORT FOR TIER: {args.tier.upper()}", flush=True)
+            print("="*80, flush=True)
+            
+            print("\n--- BẢNG 1: HIỆU NĂNG PHÂN LOẠI (Classification Metrics) ---", flush=True)
+            print(f"{'Tầng (Tier)':<15} | {'Macro-F1':<10} | {'Accuracy':<10} | {'F1-Negative':<12} | {'F1-Neutral':<10}", flush=True)
+            print("-" * 75, flush=True)
+            print(f"{args.tier.upper():<15} | {f1:.4f}     | {acc:.4f}     | {f1_neg:.4f}       | {f1_neu:.4f}", flush=True)
+            
+            print("\n--- BẢNG 2: CHI PHÍ HUẤN LUYỆN & TÀI NGUYÊN (MLOps Cost) ---", flush=True)
+            print(f"{'Tầng (Tier)':<15} | {'Dataset Size':<12} | {'Train Time(s)':<14} | {'Peak RAM(MB)':<12} | {'Model Size(MB)':<12}", flush=True)
+            print("-" * 80, flush=True)
+            
+            # Lấy RAM thực tế hiện tại
+            import psutil
+            current_ram = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+            t_time = train_duration if args.tier != "vip" else (time.time() - t_start)
+            m_size = model_size_mb if args.tier != "vip" else 260.5
+            d_size = len(df)
+            
+            print(f"{args.tier.upper():<15} | {d_size:<12} | {t_time:<14.2f} | {current_ram:<12.1f} | {m_size:<12.2f}", flush=True)
+            print("="*80 + "\n", flush=True)
+        except Exception as log_err:
+            print(f"⚠️ Warning: Could not print summary tables: {log_err}", flush=True)
 
     # Transition to Staging via MLflow Client
     client = MlflowClient()
@@ -293,9 +296,10 @@ def train_and_deploy():
     if versions:
         latest = versions[0].version
         client.transition_model_version_stage(name=model_name, version=latest, stage="Staging")
-        print(f"🚀 SUCCESS: Model {model_name} v{latest} transitioned to STAGING.")
+        print(f"🚀 SUCCESS: Model {model_name} v{latest} transitioned to STAGING.", flush=True)
     
-    time.sleep(5)
+    print("\n🏁 Training process completed. Pod will stay alive for 1 hour to allow log extraction...", flush=True)
+    time.sleep(3600) # Sleep for 1 hour
 
 if __name__ == "__main__":
     try:
