@@ -6,7 +6,7 @@ on:
       data_source:
         description: 'Dataset CSV source URL (DagsHub) or local path'
         required: false
-        default: 'https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/spotify_db.raw_reviews.csv'
+        default: 'https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/sentiment_dataset_150k.csv'
       project_id:
         description: 'Project ID for model registration'
         required: false
