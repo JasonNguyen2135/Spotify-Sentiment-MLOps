@@ -225,19 +225,26 @@ def train_and_deploy():
         # ==========================================
         else:
             # --- PHÂN CẤP ĐẶC TRƯNG ĐỂ TẠO GAP ĐỘ CHÍNH XÁC ---
-            if args.tier in ["basic", "standard"]:
-                n_feat = 10000
-                print(f"📉 {args.tier.upper()} Tier: Using 10k features")
+            if args.tier == "basic":
+                n_feat = 1000
+                ngrams = (1, 1) # Chỉ học từ đơn, bóp nghẹt thông tin
+                print(f"📉 BASIC Tier: Severe bottleneck (1k features, unigrams only)")
+            elif args.tier == "standard":
+                n_feat = 5000
+                ngrams = (1, 2)
+                print(f"📉 STANDARD Tier: Moderate bottleneck (5k features)")
             elif args.tier == "pro":
-                n_feat = 30000
-                print(f"📈 PRO Tier: Using 30k features")
+                n_feat = 15000
+                ngrams = (1, 2)
+                print(f"📈 PRO Tier: Using 15k features")
             else: # Premium
                 n_feat = 50000
-                print(f"🚀 PREMIUM Tier: Using 50k features")
+                ngrams = (1, 2)
+                print(f"🚀 PREMIUM Tier: Using max 50k features")
 
             tfidf = TfidfVectorizer(
                 max_features=n_feat, 
-                ngram_range=(1, 2), 
+                ngram_range=ngrams, 
                 min_df=3, 
                 sublinear_tf=True
             )
