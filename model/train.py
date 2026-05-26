@@ -100,15 +100,20 @@ def get_and_prepare_data():
     
     print(f"📊 Class Distribution: {df['sentiment'].value_counts().to_dict()}")
     
-    # --- AUTO-SAMPLING FOR VIP TIER (CPU OPTIMIZATION) ---
-    if args.tier == "vip" and len(df) > 5000:
-        print(f"⚠️ VIP Tier detected with large dataset ({len(df)} rows).")
-        print(f"💡 Auto-sampling 5,000 high-quality rows to ensure CPU-stable training...")
+    # --- AUTO-SAMPLING FOR RESOURCE OPTIMIZATION ---
+    if args.tier == "vip":
+        LIMIT = 5000
+        print(f"💡 VIP Tier: Auto-sampling {LIMIT} rows for CPU stability...")
+    else:
+        LIMIT = 50000 # Giới hạn 50k để không bị OOM RAM
+        print(f"💡 Classic Tier: Auto-sampling {LIMIT} rows to prevent Pod OOM...")
+
+    if len(df) > LIMIT:
         # Stratified sampling to maintain class ratio
-        df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), 2000), random_state=42))
+        df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), LIMIT // 3), random_state=42))
         # Shuffle
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
-        print(f"✅ Sub-sampling complete. New Distribution: {df['sentiment'].value_counts().to_dict()}")
+        print(f"✅ Sub-sampling complete. New Size: {len(df)}")
 
     return df
 
