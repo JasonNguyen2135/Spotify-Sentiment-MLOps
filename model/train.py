@@ -102,8 +102,8 @@ def get_and_prepare_data():
     
     # --- AUTO-SAMPLING FOR RESOURCE OPTIMIZATION ---
     if args.tier == "vip":
-        LIMIT = 10000 # Tăng lên 10k để đạt độ chính xác cao hơn
-        print(f"💡 VIP Tier: Auto-sampling {LIMIT} rows for better convergence...")
+        LIMIT = 25000 # Nâng lên 25k theo yêu cầu để đạt độ chính xác tối ưu
+        print(f"💡 VIP Tier: Auto-sampling {LIMIT} rows for high-performance fine-tuning...")
     else:
         LIMIT = 50000
         print(f"💡 Classic Tier: Auto-sampling {LIMIT} rows to prevent Pod OOM...")
