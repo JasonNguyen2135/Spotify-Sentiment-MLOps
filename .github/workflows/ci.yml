@@ -20,7 +20,7 @@ jobs:
       model_service: ${{ steps.filter.outputs.model_service }}
       trainer_logic: ${{ steps.filter.outputs.trainer_logic }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v2
         id: filter
         with:
