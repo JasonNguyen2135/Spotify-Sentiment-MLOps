@@ -102,16 +102,15 @@ def get_and_prepare_data():
     
     # --- AUTO-SAMPLING FOR RESOURCE OPTIMIZATION ---
     if args.tier == "vip":
-        LIMIT = 5000
-        print(f"💡 VIP Tier: Auto-sampling {LIMIT} rows for CPU stability...")
+        LIMIT = 10000 # Tăng lên 10k để đạt độ chính xác cao hơn
+        print(f"💡 VIP Tier: Auto-sampling {LIMIT} rows for better convergence...")
     else:
-        LIMIT = 50000 # Giới hạn 50k để không bị OOM RAM
+        LIMIT = 50000
         print(f"💡 Classic Tier: Auto-sampling {LIMIT} rows to prevent Pod OOM...")
 
     if len(df) > LIMIT:
-        # Stratified sampling to maintain class ratio
+        # Stratified sampling
         df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), LIMIT // 3), random_state=42))
-        # Shuffle
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
         print(f"✅ Sub-sampling complete. New Size: {len(df)}")
 
