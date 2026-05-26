@@ -1,4 +1,3 @@
-# --- ROBUST 5-TIER TRAINING PIPELINE (v2.1 - Forced Rebuild) ---
 import os
 import re
 import pandas as pd
@@ -112,6 +111,7 @@ def get_and_prepare_data():
     if len(df) > LIMIT:
         # Stratified sampling
         df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), LIMIT // 3), random_state=42))
+        # Shuffle
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
         print(f"✅ Sub-sampling complete. New Size: {len(df)}")
 
@@ -224,42 +224,42 @@ def train_and_deploy():
         # TIERS 1-4: CLASSIC/SHALLOW ML (Scikit-Learn / LightGBM)
         # ==========================================
         else:
-            # Robust TF-IDF Vectorization
+            # --- PHÂN CẤP ĐẶC TRƯNG ĐỂ TẠO GAP ĐỘ CHÍNH XÁC ---
+            if args.tier in ["basic", "standard"]:
+                n_feat = 10000
+                print(f"📉 {args.tier.upper()} Tier: Using 10k features")
+            elif args.tier == "pro":
+                n_feat = 30000
+                print(f"📈 PRO Tier: Using 30k features")
+            else: # Premium
+                n_feat = 50000
+                print(f"🚀 PREMIUM Tier: Using 50k features")
+
             tfidf = TfidfVectorizer(
-                max_features=25000, 
+                max_features=n_feat, 
                 ngram_range=(1, 2), 
                 min_df=3, 
-                max_df=0.9, 
                 sublinear_tf=True
             )
             
             if args.tier == "basic":
-                print("⚡ Basic Tier: Complement Naive Bayes (Handling Imbalance)")
-                clf = ComplementNB(alpha=0.5)
+                clf = ComplementNB(alpha=1.0)
             elif args.tier == "standard":
-                print("⚖️ Standard Tier: Logistic Regression (LBFGS)")
-                clf = LogisticRegression(max_iter=2000, class_weight='balanced', solver='lbfgs', n_jobs=-1)
+                clf = LogisticRegression(max_iter=1000, class_weight='balanced')
             elif args.tier == "pro":
-                print("🌲 Pro Tier: LightGBM (Gradient Boosting on Trees)")
                 clf = lgb.LGBMClassifier(
-                    n_estimators=300, 
+                    n_estimators=500, 
                     learning_rate=0.05, 
-                    max_depth=8,
-                    class_weight='balanced', 
-                    n_jobs=-1,
-                    verbose=-1
+                    num_leaves=31, 
+                    class_weight='balanced',
+                    n_jobs=-1, verbose=-1
                 )
             elif args.tier == "premium":
-                print("🧠 Premium Tier: Multi-Layer Perceptron (Shallow Deep Learning)")
                 clf = MLPClassifier(
-                    hidden_layer_sizes=(128, 64), 
-                    activation='relu', 
-                    solver='adam', 
-                    alpha=0.001, 
-                    batch_size=256,
-                    learning_rate='adaptive', 
+                    hidden_layer_sizes=(256, 128, 64), 
                     max_iter=500,
-                    early_stopping=True
+                    alpha=0.0001,
+                    early_stopping=False
                 )
 
             # Build and Train Pipeline
@@ -269,8 +269,9 @@ def train_and_deploy():
             ])
             
             print("⏳ Fitting Pipeline...")
+            t_start_classic = time.time()
             pipeline.fit(X_train, y_train_num)
-            train_duration = time.time() - t_start
+            train_duration = time.time() - t_start_classic
             
             # Estimate Model Size
             import joblib
