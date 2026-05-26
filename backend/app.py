@@ -959,10 +959,11 @@ def train(dataset_source: str, project_id: int, tier: str = "basic", current_use
     payload = {"ref": "main", "inputs": {"data_source": dataset_source, "project_id": str(project_id), "tier": tier}}
     print(f"[DEBUG] Triggering GitHub Training with payload: {payload}")
     
-    # Trigger manual_train.yml
+    # Trigger manual_train_v2.yml
     res = requests.post(
-        f"https://api.github.com/repos/davidmoi2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", 
+        f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train_v2.yml/dispatches", 
         json=payload, 
+
         headers={"Authorization": f"token {tk}", "Accept": "application/vnd.github.v3+json"}, 
         timeout=10
     )
