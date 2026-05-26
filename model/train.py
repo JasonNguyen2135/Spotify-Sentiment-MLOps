@@ -136,7 +136,7 @@ def train_and_deploy():
     y_train_num = np.array([label_map[label] for label in y_train])
     y_test_num = np.array([label_map[label] for label in y_test])
 
-    t_start = time.time() # Đặt ở đây để dùng chung cho cả VIP và Classic
+    t_start = time.time()
 
     with mlflow.start_run():
         mlflow.log_param("dataset_size", len(df))
@@ -207,12 +207,9 @@ def train_and_deploy():
             preds_labels = np.concatenate(preds)
             acc = accuracy_score(y_test_num, preds_labels)
             f1 = f1_score(y_test_num, preds_labels, average='macro')
+            train_duration = time.time() - t_start
             
             # Log Model
-            components = {
-                "model": model,
-                "tokenizer": tokenizer
-            }
             mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
 
         # ==========================================
@@ -264,8 +261,7 @@ def train_and_deploy():
             ])
             
             print("⏳ Fitting Pipeline...")
-            t_start = time.time()
-            pipeline.fit(X_train, y_train)
+            pipeline.fit(X_train, y_train_num)
             train_duration = time.time() - t_start
             
             # Estimate Model Size
@@ -276,8 +272,8 @@ def train_and_deploy():
 
             # Evaluation
             preds_labels = pipeline.predict(X_test)
-            acc = accuracy_score(y_test, preds_labels)
-            f1 = f1_score(y_test, preds_labels, average='macro')
+            acc = accuracy_score(y_test_num, preds_labels)
+            f1 = f1_score(y_test_num, preds_labels, average='macro')
             
             # Log Model and Metrics
             mlflow.log_metric("training_time_sec", train_duration)
@@ -285,15 +281,15 @@ def train_and_deploy():
             mlflow.sklearn.log_model(sk_model=pipeline, artifact_path="model", registered_model_name=model_name)
 
         # --- FINAL METRICS & STAGING ---
-        report = classification_report(y_test if args.tier != "vip" else y_test_num, preds_labels, output_dict=True)
-        f1_neg = report.get('negative', {}).get('f1-score', 0) if args.tier != "vip" else report.get('0', {}).get('f1-score', 0)
-        f1_neu = report.get('neutral', {}).get('f1-score', 0) if args.tier != "vip" else report.get('1', {}).get('f1-score', 0)
-        f1_pos = report.get('positive', {}).get('f1-score', 0) if args.tier != "vip" else report.get('2', {}).get('f1-score', 0)
+        report = classification_report(y_test_num, preds_labels, output_dict=True)
+        f1_neg = report.get('0', {}).get('f1-score', 0)
+        f1_neu = report.get('1', {}).get('f1-score', 0)
+        f1_pos = report.get('2', {}).get('f1-score', 0)
         
         mlflow.log_metrics({"accuracy": acc, "f1_macro": f1})
         for label, metrics in report.items():
             if isinstance(metrics, dict):
-                mlflow.log_metric(f"f1_{label}", metrics['f1-score'])
+                mlflow.log_metric(f"f1_class_{label}", metrics['f1-score'])
 
         # --- IN RA LOG BẢNG ĐẸP CHO LATEX ---
         try:
@@ -313,11 +309,10 @@ def train_and_deploy():
             # Lấy RAM thực tế hiện tại
             import psutil
             current_ram = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
-            t_time = train_duration if args.tier != "vip" else (time.time() - t_start)
             m_size = model_size_mb if args.tier != "vip" else 260.5
             d_size = len(df)
             
-            print(f"{args.tier.upper():<15} | {d_size:<12} | {t_time:<14.2f} | {current_ram:<12.1f} | {m_size:<12.2f}", flush=True)
+            print(f"{args.tier.upper():<15} | {d_size:<12} | {train_duration:<14.2f} | {current_ram:<12.1f} | {m_size:<12.2f}", flush=True)
             print("="*80 + "\n", flush=True)
         except Exception as log_err:
             print(f"⚠️ Warning: Could not print summary tables: {log_err}", flush=True)
@@ -340,4 +335,3 @@ if __name__ == "__main__":
         print(f"❌ Pipeline failed with error: {e}")
         import sys
         sys.exit(1)
-
