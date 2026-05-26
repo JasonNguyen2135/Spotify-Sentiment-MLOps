@@ -1,0 +1,48 @@
+name: Manual Trigger Airflow Training
+
+on:
+  workflow_dispatch:
+    inputs:
+      data_source:
+        description: 'Dataset CSV source URL (DagsHub) or local path'
+        required: false
+        default: 'https://dagshub.com/davidmoi2135/Spotify-Sentiment-MLOps/raw/main/model/dataset/sentiment_dataset_150k.csv'
+      project_id:
+        description: 'Project ID for model registration'
+        required: false
+        default: 'default'
+      tier:
+        description: 'Model Tier (basic, standard, pro, premium, vip)'
+        required: false
+        default: 'basic'
+
+jobs:
+  trigger-airflow:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy DAG file to K8s
+        run: |
+          echo "Finding Scheduler and Dag-Processor pods..."
+          SCHEDULER_POD=$(kubectl get pods -n airflow -l component=scheduler -o jsonpath='{.items[0].metadata.name}')
+          PROCESSOR_POD=$(kubectl get pods -n airflow -l component=dag-processor -o jsonpath='{.items[0].metadata.name}')
+          
+          echo "Copying DAG file to Airflow..."
+          kubectl cp dags/spotify_training_dag.py airflow/$SCHEDULER_POD:/opt/airflow/dags/ -c scheduler
+          kubectl cp dags/spotify_training_dag.py airflow/$PROCESSOR_POD:/opt/airflow/dags/ -c dag-processor
+          sleep 5
+
+      - name: Execute Airflow Trigger
+        run: |
+          echo "Triggering training pipeline for Project: ${{ github.event.inputs.project_id }} with source: ${{ github.event.inputs.data_source }} and tier: ${{ github.event.inputs.tier }}"
+          kubectl exec -n airflow statefulset/airflow-scheduler -c scheduler -- airflow dags trigger spotify_sentiment_train_k8s_native -c "{\"data_source\": \"${{ github.event.inputs.data_source }}\", \"project_id\": \"${{ github.event.inputs.project_id }}\", \"tier\": \"${{ github.event.inputs.tier }}\"}"
+
+      - name: Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_MESSAGE: "Manual Training Trigger: ${{ job.status }}"
+          SLACK_TITLE: "Training Request Status"
