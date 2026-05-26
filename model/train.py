@@ -227,16 +227,16 @@ def train_and_deploy():
             # --- PHÂN CẤP ĐẶC TRƯNG ĐỂ TẠO GAP ĐỘ CHÍNH XÁC ---
             if args.tier == "basic":
                 n_feat = 1000
-                ngrams = (1, 1) # Chỉ học từ đơn, bóp nghẹt thông tin
-                print(f"📉 BASIC Tier: Severe bottleneck (1k features, unigrams only)")
+                ngrams = (1, 1) 
+                print(f"📉 BASIC Tier: Severe bottleneck (1k features, unigrams)")
             elif args.tier == "standard":
-                n_feat = 5000
-                ngrams = (1, 2)
-                print(f"📉 STANDARD Tier: Moderate bottleneck (5k features)")
+                n_feat = 2000 # Giảm từ 5000 xuống 2000
+                ngrams = (1, 1) # Ép dùng unigrams để giảm độ chính xác xuống ~88%
+                print(f"📉 STANDARD Tier: Moderate bottleneck (2k features, unigrams)")
             elif args.tier == "pro":
-                n_feat = 15000
+                n_feat = 10000 # Giảm xuống 10k để tạo gap với Premium
                 ngrams = (1, 2)
-                print(f"📈 PRO Tier: Using 15k features")
+                print(f"📈 PRO Tier: Using 10k features with bigrams")
             else: # Premium
                 n_feat = 50000
                 ngrams = (1, 2)
