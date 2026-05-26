@@ -930,7 +930,7 @@ def deploy_model(version: str, model_name: str, current_user: User = Depends(get
 def build_deploy(version: str, current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "ai_engineer"]: raise HTTPException(status_code=403)
     tk = os.getenv("GITHUB_TOKEN")
-    requests.post(f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_build_deploy_model_service.yml/dispatches", json={"ref": "main", "inputs": {"model_target": version}}, headers={"Authorization": f"token {tk}"}, timeout=10)
+    requests.post(f"https://api.github.com/repos/davidmoi2135/Spotify-Sentiment-MLOps/actions/workflows/manual_build_deploy_model_service.yml/dispatches", json={"ref": "main", "inputs": {"model_target": version}}, headers={"Authorization": f"token {tk}"}, timeout=10)
     return {"status": "success"}
 
 @api_router.get("/datasets")
@@ -961,7 +961,7 @@ def train(dataset_source: str, project_id: int, tier: str = "basic", current_use
     
     # Trigger manual_train.yml
     res = requests.post(
-        f"https://api.github.com/repos/JasonNguyen2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", 
+        f"https://api.github.com/repos/davidmoi2135/Spotify-Sentiment-MLOps/actions/workflows/manual_train.yml/dispatches", 
         json=payload, 
         headers={"Authorization": f"token {tk}", "Accept": "application/vnd.github.v3+json"}, 
         timeout=10
