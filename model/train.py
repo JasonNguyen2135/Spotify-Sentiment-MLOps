@@ -102,8 +102,8 @@ def get_and_prepare_data():
     
     # --- AUTO-SAMPLING FOR RESOURCE OPTIMIZATION ---
     if args.tier == "vip":
-        LIMIT = 25000 # Nâng lên 25k theo yêu cầu để đạt độ chính xác tối ưu
-        print(f"💡 VIP Tier: Auto-sampling {LIMIT} rows for high-performance fine-tuning...")
+        LIMIT = 50000 # Nâng lên 50k theo yêu cầu để đạt độ chính xác tối đa
+        print(f"💡 VIP Tier: Auto-sampling {LIMIT} rows for deep fine-tuning...")
     else:
         LIMIT = 50000
         print(f"💡 Classic Tier: Auto-sampling {LIMIT} rows to prevent Pod OOM...")
@@ -160,16 +160,24 @@ def train_and_deploy():
             train_loader = DataLoader(train_dataset, sampler=RandomSampler(train_dataset), batch_size=batch_size)
             test_loader = DataLoader(test_dataset, sampler=SequentialSampler(test_dataset), batch_size=batch_size)
 
-            # Model Definition (Freeze backbone for CPU efficiency)
+            # Model Definition (Unfreeze last 2 layers for deep learning)
             model = AutoModelForSequenceClassification.from_pretrained(model_ckpt, num_labels=3)
+            
+            # Freeze everything first
             for param in model.distilbert.parameters():
-                param.requires_grad = False # Freeze core
+                param.requires_grad = False
+            
+            # Unfreeze layer 4 and 5
+            for i in [4, 5]:
+                for param in model.distilbert.transformer.layer[i].parameters():
+                    param.requires_grad = True
             
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             model.to(device)
             
-            optimizer = AdamW(model.classifier.parameters(), lr=2e-4, eps=1e-8)
-            epochs = args.epochs
+            # Use a slightly lower learning rate for fine-tuning
+            optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=5e-5, eps=1e-8)
+            epochs = 5 # Nâng lên 5 epoch để hội tụ tốt hơn
             total_steps = len(train_loader) * epochs
             scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
 
