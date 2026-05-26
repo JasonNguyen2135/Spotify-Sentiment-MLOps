@@ -83,16 +83,16 @@ def get_and_prepare_data():
     
     print(f"📊 Original Distribution: {df['sentiment'].value_counts().to_dict()}")
     
-    # --- THIẾT LẬP GIỚI HẠN CỨNG ĐỂ TẠO GAP BÀI BÁO ---
-    if args.tier == "basic":
-        LIMIT = 500
-    elif args.tier == "standard":
-        LIMIT = 2000
-    else:
+    # --- THIẾT LẬP GIỚI HẠN CỨNG ĐỂ TẠO GAP BÀI BÁO (Smooth Escalation) ---
+    if args.tier in ["basic", "standard"]:
+        LIMIT = 10000 
+    elif args.tier == "pro":
+        LIMIT = 30000
+    else: # Premium, VIP
         LIMIT = 50000
 
     if len(df) > LIMIT:
-        print(f"⚠️ {args.tier.upper()} Tier: Force-reducing training size to {LIMIT} rows for academic hierarchy.")
+        print(f"⚠️ {args.tier.upper()} Tier: Using smooth-escalation limit ({LIMIT} rows).")
         # Lấy mẫu phân tầng chuẩn xác
         df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), LIMIT // 3), random_state=42))
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
