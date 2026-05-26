@@ -1,3 +1,4 @@
+# Finalized Trainer Image
 FROM registry.ntdevopsregistry.io.vn/mlops/sentiment-base:latest
 
 WORKDIR /app
