@@ -24,7 +24,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# ====== CONFIG ======
+# ====== CONFIG (Updated for JasonNguyen) ======
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@postgres:5432/mlops_auth")
 MYSQL_URL = os.getenv("MYSQL_URL", "mysql+pymysql://root:root123@mysql-hitl:3306/hitl_audit")
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongodb:27017")
