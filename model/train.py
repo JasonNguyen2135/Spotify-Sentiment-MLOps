@@ -72,8 +72,8 @@ def get_and_prepare_data():
     df['clean_text'] = df['text'].apply(clean_text)
     
     # --- PHÂN CẤP DỮ LIỆU ĐỂ ĐẠT MỤC TIÊU ACCURACY (80-83-87-90-90+) ---
-    if args.tier == "basic": LIMIT = 10000
-    elif args.tier == "standard": LIMIT = 15000
+    if args.tier == "basic": LIMIT = 3000 # Giảm từ 10k xuống 3k
+    elif args.tier == "standard": LIMIT = 7000 # Giảm từ 15k xuống 7k
     elif args.tier == "pro": LIMIT = 30000
     else: LIMIT = 50000
 
@@ -130,16 +130,20 @@ def train_and_deploy():
             mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
 
         else:
-            # --- PHÂN CẤP VỐN TỪ THEO MỤC TIÊU ---
-            if args.tier == "basic": n_feat = 2000
-            elif args.tier == "standard": n_feat = 5000
-            elif args.tier == "pro": n_feat = 10000
-            else: n_feat = 25000 # Premium
+            # --- THIẾT LẬP VỐN TỪ (FEATURES) KHẮC NGHIỆT CHO TẦNG THẤP ---
+            if args.tier == "basic": 
+                n_feat, ngrams = 500, (1, 1) # Chỉ 500 từ đơn
+            elif args.tier == "standard": 
+                n_feat, ngrams = 1000, (1, 1) # Chỉ 1000 từ đơn, KHÔNG BIGRAM
+            elif args.tier == "pro": 
+                n_feat, ngrams = 10000, (1, 2)
+            else: 
+                n_feat, ngrams = 25000 # Premium
             
-            tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=(1, 2) if args.tier != "basic" else (1,1))
+            tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=ngrams, sublinear_tf=True)
             
-            if args.tier == "basic": clf = ComplementNB(alpha=1.0)
-            elif args.tier == "standard": clf = LogisticRegression(C=0.5, max_iter=1000)
+            if args.tier == "basic": clf = ComplementNB(alpha=20.0) # Ngu hóa mạnh
+            elif args.tier == "standard": clf = LogisticRegression(C=0.01, max_iter=1000) # Ép Underfitting
             elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=300, class_weight='balanced', verbose=-1)
             else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
 
