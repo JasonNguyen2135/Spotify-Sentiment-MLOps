@@ -70,16 +70,18 @@ def get_and_prepare_data():
     df = df[df['sentiment'].isin(["positive", "negative", "neutral"])]
     df['clean_text'] = df['text'].apply(clean_text)
     
-    # --- THIẾT LẬP GIỚI HẠN DÒNG (ROWS) THEO YÊU CẦU ---
-    if args.tier in ["basic", "standard"]:
-        LIMIT = 15000
+    # --- THIẾT LẬP GIỚI HẠN DÒNG (ROWS) THEO YÊU CẦU (Bóp nghẹt Standard/Basic) ---
+    if args.tier == "basic":
+        LIMIT = 2000 # Chỉ 2k dòng
+    elif args.tier == "standard":
+        LIMIT = 5000 # Chỉ 5k dòng
     elif args.tier == "pro":
         LIMIT = 30000
     else: # Premium & VIP
         LIMIT = 50000
 
     if len(df) > LIMIT:
-        print(f"⚠️ {args.tier.upper()} Tier: Sampling {LIMIT} rows...")
+        print(f"⚠️ {args.tier.upper()} Tier: Force-reducing training size to {LIMIT} rows for academic hierarchy.")
         df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), LIMIT // 3), random_state=42))
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
     
@@ -109,7 +111,7 @@ def train_and_deploy():
             
             model = AutoModelForSequenceClassification.from_pretrained(model_ckpt, num_labels=3)
             for param in model.distilbert.parameters(): param.requires_grad = False
-            for i in [4, 5]: # Mở khóa 2 lớp cuối cho 50k dòng
+            for i in [4, 5]: 
                 for param in model.distilbert.transformer.layer[i].parameters(): param.requires_grad = True
             
             model.to("cpu")
@@ -128,15 +130,16 @@ def train_and_deploy():
             mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
 
         else:
-            # --- THIẾT LẬP VỐN TỪ (FEATURES) THEO YÊU CẦU ---
-            if args.tier in ["basic", "standard"]: n_feat = 7500
+            # --- THIẾT LẬP VỐN TỪ (FEATURES) KHẮC NGHIỆT CHO TẦNG THẤP ---
+            if args.tier == "basic": n_feat = 500
+            elif args.tier == "standard": n_feat = 1000
             elif args.tier == "pro": n_feat = 15000
-            elif args.tier == "premium": n_feat = 25000
+            else: n_feat = 50000 # Premium
             
             tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=(1, 2), sublinear_tf=True)
             
-            if args.tier == "basic": clf = ComplementNB(alpha=1.0)
-            elif args.tier == "standard": clf = LogisticRegression(max_iter=1000, class_weight='balanced')
+            if args.tier == "basic": clf = ComplementNB(alpha=10.0) # Ngu hóa bằng alpha cao
+            elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000) # Giảm C
             elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=500, class_weight='balanced', verbose=-1)
             else: clf = MLPClassifier(hidden_layer_sizes=(256, 128, 64), max_iter=500)
 
@@ -145,16 +148,27 @@ def train_and_deploy():
             preds_labels = pipeline.predict(X_test)
             mlflow.sklearn.log_model(pipeline, "model", registered_model_name=model_name)
 
-        # Metrics
+        # Metrics Calculation
         acc = accuracy_score(y_test_num, preds_labels)
-        f1 = f1_score(y_test_num, preds_labels, average='macro')
+        f1_macro = f1_score(y_test_num, preds_labels, average='macro')
         report = classification_report(y_test_num, preds_labels, output_dict=True)
         
-        # BẢNG TÓM TẮT CHO BÀI BÁO
-        print("\n" + "="*80, flush=True)
-        print(f"📊 SUMMARY FOR {args.tier.upper()}: Acc={acc:.4f} | F1={f1:.4f} | Time={time.time()-t_start:.1f}s", flush=True)
-        print(f"Details: Rows={len(df)} | Features={n_feat if args.tier != 'vip' else 'BERT'} | RAM={psutil.Process(os.getpid()).memory_info().rss/(1024*1024):.1f}MB", flush=True)
-        print("="*80 + "\n", flush=True)
+        f1_neg = report.get('0', {}).get('f1-score', 0)
+        f1_neu = report.get('1', {}).get('f1-score', 0)
+        f1_pos = report.get('2', {}).get('f1-score', 0)
+        
+        # --- FINAL SUMMARY LOG (Expanded) ---
+        print("\n" + "="*90, flush=True)
+        print(f"📊 FINAL SUMMARY REPORT FOR TIER: {args.tier.upper()}", flush=True)
+        print("-" * 90, flush=True)
+        print(f"OVERALL   | Accuracy: {acc:.4f} | Macro-F1: {f1_macro:.4f} | Train Time: {time.time()-t_start:.2f}s", flush=True)
+        print("-" * 90, flush=True)
+        print(f"PER-CLASS | F1-Negative: {f1_neg:.4f} | F1-Neutral: {f1_neu:.4f} | F1-Positive: {f1_pos:.4f}", flush=True)
+        print("-" * 90, flush=True)
+        print(f"RESOURCES | Rows: {len(df):<10} | Features: {n_feat if args.tier != 'vip' else 'BERT':<10} | RAM: {psutil.Process(os.getpid()).memory_info().rss/(1024*1024):.1f}MB", flush=True)
+        print("="*90 + "\n", flush=True)
+
+        mlflow.log_metrics({"accuracy": acc, "f1_macro": f1_macro, "f1_neg": f1_neg, "f1_neu": f1_neu, "f1_pos": f1_pos})
 
     client = MlflowClient()
     versions = client.get_latest_versions(model_name, stages=["None"])
