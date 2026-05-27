@@ -71,16 +71,15 @@ def get_and_prepare_data():
     df = df[df['sentiment'].isin(["positive", "negative", "neutral"])]
     df['clean_text'] = df['text'].apply(clean_text)
     
-    # --- PHÂN CẤP DỮ LIỆU ĐỂ ĐẠT MỤC TIÊU ACCURACY (80-83-87-90-90+) ---
+    # --- PHÂN CẤP DỮ LIỆU ---
     if args.tier == "basic": LIMIT = 5000
-    elif args.tier == "standard": LIMIT = 8000 
-    elif args.tier == "pro": LIMIT = 15000 
+    elif args.tier == "standard": LIMIT = 8000
+    elif args.tier == "pro": LIMIT = 15000
     elif args.tier == "premium": LIMIT = 40000 
-    else: LIMIT = 15000 # Giảm xuống 15k để đảm bảo không sập Pod 4GB
-
+    else: LIMIT = 5000 # VIP lùi về 5k để chạy nhanh và in log liên tục
 
     if len(df) > LIMIT:
-        print(f"⚠️ {args.tier.upper()} Tier: Sampling {LIMIT} rows for hierarchy control.")
+        print(f"⚠️ {args.tier.upper()} Tier: Sampling {LIMIT} rows...", flush=True)
         df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), LIMIT // 3), random_state=42))
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
     
@@ -101,7 +100,7 @@ def train_and_deploy():
     t_start = time.time()
     with mlflow.start_run():
         if args.tier == "vip":
-            # VIP: Transformer with unfreezing
+            print("💎 VIP Tier: Deep Fine-tuning with Step Logging...", flush=True)
             model_ckpt = "distilbert-base-uncased"
             tokenizer = AutoTokenizer.from_pretrained(model_ckpt)
             train_enc = tokenizer(list(X_train), truncation=True, padding=True, max_length=128, return_tensors="pt")
@@ -109,7 +108,8 @@ def train_and_deploy():
             train_dataset = TensorDataset(train_enc['input_ids'], train_enc['attention_mask'], torch.tensor(y_train_num))
             test_dataset = TensorDataset(test_enc['input_ids'], test_enc['attention_mask'], torch.tensor(y_test_num))
             train_loader = DataLoader(train_dataset, sampler=RandomSampler(train_dataset), batch_size=16)
-            
+            test_loader = DataLoader(test_dataset, sampler=SequentialSampler(test_dataset), batch_size=16)
+
             model = AutoModelForSequenceClassification.from_pretrained(model_ckpt, num_labels=3)
             for param in model.distilbert.parameters(): param.requires_grad = False
             for i in [4, 5]: 
@@ -117,33 +117,44 @@ def train_and_deploy():
             
             model.to("cpu")
             optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=5e-5)
-            for epoch in range(5):
-                model.train()
-                for b in train_loader:
-                    optimizer.zero_grad()
-                    loss = model(b[0], attention_mask=b[1], labels=b[2]).loss
-                    loss.backward(); optimizer.step()
-                print(f"Epoch {epoch+1} complete.")
+            epochs = 5
+            total_steps = len(train_loader) * epochs
             
-            model.eval(); 
+            print(f"🎬 Starting Training Loop ({total_steps} total steps)...", flush=True)
+            global_step = 0
+            for epoch in range(epochs):
+                model.train()
+                for step, b in enumerate(train_loader):
+                    global_step += 1
+                    optimizer.zero_grad()
+                    outputs = model(b[0], attention_mask=b[1], labels=b[2])
+                    loss = outputs.loss
+                    loss.backward(); optimizer.step()
+                    
+                    if global_step % 10 == 0:
+                        print(f"   🔹 Epoch {epoch+1}/{epochs} | Step {global_step}/{total_steps} | Loss: {loss.item():.4f}", flush=True)
+                        mlflow.log_metric("train_loss", loss.item(), step=global_step)
+            
+            model.eval(); preds = []
             with torch.no_grad():
-                logits = model(test_enc['input_ids'], attention_mask=test_enc['attention_mask']).logits
-                preds_labels = np.argmax(logits.numpy(), axis=1)
+                for b in test_loader:
+                    logits = model(b[0], attention_mask=b[1]).logits
+                    preds.append(np.argmax(logits.numpy(), axis=1))
+            preds_labels = np.concatenate(preds)
+            acc = accuracy_score(y_test_num, preds_labels)
+            f1 = f1_score(y_test_num, preds_labels, average='macro')
             mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
 
         else:
-            # --- THIẾT LẬP VỐN TỪ THEO MỤC TIÊU ---
-            if args.tier == "basic": n_feat, ngrams = 1500, (1, 1) # Giữ 1.5k từ
-            elif args.tier == "standard": n_feat, ngrams = 3800, (1, 1) # Lên 3.8k từ, unigrams
-            elif args.tier == "pro": n_feat, ngrams = 8000, (1, 2) # Giữ 8k từ, bigrams
-            elif args.tier == "premium": n_feat, ngrams = 20000, (1, 2)
-            else: n_feat, ngrams = 50000, (1, 2)
+            if args.tier == "basic": n_feat, ngrams = 1500, (1, 1)
+            elif args.tier == "standard": n_feat, ngrams = 3800, (1, 1) 
+            elif args.tier == "pro": n_feat, ngrams = 8000, (1, 2)
+            else: n_feat, ngrams = 20000, (1, 2)
             
             tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=ngrams, sublinear_tf=True)
-            
             if args.tier == "basic": clf = ComplementNB(alpha=10.0)
             elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000)
-            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=230, class_weight='balanced', verbose=-1) # Xuống 230 cây
+            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=230, class_weight='balanced', verbose=-1)
             else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
 
             pipeline = Pipeline([('tfidf', tfidf), ('clf', clf)])
@@ -151,16 +162,13 @@ def train_and_deploy():
             preds_labels = pipeline.predict(X_test)
             mlflow.sklearn.log_model(pipeline, "model", registered_model_name=model_name)
 
-        # Metrics Calculation
+        # Metrics
         acc = accuracy_score(y_test_num, preds_labels)
         f1_macro = f1_score(y_test_num, preds_labels, average='macro')
         report = classification_report(y_test_num, preds_labels, output_dict=True)
+        f1_neg, f1_neu, f1_pos = report.get('0', {}).get('f1-score', 0), report.get('1', {}).get('f1-score', 0), report.get('2', {}).get('f1-score', 0)
         
-        f1_neg = report.get('0', {}).get('f1-score', 0)
-        f1_neu = report.get('1', {}).get('f1-score', 0)
-        f1_pos = report.get('2', {}).get('f1-score', 0)
-        
-        # --- FINAL SUMMARY LOG ---
+        # FINAL LOG
         print("\n" + "="*90, flush=True)
         print(f"📊 FINAL SUMMARY REPORT FOR TIER: {args.tier.upper()}", flush=True)
         print("-" * 90, flush=True)
@@ -170,13 +178,12 @@ def train_and_deploy():
         print("-" * 90, flush=True)
         print(f"RESOURCES | Rows: {len(df):<10} | Features: {n_feat if args.tier != 'vip' else 'BERT':<10} | RAM: {psutil.Process(os.getpid()).memory_info().rss/(1024*1024):.1f}MB", flush=True)
         print("="*90 + "\n", flush=True)
-
         mlflow.log_metrics({"accuracy": acc, "f1_macro": f1_macro, "f1_neg": f1_neg, "f1_neu": f1_neu, "f1_pos": f1_pos})
 
     client = MlflowClient()
     versions = client.get_latest_versions(model_name, stages=["None"])
     if versions: client.transition_model_version_stage(name=model_name, version=versions[0].version, stage="Staging")
-    print("🏁 Completed. Sleeping for 1 hour...", flush=True)
+    print("🏁 Completed. Pod will sleep for 1 hour...", flush=True)
     time.sleep(3600)
 
 if __name__ == "__main__":
