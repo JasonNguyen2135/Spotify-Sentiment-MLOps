@@ -132,7 +132,7 @@ def train_and_deploy():
         else:
             # --- THIẾT LẬP VỐN TỪ (FEATURES) THEO YÊU CẦU ---
             if args.tier == "basic": n_feat, ngrams = 1000, (1, 1) # Chỉ 1k từ
-            elif args.tier == "standard": n_feat, ngrams = 4000, (1, 1) # 4k từ, unigrams
+            elif args.tier == "standard": n_feat, ngrams = 3500, (1, 1) # 3.5k từ, unigrams
             elif args.tier == "pro": n_feat, ngrams = 15000, (1, 2)
             else: n_feat, ngrams = 50000, (1, 2) # Premium
             
