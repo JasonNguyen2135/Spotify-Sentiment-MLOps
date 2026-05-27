@@ -88,7 +88,17 @@ def load_model_for_project(project_id: str, target: str = "Production"):
                     else:
                         continue
 
-                model = mlflow.sklearn.load_model(model_uri)
+                # --- DYNAMIC LOADER SELECTION ---
+                if "Vip" in model_name:
+                    print(f"💎 Loading Deep Learning model (PyTorch): {model_name}")
+                    loaded_model = mlflow.pytorch.load_model(model_uri)
+                    from transformers import AutoTokenizer
+                    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+                    model = {"type": "pytorch", "model": loaded_model, "tokenizer": tokenizer}
+                else:
+                    print(f"⚡ Loading Classic ML model (Sklearn): {model_name}")
+                    loaded_model = mlflow.sklearn.load_model(model_uri)
+                    model = {"type": "sklearn", "model": loaded_model}
                 
                 meta = {"version": "unknown", "accuracy": "N/A", "run_id": "none", "target": str(current_target), "model_name": model_name}
                 
@@ -189,17 +199,44 @@ def predict(review: str, project_id: str = "default"):
     try:
         # Predict class
         t_start = time.time()
-        prediction = model.predict([review])[0]
-        inference_duration_ms = (time.time() - t_start) * 1000
-        sentiment = str(prediction)
 
-        # Calculate confidence if predict_proba is available
-        confidence = 1.0
-        try:
-            if hasattr(model, "predict_proba"):
-                probs = model.predict_proba([review])[0]
-                confidence = float(max(probs))
-        except: pass
+        if model["type"] == "sklearn":
+            prediction = model["model"].predict([review])[0]
+            sentiment = str(prediction)
+
+            # Calculate confidence if predict_proba is available
+            confidence = 1.0
+            try:
+                if hasattr(model["model"], "predict_proba"):
+                    probs = model["model"].predict_proba([review])[0]
+                    confidence = float(max(probs))
+            except: pass
+
+        elif model["type"] == "pytorch":
+            import torch
+            import numpy as np
+
+            # Use cached model and tokenizer
+            pt_model = model["model"]
+            tokenizer = model["tokenizer"]
+
+            # Preprocess
+            inputs = tokenizer(review, return_tensors="pt", truncation=True, padding=True, max_length=128)
+
+            # Inference
+            pt_model.eval()
+            with torch.no_grad():
+                outputs = pt_model(**inputs)
+                logits = outputs.logits
+                probs = torch.nn.functional.softmax(logits, dim=1).numpy()[0]
+                pred_idx = np.argmax(probs)
+                confidence = float(probs[pred_idx])
+
+            # Map index back to label (0:neg, 1:neu, 2:pos)
+            label_map_rev = {0: "negative", 1: "neutral", 2: "positive"}
+            sentiment = label_map_rev.get(pred_idx, "neutral")
+
+        inference_duration_ms = (time.time() - t_start) * 1000
 
         print(f"Kết quả dự đoán: {sentiment} ({confidence*100:.1f}%) (Model: {meta.get('model_name')})")
 
