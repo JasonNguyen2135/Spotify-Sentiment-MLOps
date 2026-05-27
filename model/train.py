@@ -70,13 +70,13 @@ def get_and_prepare_data():
     df = df[df['sentiment'].isin(["positive", "negative", "neutral"])]
     df['clean_text'] = df['text'].apply(clean_text)
     
-    # --- THIẾT LẬP GIỚI HẠN DÒNG (ROWS) THEO YÊU CẦU (Bóp nghẹt Standard/Basic) ---
+    # --- THIẾT LẬP GIỚI HẠN DÒNG (ROWS) THEO YÊU CẦU (Bóp nghẹt Standard/Basic/Pro) ---
     if args.tier == "basic":
-        LIMIT = 2000 # Chỉ 2k dòng
+        LIMIT = 2000 
     elif args.tier == "standard":
-        LIMIT = 5000 # Chỉ 5k dòng
+        LIMIT = 5000 
     elif args.tier == "pro":
-        LIMIT = 30000
+        LIMIT = 10000 # Giảm từ 30k xuống 10k
     else: # Premium & VIP
         LIMIT = 50000
 
@@ -133,14 +133,14 @@ def train_and_deploy():
             # --- THIẾT LẬP VỐN TỪ (FEATURES) KHẮC NGHIỆT CHO TẦNG THẤP ---
             if args.tier == "basic": n_feat = 500
             elif args.tier == "standard": n_feat = 1000
-            elif args.tier == "pro": n_feat = 15000
+            elif args.tier == "pro": n_feat = 5000 # Giảm từ 15k xuống 5k
             else: n_feat = 50000 # Premium
             
             tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=(1, 2), sublinear_tf=True)
             
             if args.tier == "basic": clf = ComplementNB(alpha=10.0) # Ngu hóa bằng alpha cao
             elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000) # Giảm C
-            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=500, class_weight='balanced', verbose=-1)
+            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=100, class_weight='balanced', verbose=-1) # Giảm từ 500 xuống 100 cây
             else: clf = MLPClassifier(hidden_layer_sizes=(256, 128, 64), max_iter=500)
 
             pipeline = Pipeline([('tfidf', tfidf), ('clf', clf)])
