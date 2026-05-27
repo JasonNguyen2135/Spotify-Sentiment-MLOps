@@ -34,6 +34,7 @@ parser = argparse.ArgumentParser(description="Professional 5-Tier Sentiment Trai
 parser.add_argument("--tier", type=str, default=os.getenv("MODEL_TIER", "basic"), choices=["basic", "standard", "pro", "premium", "vip"])
 parser.add_argument("--project_id", type=str, default=os.getenv("PROJECT_ID", "default"))
 parser.add_argument("--data_source", type=str, default=os.getenv("DATA_SOURCE", "mongodb"))
+parser.add_argument("--epochs", type=int, default=3, help="Epochs for VIP tier")
 args = parser.parse_args()
 
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow.ntdevopsmlflow.io.vn")
@@ -70,18 +71,14 @@ def get_and_prepare_data():
     df = df[df['sentiment'].isin(["positive", "negative", "neutral"])]
     df['clean_text'] = df['text'].apply(clean_text)
     
-    # --- THIẾT LẬP GIỚI HẠN DÒNG (ROWS) THEO YÊU CẦU (Bóp nghẹt Standard/Basic/Pro) ---
-    if args.tier == "basic":
-        LIMIT = 2000 
-    elif args.tier == "standard":
-        LIMIT = 5000 
-    elif args.tier == "pro":
-        LIMIT = 10000 # Giảm từ 30k xuống 10k
-    else: # Premium & VIP
-        LIMIT = 50000
+    # --- PHÂN CẤP DỮ LIỆU ĐỂ ĐẠT MỤC TIÊU ACCURACY (80-83-87-90-90+) ---
+    if args.tier == "basic": LIMIT = 10000
+    elif args.tier == "standard": LIMIT = 15000
+    elif args.tier == "pro": LIMIT = 30000
+    else: LIMIT = 50000
 
     if len(df) > LIMIT:
-        print(f"⚠️ {args.tier.upper()} Tier: Force-reducing training size to {LIMIT} rows for academic hierarchy.")
+        print(f"⚠️ {args.tier.upper()} Tier: Sampling {LIMIT} rows for hierarchy control.")
         df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), LIMIT // 3), random_state=42))
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
     
@@ -107,7 +104,9 @@ def train_and_deploy():
             tokenizer = AutoTokenizer.from_pretrained(model_ckpt)
             train_enc = tokenizer(list(X_train), truncation=True, padding=True, max_length=128, return_tensors="pt")
             test_enc = tokenizer(list(X_test), truncation=True, padding=True, max_length=128, return_tensors="pt")
-            train_loader = DataLoader(TensorDataset(train_enc['input_ids'], train_enc['attention_mask'], torch.tensor(y_train_num)), batch_size=16, shuffle=True)
+            train_dataset = TensorDataset(train_enc['input_ids'], train_enc['attention_mask'], torch.tensor(y_train_num))
+            test_dataset = TensorDataset(test_enc['input_ids'], test_enc['attention_mask'], torch.tensor(y_test_num))
+            train_loader = DataLoader(train_dataset, sampler=RandomSampler(train_dataset), batch_size=16)
             
             model = AutoModelForSequenceClassification.from_pretrained(model_ckpt, num_labels=3)
             for param in model.distilbert.parameters(): param.requires_grad = False
@@ -122,6 +121,7 @@ def train_and_deploy():
                     optimizer.zero_grad()
                     loss = model(b[0], attention_mask=b[1], labels=b[2]).loss
                     loss.backward(); optimizer.step()
+                print(f"Epoch {epoch+1} complete.")
             
             model.eval(); 
             with torch.no_grad():
@@ -130,34 +130,33 @@ def train_and_deploy():
             mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
 
         else:
-            # --- THIẾT LẬP VỐN TỪ (FEATURES) KHẮC NGHIỆT CHO TẦNG THẤP ---
-            if args.tier == "basic": n_feat = 500
-            elif args.tier == "standard": n_feat = 1000
-            elif args.tier == "pro": n_feat = 5000 # Giảm từ 15k xuống 5k
-            else: n_feat = 50000 # Premium
+            # --- PHÂN CẤP VỐN TỪ THEO MỤC TIÊU ---
+            if args.tier == "basic": n_feat = 2000
+            elif args.tier == "standard": n_feat = 5000
+            elif args.tier == "pro": n_feat = 10000
+            else: n_feat = 25000 # Premium
             
-            tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=(1, 2), sublinear_tf=True)
+            tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=(1, 2) if args.tier != "basic" else (1,1))
             
-            if args.tier == "basic": clf = ComplementNB(alpha=10.0) # Ngu hóa bằng alpha cao
-            elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000) # Giảm C
-            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=100, class_weight='balanced', verbose=-1) # Giảm từ 500 xuống 100 cây
-            else: clf = MLPClassifier(hidden_layer_sizes=(256, 128, 64), max_iter=500)
+            if args.tier == "basic": clf = ComplementNB(alpha=1.0)
+            elif args.tier == "standard": clf = LogisticRegression(C=0.5, max_iter=1000)
+            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=300, class_weight='balanced', verbose=-1)
+            else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
 
             pipeline = Pipeline([('tfidf', tfidf), ('clf', clf)])
             pipeline.fit(X_train, y_train_num)
             preds_labels = pipeline.predict(X_test)
             mlflow.sklearn.log_model(pipeline, "model", registered_model_name=model_name)
 
-        # Metrics Calculation
+        # Metrics
         acc = accuracy_score(y_test_num, preds_labels)
         f1_macro = f1_score(y_test_num, preds_labels, average='macro')
         report = classification_report(y_test_num, preds_labels, output_dict=True)
-        
         f1_neg = report.get('0', {}).get('f1-score', 0)
         f1_neu = report.get('1', {}).get('f1-score', 0)
         f1_pos = report.get('2', {}).get('f1-score', 0)
         
-        # --- FINAL SUMMARY LOG (Expanded) ---
+        # FINAL LOG
         print("\n" + "="*90, flush=True)
         print(f"📊 FINAL SUMMARY REPORT FOR TIER: {args.tier.upper()}", flush=True)
         print("-" * 90, flush=True)
