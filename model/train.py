@@ -74,9 +74,10 @@ def get_and_prepare_data():
     # --- PHÂN CẤP DỮ LIỆU ĐỂ ĐẠT MỤC TIÊU ACCURACY (80-83-87-90-90+) ---
     if args.tier == "basic": LIMIT = 5000
     elif args.tier == "standard": LIMIT = 10000 
-    elif args.tier == "pro": LIMIT = 20000 
+    elif args.tier == "pro": LIMIT = 15000 
     elif args.tier == "premium": LIMIT = 40000 
-    else: LIMIT = 50000
+    else: LIMIT = 30000 # Giảm xuống 30k cho an toàn
+
 
     if len(df) > LIMIT:
         print(f"⚠️ {args.tier.upper()} Tier: Sampling {LIMIT} rows for hierarchy control.")
