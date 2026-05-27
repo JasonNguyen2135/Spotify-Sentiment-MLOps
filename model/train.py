@@ -71,14 +71,14 @@ def get_and_prepare_data():
     df = df[df['sentiment'].isin(["positive", "negative", "neutral"])]
     df['clean_text'] = df['text'].apply(clean_text)
     
-    # --- PHÂN CẤP DỮ LIỆU CỰC ĐOAN (Để ép đạt 80-83%) ---
-    if args.tier == "basic": LIMIT = 2000 # Rất ít dữ liệu
-    elif args.tier == "standard": LIMIT = 5000 # Ít dữ liệu
+    # --- THIẾT LẬP GIỚI HẠN DÒNG (ROWS) THEO YÊU CẦU ---
+    if args.tier == "basic": LIMIT = 5000
+    elif args.tier == "standard": LIMIT = 10000
     elif args.tier == "pro": LIMIT = 30000
     else: LIMIT = 50000
 
     if len(df) > LIMIT:
-        print(f"⚠️ {args.tier.upper()} Tier: Force-reducing training size to {LIMIT} rows for hierarchy control.")
+        print(f"⚠️ {args.tier.upper()} Tier: Sampling {LIMIT} rows for hierarchy control.")
         df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), LIMIT // 3), random_state=42))
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
     
@@ -130,16 +130,16 @@ def train_and_deploy():
             mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
 
         else:
-            # --- PHÂN CẤP VỐN TỪ CỰC ĐOAN (Bóp Accuracy xuống 80-83%) ---
-            if args.tier == "basic": n_feat, ngrams = 500, (1, 1) # Chỉ 500 từ
-            elif args.tier == "standard": n_feat, ngrams = 1000, (1, 1) # Chỉ 1000 từ
-            elif args.tier == "pro": n_feat, ngrams = 10000, (1, 2)
-            else: n_feat = 25000 # Premium
+            # --- THIẾT LẬP VỐN TỪ (FEATURES) THEO YÊU CẦU ---
+            if args.tier == "basic": n_feat, ngrams = 1000, (1, 1) # Chỉ 1k từ
+            elif args.tier == "standard": n_feat, ngrams = 4000, (1, 1) # 4k từ, unigrams
+            elif args.tier == "pro": n_feat, ngrams = 15000, (1, 2)
+            else: n_feat, ngrams = 50000, (1, 2) # Premium
             
             tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=ngrams, sublinear_tf=True)
             
-            if args.tier == "basic": clf = ComplementNB(alpha=50.0) # Ép "ngu hóa" cực mạnh
-            elif args.tier == "standard": clf = LogisticRegression(C=0.01, max_iter=1000) # Ép Underfitting mạnh
+            if args.tier == "basic": clf = ComplementNB(alpha=5.0)
+            elif args.tier == "standard": clf = LogisticRegression(C=0.5, max_iter=1000)
             elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=300, class_weight='balanced', verbose=-1)
             else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
 
@@ -152,11 +152,12 @@ def train_and_deploy():
         acc = accuracy_score(y_test_num, preds_labels)
         f1_macro = f1_score(y_test_num, preds_labels, average='macro')
         report = classification_report(y_test_num, preds_labels, output_dict=True)
+        
         f1_neg = report.get('0', {}).get('f1-score', 0)
         f1_neu = report.get('1', {}).get('f1-score', 0)
         f1_pos = report.get('2', {}).get('f1-score', 0)
         
-        # FINAL LOG
+        # --- FINAL SUMMARY LOG (Expanded) ---
         print("\n" + "="*90, flush=True)
         print(f"📊 FINAL SUMMARY REPORT FOR TIER: {args.tier.upper()}", flush=True)
         print("-" * 90, flush=True)
