@@ -148,7 +148,7 @@ def train_and_deploy():
             # --- THIẾT LẬP VỐN TỪ (FEATURES) THEO YÊU CẦU ---
             if args.tier == "basic": n_feat, ngrams = 1500, (1, 1)
             elif args.tier == "standard": n_feat, ngrams = 3900, (1, 2) # 3.9k từ
-            elif args.tier == "pro": n_feat, ngrams = 4000, (1, 2) # 4k từ
+            elif args.tier == "pro": n_feat, ngrams = 3700, (1, 2) # Giảm xuống 3.7k từ
 
             elif args.tier == "premium": n_feat, ngrams = 20000, (1, 2)
             else: n_feat, ngrams = 50000, (1, 2)
