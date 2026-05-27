@@ -147,8 +147,9 @@ def train_and_deploy():
         else:
             # --- THIẾT LẬP VỐN TỪ (FEATURES) THEO YÊU CẦU ---
             if args.tier == "basic": n_feat, ngrams = 1500, (1, 1)
-            elif args.tier == "standard": n_feat, ngrams = 3900, (1, 2) # Lên 3.9k từ và Bigram
-            elif args.tier == "pro": n_feat, ngrams = 4700, (1, 2) # 4.7k từ
+            elif args.tier == "standard": n_feat, ngrams = 3900, (1, 2) # 3.9k từ
+            elif args.tier == "pro": n_feat, ngrams = 4000, (1, 2) # 4k từ
+
             elif args.tier == "premium": n_feat, ngrams = 20000, (1, 2)
             else: n_feat, ngrams = 50000, (1, 2)
 
@@ -156,7 +157,7 @@ def train_and_deploy():
 
             if args.tier == "basic": clf = ComplementNB(alpha=10.0)
             elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000)
-            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=180, class_weight='balanced', verbose=-1) # Đặt đúng 180 cây
+            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=170, class_weight='balanced', verbose=-1) # Đặt đúng 170 cây
             else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
 
             pipeline = Pipeline([('tfidf', tfidf), ('clf', clf)])
@@ -190,3 +191,4 @@ def train_and_deploy():
 
 if __name__ == "__main__":
     train_and_deploy()
+
