@@ -114,10 +114,14 @@ with DAG(
             )
         ],
 
+        container_resources=k8s.V1ResourceRequirements(
+            requests={"cpu": "1000m", "memory": "2Gi"},
+            limits={"cpu": "2000m", "memory": "4Gi"}
+        ),
         get_logs=True,
         in_cluster=True,
         is_delete_operator_pod=False,
-        )
+    )
 
 
     training_task
