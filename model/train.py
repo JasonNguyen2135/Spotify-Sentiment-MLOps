@@ -71,10 +71,11 @@ def get_and_prepare_data():
     df = df[df['sentiment'].isin(["positive", "negative", "neutral"])]
     df['clean_text'] = df['text'].apply(clean_text)
     
-    # --- THIẾT LẬP GIỚI HẠN DÒNG (ROWS) THEO YÊU CẦU ---
+    # --- PHÂN CẤP DỮ LIỆU ĐỂ ĐẠT MỤC TIÊU ACCURACY (80-83-87-90-90+) ---
     if args.tier == "basic": LIMIT = 5000
-    elif args.tier == "standard": LIMIT = 10000
-    elif args.tier == "pro": LIMIT = 30000
+    elif args.tier == "standard": LIMIT = 8000 # Giảm xuống 8k
+    elif args.tier == "pro": LIMIT = 25000 # Giảm xuống 25k
+    elif args.tier == "premium": LIMIT = 40000 # Giảm xuống 40k
     else: LIMIT = 50000
 
     if len(df) > LIMIT:
@@ -130,11 +131,12 @@ def train_and_deploy():
             mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
 
         else:
-            # --- THIẾT LẬP VỐN TỪ (FEATURES) THEO YÊU CẦU ---
+            # --- PHÂN CẤP VỐN TỪ THEO MỤC TIÊU ---
             if args.tier == "basic": n_feat, ngrams = 1000, (1, 1) # Chỉ 1k từ
-            elif args.tier == "standard": n_feat, ngrams = 3500, (1, 1) # 3.5k từ, unigrams
-            elif args.tier == "pro": n_feat, ngrams = 15000, (1, 2)
-            else: n_feat, ngrams = 50000, (1, 2) # Premium
+            elif args.tier == "standard": n_feat, ngrams = 3200, (1, 1) # 3.2k từ
+            elif args.tier == "pro": n_feat, ngrams = 10000, (1, 2)
+            elif args.tier == "premium": n_feat, ngrams = 20000, (1, 2)
+            else: n_feat, ngrams = 50000, (1, 2)
             
             tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=ngrams, sublinear_tf=True)
             
