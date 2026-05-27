@@ -147,14 +147,15 @@ def train_and_deploy():
 
         else:
             if args.tier == "basic": n_feat, ngrams = 1500, (1, 1)
-            elif args.tier == "standard": n_feat, ngrams = 3800, (1, 2) # Nâng lên Bigram
-            elif args.tier == "pro": n_feat, ngrams = 5000, (1, 2) # Hạ xuống 5k từ
-            else: n_feat, ngrams = 20000, (1, 2)
-            
+            elif args.tier == "pro": n_feat, ngrams = 5000, (1, 2) # Giữ 5k từ
+            elif args.tier == "premium": n_feat, ngrams = 20000, (1, 2)
+            else: n_feat, ngrams = 50000, (1, 2)
+
             tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=ngrams, sublinear_tf=True)
+
             if args.tier == "basic": clf = ComplementNB(alpha=10.0)
             elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000)
-            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=80, class_weight='balanced', verbose=-1) # Hạ xuống 80 cây
+            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=180, class_weight='balanced', verbose=-1) # Chỉnh lên 180 cây
             else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
 
             pipeline = Pipeline([('tfidf', tfidf), ('clf', clf)])
