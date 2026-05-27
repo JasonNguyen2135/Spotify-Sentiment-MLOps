@@ -212,7 +212,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-service
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:679372f32a32a5cc306684a1d2ee30721bd3c221
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -281,7 +281,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-standard
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:679372f32a32a5cc306684a1d2ee30721bd3c221
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -347,7 +347,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-pro
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:679372f32a32a5cc306684a1d2ee30721bd3c221
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -413,7 +413,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-premium
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:679372f32a32a5cc306684a1d2ee30721bd3c221
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -479,7 +479,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-vip
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:679372f32a32a5cc306684a1d2ee30721bd3c221
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
