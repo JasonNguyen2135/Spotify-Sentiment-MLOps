@@ -157,7 +157,7 @@ def train_and_deploy():
 
             if args.tier == "basic": clf = ComplementNB(alpha=10.0)
             elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000)
-            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=120, class_weight='balanced', verbose=-1) # Đặt đúng 120 cây
+            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=75, class_weight='balanced', verbose=-1) # Đặt đúng 75 cây
             else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
 
             pipeline = Pipeline([('tfidf', tfidf), ('clf', clf)])
