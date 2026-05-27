@@ -71,10 +71,10 @@ def get_and_prepare_data():
     df = df[df['sentiment'].isin(["positive", "negative", "neutral"])]
     df['clean_text'] = df['text'].apply(clean_text)
     
-    # --- PHÂN CẤP DỮ LIỆU (Fine-tuning Accuracy Ladder) ---
+    # --- PHÂN CẤP DỮ LIỆU ĐỂ ĐẠT MỤC TIÊU ACCURACY (80-83-87-90-90+) ---
     if args.tier == "basic": LIMIT = 5000
-    elif args.tier == "standard": LIMIT = 8000
-    elif args.tier == "pro": LIMIT = 15000
+    elif args.tier == "standard": LIMIT = 10000 
+    elif args.tier == "pro": LIMIT = 20000 
     elif args.tier == "premium": LIMIT = 40000 
     else: LIMIT = 50000
 
@@ -105,7 +105,9 @@ def train_and_deploy():
             tokenizer = AutoTokenizer.from_pretrained(model_ckpt)
             train_enc = tokenizer(list(X_train), truncation=True, padding=True, max_length=128, return_tensors="pt")
             test_enc = tokenizer(list(X_test), truncation=True, padding=True, max_length=128, return_tensors="pt")
-            train_loader = DataLoader(TensorDataset(train_enc['input_ids'], train_enc['attention_mask'], torch.tensor(y_train_num)), batch_size=16, shuffle=True)
+            train_dataset = TensorDataset(train_enc['input_ids'], train_enc['attention_mask'], torch.tensor(y_train_num))
+            test_dataset = TensorDataset(test_enc['input_ids'], test_enc['attention_mask'], torch.tensor(y_test_num))
+            train_loader = DataLoader(train_dataset, sampler=RandomSampler(train_dataset), batch_size=16)
             
             model = AutoModelForSequenceClassification.from_pretrained(model_ckpt, num_labels=3)
             for param in model.distilbert.parameters(): param.requires_grad = False
@@ -129,18 +131,18 @@ def train_and_deploy():
             mlflow.pytorch.log_model(model, "model", registered_model_name=model_name)
 
         else:
-            # --- THIẾT LẬP VỐN TỪ (FEATURES) ĐỂ ĐẠT 80-83-88 ---
-            if args.tier == "basic": n_feat, ngrams = 1500, (1, 1) # Revert to 1.5k
-            elif args.tier == "standard": n_feat, ngrams = 3000, (1, 1) # Nâng nhẹ lên 3k từ
-            elif args.tier == "pro": n_feat, ngrams = 5000, (1, 2) # Buff features back to 5k + Bigrams
+            # --- THIẾT LẬP VỐN TỪ THEO MỤC TIÊU ---
+            if args.tier == "basic": n_feat, ngrams = 1500, (1, 1) # Giữ 1.5k từ
+            elif args.tier == "standard": n_feat, ngrams = 3800, (1, 1) # Lên 3.8k từ, unigrams
+            elif args.tier == "pro": n_feat, ngrams = 8000, (1, 2) # Giữ 8k từ, bigrams
             elif args.tier == "premium": n_feat, ngrams = 20000, (1, 2)
             else: n_feat, ngrams = 50000, (1, 2)
             
             tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=ngrams, sublinear_tf=True)
             
-            if args.tier == "basic": clf = ComplementNB(alpha=10.0) # Nerf alpha for 80%
-            elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000) # Slightly restrictive
-            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=300, class_weight='balanced', verbose=-1) # Buff to 300 trees
+            if args.tier == "basic": clf = ComplementNB(alpha=10.0)
+            elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000)
+            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=230, class_weight='balanced', verbose=-1) # Xuống 230 cây
             else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
 
             pipeline = Pipeline([('tfidf', tfidf), ('clf', clf)])
