@@ -132,17 +132,17 @@ def train_and_deploy():
 
         else:
             # --- PHÂN CẤP VỐN TỪ THEO MỤC TIÊU ---
-            if args.tier == "basic": n_feat, ngrams = 1000, (1, 1) # Chỉ 1k từ
-            elif args.tier == "standard": n_feat, ngrams = 3200, (1, 1) # 3.2k từ
-            elif args.tier == "pro": n_feat, ngrams = 10000, (1, 2)
+            if args.tier == "basic": n_feat, ngrams = 1200, (1, 1) # Nâng lên 1.2k từ theo yêu cầu
+            elif args.tier == "standard": n_feat, ngrams = 3200, (1, 1) 
+            elif args.tier == "pro": n_feat, ngrams = 7000, (1, 2) # Giảm xuống 7k từ
             elif args.tier == "premium": n_feat, ngrams = 20000, (1, 2)
             else: n_feat, ngrams = 50000, (1, 2)
-            
+
             tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=ngrams, sublinear_tf=True)
-            
+
             if args.tier == "basic": clf = ComplementNB(alpha=5.0)
             elif args.tier == "standard": clf = LogisticRegression(C=0.5, max_iter=1000)
-            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=300, class_weight='balanced', verbose=-1)
+            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=100, class_weight='balanced', verbose=-1) # Giảm xuống 100 cây
             else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
 
             pipeline = Pipeline([('tfidf', tfidf), ('clf', clf)])
