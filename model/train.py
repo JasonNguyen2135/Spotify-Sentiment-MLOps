@@ -131,7 +131,7 @@ def train_and_deploy():
         else:
             # --- THIẾT LẬP VỐN TỪ (FEATURES) ĐỂ ĐẠT 80-83-88 ---
             if args.tier == "basic": n_feat, ngrams = 1500, (1, 1) # Revert to 1.5k
-            elif args.tier == "standard": n_feat, ngrams = 2500, (1, 1) # Reduce slightly to hit 82-83
+            elif args.tier == "standard": n_feat, ngrams = 3000, (1, 1) # Nâng nhẹ lên 3k từ
             elif args.tier == "pro": n_feat, ngrams = 5000, (1, 2) # Buff features back to 5k + Bigrams
             elif args.tier == "premium": n_feat, ngrams = 20000, (1, 2)
             else: n_feat, ngrams = 50000, (1, 2)
