@@ -202,7 +202,10 @@ def predict(review: str, project_id: str = "default"):
 
         if model["type"] == "sklearn":
             prediction = model["model"].predict([review])[0]
-            sentiment = str(prediction)
+
+            # --- MAP NUMERIC BACK TO STRING ---
+            label_map_rev = {0: "negative", 1: "neutral", 2: "positive", "0": "negative", "1": "neutral", "2": "positive"}
+            sentiment = label_map_rev.get(prediction, str(prediction))
 
             # Calculate confidence if predict_proba is available
             confidence = 1.0
