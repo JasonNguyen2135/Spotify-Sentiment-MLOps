@@ -81,8 +81,11 @@ def get_and_prepare_data():
     if len(df) > LIMIT:
         print(f"⚠️ {args.tier.upper()} Tier: Sampling {LIMIT} rows...", flush=True)
         df = df.groupby('sentiment', group_keys=False).apply(lambda x: x.sample(min(len(x), LIMIT // 3), random_state=42))
-        df = df.sample(frac=1, random_state=42).reset_index(drop=True)
-    
+
+    # Shuffle ALWAYS, regardless of sampling, to prevent sequence bias (e.g. all Positives first)
+    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    print(f"✅ Data preparation complete. Final Size: {len(df)}", flush=True)
+
     return df
 
 def train_and_deploy():
