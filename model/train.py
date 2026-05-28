@@ -76,7 +76,7 @@ def get_and_prepare_data():
     if args.tier == "basic": LIMIT = 5000
     elif args.tier == "standard": LIMIT = 15000 
     elif args.tier == "pro": LIMIT = 15000 
-    elif args.tier == "premium": LIMIT = 40000 
+    elif args.tier == "premium": LIMIT = 25000 # Hạ xuống 25k cho ổn định RAM
     else: LIMIT = 5000 # VIP lùi về 5k cho nhanh và an toàn
 
     if len(df) > LIMIT:
