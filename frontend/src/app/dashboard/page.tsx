@@ -128,6 +128,7 @@ export default function Home() {
             <div className="flex gap-2">
               <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Positive</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div> Neutral</div>
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> Negative</div>
               </div>
             </div>
@@ -145,12 +146,17 @@ export default function Home() {
                     <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                   </linearGradient>
+                  <linearGradient id="colorNeu" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
                 <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}} />
                 <Area type="monotone" dataKey="positive" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorPos)" />
+                <Area type="monotone" dataKey="neutral" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorNeu)" />
                 <Area type="monotone" dataKey="negative" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorNeg)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -193,12 +199,12 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-12">
         {/* Rating Distribution */}
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Rating Distribution</h2>
-          <p className="text-sm text-slate-400 mb-8">Spread of star ratings (1-5)</p>
-          <div className="h-[250px] w-full">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <h2 className="text-lg font-bold text-slate-800 mb-2">Rating Distribution</h2>
+          <p className="text-xs text-slate-400 mb-6">Spread of star ratings (1-5)</p>
+          <div className="h-[200px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ratingDist}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -212,29 +218,27 @@ export default function Home() {
         </div>
 
         {/* Top Negative Issues */}
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Top Negative Issues</h2>
-          <p className="text-sm text-slate-400 mb-8">AI-identified common complaints</p>
-          <div className="h-[250px] w-full">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <h2 className="text-lg font-bold text-slate-800 mb-2">Top Negative Issues</h2>
+          <p className="text-xs text-slate-400 mb-6">AI-identified complaints</p>
+          <div className="h-[200px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart layout="vertical" data={topIssues} margin={{ left: 30 }}>
+              <BarChart layout="vertical" data={topIssues} margin={{ left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                 <XAxis type="number" hide />
-                <YAxis dataKey="word" type="category" axisLine={false} tickLine={false} tick={{fill: '#475569', fontSize: 11, fontWeight: 700}} />
+                <YAxis dataKey="word" type="category" axisLine={false} tickLine={false} tick={{fill: '#475569', fontSize: 10, fontWeight: 700}} width={60} />
                 <Tooltip />
                 <Bar dataKey="count" fill="#ef4444" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
         {/* Sentiment by Version */}
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Sentiment by Version</h2>
-          <p className="text-sm text-slate-400 mb-8">Positivity rate per app release</p>
-          <div className="h-[250px] w-full">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <h2 className="text-lg font-bold text-slate-800 mb-2">Sentiment by Version</h2>
+          <p className="text-xs text-slate-400 mb-6">Positivity rate per release</p>
+          <div className="h-[200px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={versionData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -248,16 +252,16 @@ export default function Home() {
         </div>
 
         {/* Engagement Heatmap */}
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Comment Heatmap</h2>
-          <p className="text-sm text-slate-400 mb-8">Activity density by day and hour</p>
-          <div className="h-[250px] w-full">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <h2 className="text-lg font-bold text-slate-800 mb-2">Comment Heatmap</h2>
+          <p className="text-xs text-slate-400 mb-6">Activity density by hour</p>
+          <div className="h-[200px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+              <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis type="number" dataKey="hour" name="Hour" unit="h" domain={[0, 23]} axisLine={false} tickLine={false} />
-                <YAxis type="number" dataKey="day" name="Day" domain={[0, 6]} ticks={[0, 1, 2, 3, 4, 5, 6]} tickFormatter={(val) => days[val]} axisLine={false} tickLine={false} />
-                <ZAxis type="number" dataKey="value" range={[50, 400]} name="Comments" />
+                <XAxis type="number" dataKey="hour" name="Hour" unit="h" domain={[0, 23]} axisLine={false} tickLine={false} tick={{fontSize: 10}} />
+                <YAxis type="number" dataKey="day" name="Day" domain={[0, 6]} ticks={[0, 1, 2, 3, 4, 5, 6]} tickFormatter={(val) => days[val]} axisLine={false} tickLine={false} tick={{fontSize: 10}} />
+                <ZAxis type="number" dataKey="value" range={[20, 200]} name="Comments" />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} />
                 <Scatter name="Activity" data={heatmapData} fill="#6366f1" />
               </ScatterChart>
