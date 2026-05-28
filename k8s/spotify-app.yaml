@@ -212,7 +212,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-service
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:047535a422a8c6541810df50ff45da5f9176cdcc
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -220,7 +220,7 @@ spec:
             - name: MODEL_NAME
               value: "Sentiment_Basic_Model"
             - name: MODEL_TARGET
-              value: "Production"
+              value: "34"
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -281,7 +281,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-standard
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:047535a422a8c6541810df50ff45da5f9176cdcc
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -347,7 +347,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-pro
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:047535a422a8c6541810df50ff45da5f9176cdcc
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -413,7 +413,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-premium
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:047535a422a8c6541810df50ff45da5f9176cdcc
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -479,7 +479,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-vip
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:67af44b8aedf0a54f6345983705f8fb46e961f5c
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:047535a422a8c6541810df50ff45da5f9176cdcc
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
