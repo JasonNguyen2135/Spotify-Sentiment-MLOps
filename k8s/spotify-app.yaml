@@ -570,16 +570,16 @@ spec:
                 secretKeyRef:
                   name: github-secret
                   key: GITHUB_TOKEN
-            - name: DAGSHUB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: dagshub-secret
-                  key: DAGSHUB_USERNAME
-            - name: DAGSHUB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: dagshub-secret
-                  key: DAGSHUB_PASSWORD
+           # - name: DAGSHUB_USERNAME
+           #   valueFrom:
+           #     secretKeyRef:
+           #       name: dagshub-secret
+           #       key: DAGSHUB_USERNAME
+           # - name: DAGSHUB_PASSWORD
+           #   valueFrom:
+           #     secretKeyRef:
+           #       name: dagshub-secret
+           #       key: DAGSHUB_PASSWORD
           resources:
             requests:
               cpu: 100m
@@ -621,7 +621,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: frontend
-          image: registry.ntdevopsregistry.io.vn/mlops/frontend:84665c95642b5ef71a85b6a25f4450cb8c1168dc
+          image: registry.ntdevopsregistry.io.vn/mlops/frontend:c0069ae47769f9c4f188b927793f97f9e8df9506
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
