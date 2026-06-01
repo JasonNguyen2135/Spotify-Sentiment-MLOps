@@ -621,7 +621,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: frontend
-          image: registry.ntdevopsregistry.io.vn/mlops/frontend:9bb4cd9afb6018e23b708897cab146d11b40ac46
+          image: registry.ntdevopsregistry.io.vn/mlops/frontend:84665c95642b5ef71a85b6a25f4450cb8c1168dc
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
