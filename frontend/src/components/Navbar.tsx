@@ -30,7 +30,7 @@ export default function Navbar() {
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2 cursor-pointer" onClick={handleSwitchProject}>
               <Activity className="text-brand w-8 h-8" />
-              <span className="font-bold text-xl tracking-tight text-gray-900">SentimentAI</span>
+              <span className="font-bold text-xl tracking-tight text-gray-900">SentimentAI Hub</span>
             </div>
             
             <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-100 rounded-2xl">
