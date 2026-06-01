@@ -570,16 +570,16 @@ spec:
                 secretKeyRef:
                   name: github-secret
                   key: GITHUB_TOKEN
-            - name: DAGSHUB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: dagshub-secret
-                  key: DAGSHUB_USERNAME
-            - name: DAGSHUB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: dagshub-secret
-                  key: DAGSHUB_PASSWORD
+           # - name: DAGSHUB_USERNAME
+           #   valueFrom:
+           #     secretKeyRef:
+           #       name: dagshub-secret
+           #       key: DAGSHUB_USERNAME
+           # - name: DAGSHUB_PASSWORD
+           #   valueFrom:
+           #     secretKeyRef:
+           #       name: dagshub-secret
+           #       key: DAGSHUB_PASSWORD
           resources:
             requests:
               cpu: 100m
