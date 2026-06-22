@@ -212,7 +212,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-service
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:d44346f22bf7cfe3a1977f75a846f46f893b0696
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:e125dc4d8c7c6721a7bfea0aec561e4aad3af821
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -281,7 +281,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-standard
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:d44346f22bf7cfe3a1977f75a846f46f893b0696
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:e125dc4d8c7c6721a7bfea0aec561e4aad3af821
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -347,7 +347,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-pro
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:d44346f22bf7cfe3a1977f75a846f46f893b0696
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:e125dc4d8c7c6721a7bfea0aec561e4aad3af821
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -413,7 +413,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-premium
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:d44346f22bf7cfe3a1977f75a846f46f893b0696
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:e125dc4d8c7c6721a7bfea0aec561e4aad3af821
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -479,7 +479,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-vip
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:d44346f22bf7cfe3a1977f75a846f46f893b0696
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:e125dc4d8c7c6721a7bfea0aec561e4aad3af821
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -524,6 +524,77 @@ spec:
     - port: 8000
       targetPort: 8000
 
+# --- DIFFICULTY ROUTER (Auto Apply) ---
+# Same model-service image, env-selected to serve the router model. Predicts the
+# cheapest START tier per comment; the gateway cascade still escalates by confidence.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-router
+  namespace: mlops-sentiment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-router
+  template:
+    metadata:
+      labels:
+        app: model-router
+    spec:
+      imagePullSecrets:
+        - name: harbor-secret
+      containers:
+        - name: model-router
+          image: registry.ntdevopsregistry.io.vn/mlops/model-service:e125dc4d8c7c6721a7bfea0aec561e4aad3af821
+          imagePullPolicy: Always
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
+            - name: MODEL_NAME
+              value: "Sentiment_Router_Model"
+            - name: MODEL_TARGET
+              value: "Production"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-creds
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-creds
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: aws-creds
+                  key: AWS_DEFAULT_REGION
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-router-service
+  namespace: mlops-sentiment
+spec:
+  selector:
+    app: model-router
+  ports:
+    - port: 8000
+      targetPort: 8000
+
 # ==========================================
 # 3. BACKEND
 # ==========================================
@@ -546,8 +617,8 @@ spec:
         - name: harbor-secret
       containers:
         - name: backend
-          image: registry.ntdevopsregistry.io.vn/mlops/backend:ae2c2e806e1f1ba7d0c2d6fe5d5ebad4c9afd7e0
-          imagePullPolicy: IfNotPresent
+          image: registry.ntdevopsregistry.io.vn/mlops/backend:e125dc4d8c7c6721a7bfea0aec561e4aad3af821
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
           env:
@@ -565,6 +636,15 @@ spec:
               value: "mysql+pymysql://root:root123@mysql-hitl:3306/hitl_audit"
             - name: JWT_SECRET
               value: "super-secret-key-change-me-in-production"
+            # Auto-Apply cascade escalation threshold (calibrated, unified tau=0.70).
+            - name: AUTO_TH_BASIC
+              value: "0.70"
+            - name: AUTO_TH_STANDARD
+              value: "0.70"
+            - name: AUTO_TH_PRO
+              value: "0.70"
+            - name: AUTO_TH_PREMIUM
+              value: "0.70"
             - name: GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -621,8 +701,8 @@ spec:
         - name: harbor-secret
       containers:
         - name: frontend
-          image: registry.ntdevopsregistry.io.vn/mlops/frontend:c0069ae47769f9c4f188b927793f97f9e8df9506
-          imagePullPolicy: IfNotPresent
+          image: registry.ntdevopsregistry.io.vn/mlops/frontend:e125dc4d8c7c6721a7bfea0aec561e4aad3af821
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
           env:
