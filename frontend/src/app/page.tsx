@@ -87,18 +87,22 @@ export default function UniversalHub() {
   const [selectedVersion, setSelectedVersion] = useState('Production');
   const [modelOptions, setModelOptions] = useState<any[]>([]);
 
-  // Real MLflow Metrics derived from state
+  // Real MLflow Metrics — follow the tier actually selected (Global Gateway tier,
+  // or the active workspace's tier), not the version dropdown. Accuracy is a
+  // per-model metric so it changes by TIER (Basic 80.9% -> VIP 91.5%), not per comment.
   const selectedModelMetrics = useMemo(() => {
-    const model = modelOptions.find(m => m.version === selectedVersion) || 
-                  modelOptions.find(m => m.current_stage === 'Production') || 
+    const tier = (activeProject?.model_key || globalModel || 'basic').toUpperCase();
+    const model = modelOptions.find(m => m.tier_label === tier) ||
+                  modelOptions.find(m => m.version === selectedVersion) ||
+                  modelOptions.find(m => m.current_stage === 'Production') ||
                   (modelOptions.length > 0 ? modelOptions[0] : null);
-    
+
     if (model?.metrics) return {
       acc: (model.metrics.accuracy * 100).toFixed(1) + '%',
       lat: model.metrics.latency + 'ms'
     };
     return { acc: '94.2%', lat: '42ms' }; // Fallback
-  }, [modelOptions, selectedVersion]);
+  }, [modelOptions, selectedVersion, globalModel, activeProject]);
 
   const fetchData = useCallback(async () => {
     try {
