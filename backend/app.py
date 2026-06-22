@@ -35,6 +35,42 @@ AIRFLOW_AUTH = os.getenv("AIRFLOW_AUTH", "admin:admin")
 SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-key")
 ALGORITHM = "HS256"
 
+# ====== TIERED SERVING / AUTO APPLY (difficulty router + confidence cascade) ======
+TIER_URLS = {
+    "basic": "http://model-service:8000",
+    "standard": "http://model-standard-service:8000",
+    "pro": "http://model-pro-service:8000",
+    "premium": "http://model-premium-service:8000",
+    "vip": "http://model-vip-service:8000",
+}
+TIER_LADDER = ["basic", "standard", "pro", "premium", "vip"]
+# Learned difficulty router (Pha 2): separate service that predicts the start tier.
+# Falls back to the length/negation heuristic when unreachable or disabled.
+ROUTER_URL = os.getenv("ROUTER_URL", "http://model-router-service:8000")
+USE_LEARNED_ROUTER = os.getenv("USE_LEARNED_ROUTER", "true").lower() == "true"
+# Auto Apply: escalate to a stronger tier when a tier's confidence (max
+# predict_proba) is below tau. Unified tau = 0.70, calibrated on a labelled
+# 2400-sample set (knee of the cost<->accuracy curve; FrugalGPT-style range
+# 0.5-0.8). VIP is the top of the ladder, so it never escalates.
+AUTO_CONF_THRESHOLD = {
+    "basic": float(os.getenv("AUTO_TH_BASIC", "0.70")),
+    "standard": float(os.getenv("AUTO_TH_STANDARD", "0.70")),
+    "pro": float(os.getenv("AUTO_TH_PRO", "0.70")),
+    "premium": float(os.getenv("AUTO_TH_PREMIUM", "0.70")),
+    "vip": 0.0,
+}
+# Skip-level escalation map: on low confidence a tier jumps straight to a strong
+# tier instead of crawling one step at a time. Premium is bypassed because it is
+# LESS accurate than Pro on this corpus (pro 0.982 > premium 0.960) -- escalating
+# into it would add cost without accuracy. Path: basic/standard -> pro -> vip.
+AUTO_ESCALATION_NEXT = {
+    "basic": "pro",
+    "standard": "pro",
+    "pro": "vip",
+    "premium": "vip",
+    "vip": None,
+}
+
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT_VAL", 6379))
 QUEUE_NAME = "sentiment_webhook_queue"
@@ -93,6 +129,8 @@ class Project(Base):
     slack_webhook = Column(String, nullable=True)
     support_email = Column(String, nullable=True)
     monitor_strategy = Column(String, nullable=True) # "crawler", "webhook"
+    apply_mode = Column(String, default="manual")    # per-workspace routing: manual | auto
+    model_key = Column(String, default="basic")      # per-workspace selected tier (manual mode)
 
 class AlertRule(Base):
     __tablename__ = "alert_rules"
@@ -131,6 +169,7 @@ class SystemConfig(Base):
     id = Column(Integer, primary_key=True)
     current_model_key = Column(String, default="basic") # basic, standard, pro, premium, vip
     model_url = Column(String, default="http://model-service:8000")
+    apply_mode = Column(String, default="manual") # manual | auto
 
 def migrate_db():
     db = SessionLocal()
@@ -155,9 +194,22 @@ def migrate_db():
             db.commit()
         except: db.rollback()
 
+        # Per-workspace model selection (manual/auto + tier)
+        for col, default in [("apply_mode", "manual"), ("model_key", "basic")]:
+            try:
+                db.execute(text(f"ALTER TABLE projects ADD COLUMN {col} VARCHAR DEFAULT '{default}'"))
+                db.commit()
+            except: db.rollback()
+
         # Create system_config table if not exists
         Base.metadata.create_all(bind=engine)
-        
+
+        # Add apply_mode column to existing system_config table (Auto Apply)
+        try:
+            db.execute(text("ALTER TABLE system_config ADD COLUMN apply_mode VARCHAR DEFAULT 'manual'"))
+            db.commit()
+        except: db.rollback()
+
         # Initialize default config
         cfg = db.query(SystemConfig).first()
         if not cfg:
@@ -256,17 +308,20 @@ def redis_worker():
             if msg:
                 _, data_json = msg; data = json.loads(data_json)
                 pid, txt = data["project_id"], data["text"]
-                # Dynamic Routing based on Global Config
-                target_url = get_current_model_url(db_session)
+                # Per-workspace routing: manual fixed tier or auto (router + cascade)
+                apply_mode, manual_url, manual_tier = resolve_project_routing(pid, db_session)
                 pid_param = str(pid) if pid != 0 else "default"
-                print(f"📡 [WORKER] Routing Task to Model Service: {target_url} (Project: {pid})")
-                
+                print(f"📡 [WORKER] mode={apply_mode} tier={manual_tier} (Project: {pid})")
+
                 try:
-                    res = requests.post(f"{target_url}/predict", params={"review": txt, "project_id": pid_param}, timeout=10).json()
+                    if apply_mode == "auto":
+                        res = auto_route_predict(txt, pid_param)
+                    else:
+                        res = requests.post(f"{manual_url}/predict", params={"review": txt, "project_id": pid_param}, timeout=10).json()
                     sent = res.get("sentiment", "neutral")
                     conf = res.get("confidence", 1.0)
                     m_version = res.get("model_info", {}).get("version", "Unknown")
-                except: 
+                except:
                     sent, conf, m_version = "neutral", 0.0, "Error"
                 
                 preds_log_col.insert_one({
@@ -308,12 +363,14 @@ def get_projects(db: Session = Depends(get_db), current_user: User = Depends(get
     else: 
         # Show projects owned by user OR projects with no owner (legacy)
         projects = db.query(Project).filter(or_(Project.owner_id == current_user.id, Project.owner_id == None)).all()
-    return [{"id": p.id, "uuid": p.uuid, "name": p.name, "description": p.description, "api_key": p.api_key, "monitor_strategy": p.monitor_strategy} for p in projects]
+    return [{"id": p.id, "uuid": p.uuid, "name": p.name, "description": p.description, "api_key": p.api_key, "monitor_strategy": p.monitor_strategy,
+             "apply_mode": getattr(p, "apply_mode", "manual") or "manual", "model_key": getattr(p, "model_key", "basic") or "basic"} for p in projects]
 
 @api_router.get("/projects/{project_id}")
 def get_project_details(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = verify_project_access(project_id, current_user, db)
-    return {"id": p.id, "uuid": p.uuid, "name": p.name, "api_key": p.api_key, "slack_webhook": p.slack_webhook, "support_email": p.support_email, "monitor_strategy": p.monitor_strategy}
+    return {"id": p.id, "uuid": p.uuid, "name": p.name, "api_key": p.api_key, "slack_webhook": p.slack_webhook, "support_email": p.support_email, "monitor_strategy": p.monitor_strategy,
+            "apply_mode": getattr(p, "apply_mode", "manual") or "manual", "model_key": getattr(p, "model_key", "basic") or "basic"}
 
 @api_router.post("/projects")
 def create_project(name: str, description: str = "", monitor_type: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -360,6 +417,25 @@ def reset_project_strategy(project_id: int, db: Session = Depends(get_db), curre
     p.monitor_strategy = None
     db.commit(); return {"status": "success"}
 
+@api_router.post("/projects/{project_id}/model-config")
+def update_project_model_config(project_id: int, apply_mode: str = None, model_key: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Per-workspace model routing: pick a fixed tier (manual) or enable the
+    difficulty router + confidence cascade (auto) for this project's traffic.
+    Picking a tier implies manual mode; switching apply_mode keeps the last tier."""
+    p = verify_project_access(project_id, current_user, db)
+    if apply_mode is not None:
+        if apply_mode not in ("manual", "auto"):
+            raise HTTPException(status_code=400, detail="Invalid apply_mode")
+        p.apply_mode = apply_mode
+    if model_key is not None:
+        if model_key not in TIER_URLS:
+            raise HTTPException(status_code=400, detail="Invalid model_key")
+        p.model_key = model_key
+        p.apply_mode = "manual"  # picking a tier implies manual mode
+    db.commit()
+    log_audit(db, current_user, "UPDATE_PROJECT_MODEL", f"project {project_id}: mode={p.apply_mode}, tier={p.model_key}", project_id=project_id)
+    return {"id": p.id, "apply_mode": p.apply_mode, "model_key": p.model_key}
+
 # --- System Config ---
 @api_router.get("/system/config")
 def get_sys_config(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -367,29 +443,119 @@ def get_sys_config(db: Session = Depends(get_db), current_user: User = Depends(g
     return db.query(SystemConfig).first()
 
 @api_router.post("/system/config")
-def update_sys_config(model_key: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_sys_config(model_key: str = None, apply_mode: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin": raise HTTPException(status_code=403)
     cfg = db.query(SystemConfig).first()
-    
-    mapping = {
-        "basic": "http://model-service:8000",
-        "standard": "http://model-standard-service:8000",
-        "pro": "http://model-pro-service:8000",
-        "premium": "http://model-premium-service:8000",
-        "vip": "http://model-vip-service:8000"
-    }
-    
-    if model_key not in mapping: raise HTTPException(status_code=400, detail="Invalid model key")
-    
-    cfg.current_model_key = model_key
-    cfg.model_url = mapping[model_key]
+
+    # Auto Apply toggle (difficulty router + cascade handles tier selection per comment)
+    if apply_mode is not None:
+        if apply_mode not in ("manual", "auto"): raise HTTPException(status_code=400, detail="Invalid apply_mode")
+        cfg.apply_mode = apply_mode
+        log_audit(db, current_user, "UPDATE_APPLY_MODE", f"Set apply mode to {apply_mode}")
+
+    # Manual tier selection (also forces manual mode)
+    if model_key is not None:
+        if model_key not in TIER_URLS: raise HTTPException(status_code=400, detail="Invalid model key")
+        cfg.current_model_key = model_key
+        cfg.model_url = TIER_URLS[model_key]
+        cfg.apply_mode = "manual"
+        log_audit(db, current_user, "UPDATE_GLOBAL_MODEL", f"Changed system model to {model_key}")
+
     db.commit()
-    log_audit(db, current_user, "UPDATE_GLOBAL_MODEL", f"Changed system model to {model_key}")
     return cfg
 
 def get_current_model_url(db: Session):
     cfg = db.query(SystemConfig).first()
     return cfg.model_url if cfg else MODEL_API_URL
+
+def resolve_project_routing(project_id, db: Session):
+    """Resolve the effective routing for a request. Per-workspace config takes
+    precedence: a project runs in manual mode (a fixed tier) or auto mode
+    (difficulty router + confidence cascade). The global SystemConfig is used for
+    the global hub (project_id 0) or a project with no explicit selection yet.
+    Returns (apply_mode, manual_url, manual_tier)."""
+    try:
+        pid_int = int(project_id)
+    except (TypeError, ValueError):
+        pid_int = 0
+    proj = db.query(Project).filter(Project.id == pid_int).first() if pid_int != 0 else None
+    cfg = db.query(SystemConfig).first()
+    if proj is not None and getattr(proj, "apply_mode", None):
+        apply_mode = proj.apply_mode
+        model_key = proj.model_key or (cfg.current_model_key if cfg else "basic")
+    else:
+        apply_mode = getattr(cfg, "apply_mode", "manual") if cfg else "manual"
+        model_key = cfg.current_model_key if cfg else "basic"
+    manual_url = TIER_URLS.get(model_key, MODEL_API_URL)
+    return apply_mode, manual_url, model_key
+
+# ---- Auto Apply: difficulty router + confidence-gated cascade ----
+def route_difficulty_heuristic(review_text: str) -> str:
+    """Fallback difficulty classifier (length + negation/contrast cues), used when
+    the learned router service is unreachable or disabled."""
+    t = (review_text or "").strip().lower()
+    n = len(t.split())
+    negation = any(k in f" {t} " for k in
+                   (" not ", "n't", " no ", " never ", " but ", " however", " although", " mixed"))
+    if n <= 6 and not negation:
+        return "basic"
+    if n <= 20 and not negation:
+        return "standard"
+    if negation or n <= 40:
+        return "pro"
+    return "premium"
+
+def route_difficulty(review_text: str) -> str:
+    """Pick the cheapest START tier for a comment. Prefers the learned router
+    service (Sentiment_Router_Model); falls back to the heuristic on any error."""
+    if USE_LEARNED_ROUTER:
+        try:
+            res = requests.post(f"{ROUTER_URL}/predict",
+                                params={"review": review_text, "project_id": "default"},
+                                timeout=5).json()
+            tier = res.get("tier")
+            if tier in TIER_LADDER:
+                return tier
+        except Exception as e:
+            print(f"⚠️ [ROUTER] learned router unreachable, using heuristic: {e}")
+    return route_difficulty_heuristic(review_text)
+
+def call_tier(tier: str, review_text: str, pid_param: str) -> dict:
+    url = TIER_URLS.get(tier, MODEL_API_URL)
+    return requests.post(f"{url}/predict",
+                         params={"review": review_text, "project_id": pid_param},
+                         timeout=10).json()
+
+def auto_route_predict(review_text: str, pid_param: str) -> dict:
+    """Route a comment: start at the router's pick, then on low confidence JUMP to a
+    strong tier via AUTO_ESCALATION_NEXT instead of crawling one step at a time.
+    Effective path is basic/standard --(conf<tau)--> pro --(conf<tau)--> vip; Premium
+    is skipped in the auto path because Pro is more accurate (see calib_results/)."""
+    start = route_difficulty(review_text)
+    path = []
+    result = {"sentiment": "neutral", "confidence": 0.0}
+    tier = start
+    seen = set()
+    while tier and tier not in seen:
+        seen.add(tier)
+        try:
+            res = call_tier(tier, review_text, pid_param)
+        except Exception as e:
+            res = {"sentiment": "neutral", "confidence": 0.0, "error": f"tier_unreachable: {e}"}
+        conf = res.get("confidence", 0.0) or 0.0
+        path.append({"tier": tier, "confidence": round(float(conf), 4)})
+        result = res
+        if conf >= AUTO_CONF_THRESHOLD.get(tier, 0.0):
+            break
+        tier = AUTO_ESCALATION_NEXT.get(tier)  # skip-level jump (None -> stop)
+    result = dict(result)
+    result["auto_routing"] = {
+        "router_start": start,
+        "final_tier": path[-1]["tier"] if path else start,
+        "escalations": max(0, len(path) - 1),
+        "path": path,
+    }
+    return result
 
 # --- Analytics ---
 @api_router.get("/stats")
@@ -798,24 +964,36 @@ def get_history(project_id: int = None, db: Session = Depends(get_db), current_u
 @api_router.post("/predict")
 async def predict(review_text: str, project_id: int, model_version: str = "Production", rating: int = None, app_version: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     verify_project_access(project_id, current_user, db)
-    # Dynamic Routing: Use the globally selected model
-    target_url = get_current_model_url(db)
+    apply_mode, manual_url, manual_tier = resolve_project_routing(project_id, db)
     pid_param = str(project_id) if project_id != 0 else "default"
-    print(f"🔀 [GATEWAY] Target URL: {target_url} (PID: {project_id})")
-    
-    try:
-        res = requests.post(f"{target_url}/predict", params={"review": review_text, "project_id": pid_param}, timeout=10).json()
+
+    routed_tier = None
+    if apply_mode == "auto":
+        # Auto: difficulty router picks a start tier, then escalate by confidence
+        print(f"🔀 [GATEWAY] AUTO apply (PID: {project_id})")
+        res = auto_route_predict(review_text, pid_param)
         sent = res.get("sentiment", "neutral")
-        conf = res.get("confidence", 1.0)
+        conf = res.get("confidence", 0.0)
         actual_v = res.get("model_info", {}).get("version", model_version)
-    except:
-        res = {"sentiment": "neutral"}
-        sent, conf, actual_v = "neutral", 0.0, "Error"
-        
+        routed_tier = res.get("auto_routing", {}).get("final_tier")
+    else:
+        # Manual: use the tier selected for this workspace (or the global default)
+        print(f"🔀 [GATEWAY] MANUAL tier={manual_tier} url={manual_url} (PID: {project_id})")
+        try:
+            res = requests.post(f"{manual_url}/predict", params={"review": review_text, "project_id": pid_param}, timeout=10).json()
+            sent = res.get("sentiment", "neutral")
+            conf = res.get("confidence", 1.0)
+            actual_v = res.get("model_info", {}).get("version", model_version)
+            routed_tier = manual_tier
+        except:
+            res = {"sentiment": "neutral"}
+            sent, conf, actual_v = "neutral", 0.0, "Error"
+
     preds_log_col.insert_one({
         "text": review_text, "sentiment": sent, "confidence": conf,
-        "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(), 
-        "model_version": actual_v, "source": "instant_analysis", 
+        "project_id": project_id, "user": current_user.username, "timestamp": datetime.utcnow(),
+        "model_version": actual_v, "source": "instant_analysis",
+        "apply_mode": apply_mode, "routed_tier": routed_tier,
         "rating": rating, "app_version": app_version
     })
     return res
@@ -992,35 +1170,60 @@ def github_runs(current_user: User = Depends(get_current_user)):
     except: return []
 
 @api_router.post("/analyze-csv")
-async def analyze_csv(file: UploadFile = File(...), project_id: int = None, dataset_name: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def analyze_csv(file: UploadFile = File(...), project_id: int = None, dataset_name: str = None, apply_mode: str = None, model_key: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     pid_to_save = project_id if project_id else 0
     if pid_to_save != 0: verify_project_access(pid_to_save, current_user, db)
-    
-    print(f"[DEBUG] Starting CSV analysis. project_id={pid_to_save}, user={current_user.username}, dataset_name={dataset_name}")
+
+    # Bulk Analysis has its own Manual/Auto selector (independent of the global
+    # gateway). Auto -> per-row difficulty router + confidence cascade; Manual ->
+    # one fixed tier (explicit model_key, else the global current model).
+    cfg = db.query(SystemConfig).first()
+    if apply_mode not in ("manual", "auto"):
+        apply_mode = getattr(cfg, "apply_mode", "manual") if cfg else "manual"
+    if model_key in TIER_URLS:
+        manual_url, manual_tier = TIER_URLS[model_key], model_key
+    else:
+        manual_url = get_current_model_url(db)
+        manual_tier = cfg.current_model_key if cfg else "basic"
+
+    print(f"[DEBUG] Starting CSV analysis. project_id={pid_to_save}, user={current_user.username}, dataset_name={dataset_name}, mode={apply_mode}, manual_tier={manual_tier}")
     content = await file.read(); df = pd.read_csv(io.BytesIO(content))
     summary, results, log_entries = {"positive": 0, "negative": 0, "neutral": 0}, [], []
-    
+    tier_distribution = {t: 0 for t in TIER_LADDER}  # how many rows each tier finally served
+    escalations_total = 0
+
     col = next((c for c in ["text", "review", "comment", "content"] if c in df.columns), df.columns[0])
-    
+
     for i, row in df.head(150).iterrows():
         txt = str(row[col])
+        escalated = 0
         try:
-            # Dynamic Routing: Use the globally selected model
-            target_url = get_current_model_url(db)
-            res = requests.post(f"{target_url}/predict", params={"review": txt, "project_id": "default"}, timeout=5).json()
+            if apply_mode == "auto":
+                # Per-row difficulty router + confidence-gated escalation
+                res = auto_route_predict(txt, "default")
+                ar = res.get("auto_routing", {})
+                routed_tier = ar.get("final_tier", manual_tier)
+                escalated = ar.get("escalations", 0)
+            else:
+                # Manual: every row uses the same selected tier
+                res = requests.post(f"{manual_url}/predict", params={"review": txt, "project_id": "default"}, timeout=5).json()
+                routed_tier = manual_tier
             sent = res.get("sentiment", "neutral")
             conf = res.get("confidence", 1.0)
             m_version = res.get("model_info", {}).get("version", "Batch AI")
         except Exception as e:
-            sent, conf, m_version = "neutral", 0.0, "Error"
-            
+            sent, conf, m_version, routed_tier = "neutral", 0.0, "Error", manual_tier
+
         summary[sent] += 1
+        if routed_tier in tier_distribution: tier_distribution[routed_tier] += 1
+        escalations_total += escalated
         row_ts = datetime.utcnow()
-        
+
         entry = {
-            "text": txt, "sentiment": sent, "confidence": conf, "project_id": pid_to_save, 
-            "user": current_user.username, "timestamp": row_ts, 
+            "text": txt, "sentiment": sent, "confidence": conf, "project_id": pid_to_save,
+            "user": current_user.username, "timestamp": row_ts,
             "model_version": m_version, "source": "csv_upload",
+            "apply_mode": apply_mode, "routed_tier": routed_tier, "escalations": escalated,
             "rating": row.get('rating') or row.get('score') or row.get('stars'),
             "app_version": row.get('version') or row.get('app_version')
         }
@@ -1028,15 +1231,22 @@ async def analyze_csv(file: UploadFile = File(...), project_id: int = None, data
         if dataset_name:
             entry["dataset_name"] = dataset_name
             mongo_db["training_datasets"].insert_one(entry)
-        
+
         log_entries.append(entry)
-        results.append({"id": i, "text": txt, "sentiment": sent, "time": row_ts.isoformat()})
-        
+        results.append({"id": i, "text": txt, "sentiment": sent, "tier": routed_tier, "escalations": escalated, "time": row_ts.isoformat()})
+
     if not dataset_name and log_entries:
         preds_log_col.insert_many(log_entries)
         print(f"[DEBUG] Successfully inserted {len(log_entries)} CSV records into MongoDB")
-        
-    return {"summary": summary, "results": results, "total": len(df), "status": "processed"}
+
+    processed = len(results)
+    return {
+        "summary": summary, "results": results, "total": len(df), "processed": processed, "status": "processed",
+        "apply_mode": apply_mode, "manual_tier": (None if apply_mode == "auto" else manual_tier),
+        "tier_distribution": tier_distribution,
+        "escalations_total": escalations_total,
+        "escalation_rate": round(escalations_total / processed, 4) if processed else 0,
+    }
 
 @api_router.post("/correction/submit-audit")
 def submit_audit_batch(dataset_name: str, project_id: int, prediction_ids: list[str], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

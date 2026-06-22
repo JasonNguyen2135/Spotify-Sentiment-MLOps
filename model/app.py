@@ -13,7 +13,9 @@ TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow.ntdevopsmlflow.io
 mlflow.set_tracking_uri(TRACKING_URI)
 # New: Environment variable to specify which model this pod serves (e.g., Sentiment_Vip_Model)
 POD_MODEL_NAME = os.getenv("MODEL_NAME")
-print(f"🚀 Model Service Startup. Target Pod Model: {POD_MODEL_NAME or 'Dynamic/Project-based'}")
+# Router pods serve the difficulty router (predicts a TIER, not a sentiment).
+IS_ROUTER = bool(POD_MODEL_NAME) and "Router" in POD_MODEL_NAME
+print(f"🚀 Model Service Startup. Target Pod Model: {POD_MODEL_NAME or 'Dynamic/Project-based'}{' [ROUTER]' if IS_ROUTER else ''}")
 
 # Verify Credentials Presence (Sanitized)
 print(f"🔐 AWS_ACCESS_KEY_ID present: {bool(os.getenv('AWS_ACCESS_KEY_ID'))}")
@@ -191,29 +193,67 @@ def predict(review: str, project_id: str = "default"):
         return {
             "error": "Model not initialized", 
             "project_id": project_id,
-            "sentiment": "neutral", 
+            "sentiment": "neutral",
             "confidence": 0.0,
             "fallback": True
         }
-    
+
+    # Router model: predict the cheapest START tier (not a sentiment label).
+    if IS_ROUTER:
+        try:
+            tier = str(model["model"].predict([review])[0])
+            conf = 1.0
+            if hasattr(model["model"], "predict_proba"):
+                conf = float(max(model["model"].predict_proba([review])[0]))
+            return {"input": review, "tier": tier, "confidence": conf,
+                    "model_info": {**meta, "router": True}}
+        except Exception as e:
+            print(f"Lỗi router: {e}")
+            return {"error": str(e), "tier": None}
+
     try:
         # Predict class
         t_start = time.time()
 
         if model["type"] == "sklearn":
-            prediction = model["model"].predict([review])[0]
-
             # --- MAP NUMERIC BACK TO STRING ---
             label_map_rev = {0: "negative", 1: "neutral", 2: "positive", "0": "negative", "1": "neutral", "2": "positive"}
-            sentiment = label_map_rev.get(prediction, str(prediction))
-
-            # Calculate confidence if predict_proba is available
-            confidence = 1.0
+            pipe = model["model"]
+            proba = None
+            classes = None
             try:
-                if hasattr(model["model"], "predict_proba"):
-                    probs = model["model"].predict_proba([review])[0]
-                    confidence = float(max(probs))
-            except: pass
+                # Fast path for LightGBM (Pro tier): the sklearn LGBMClassifier
+                # wrapper's predict/predict_proba is ~100 ms/row on this 60k-feature
+                # model (per-call feature-name validation), while the raw Booster is
+                # <1 ms. Transform features once, then predict via booster_. Other
+                # estimators use a single predict_proba call (avoids the old
+                # predict + predict_proba double inference).
+                steps = getattr(pipe, "steps", None)
+                clf = steps[-1][1] if steps else pipe
+                if steps and hasattr(clf, "booster_"):
+                    Xf = steps[0][1].transform([review])
+                    try:
+                        raw = clf.booster_.predict(Xf, num_threads=1)
+                    except TypeError:
+                        raw = clf.booster_.predict(Xf)
+                    proba = list(raw[0])
+                    classes = list(clf.classes_)
+                elif hasattr(pipe, "predict_proba"):
+                    proba = list(pipe.predict_proba([review])[0])
+                    classes = list(getattr(pipe, "classes_", [0, 1, 2]))
+            except Exception as e:
+                print(f"Fast predict path failed, falling back to predict(): {e}")
+                proba = None
+
+            if proba is not None:
+                best = max(range(len(proba)), key=lambda i: proba[i])
+                confidence = float(proba[best])
+                raw_label = classes[best] if classes else best
+                sentiment = label_map_rev.get(raw_label, str(raw_label))
+            else:
+                prediction = pipe.predict([review])[0]
+                sentiment = label_map_rev.get(prediction, str(prediction))
+                confidence = 1.0
 
         elif model["type"] == "pytorch":
             import torch

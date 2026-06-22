@@ -7,6 +7,10 @@ interface Project {
   name: string;
   description: string;
   api_key: string;
+  monitor_strategy?: string;
+  created_at?: string;
+  apply_mode?: string;
+  model_key?: string;
 }
 
 interface ProjectContextType {

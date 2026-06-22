@@ -74,7 +74,11 @@ export default function UniversalHub() {
 
   // Global Model State
   const [globalModel, setGlobalModel] = useState('basic');
+  const [applyMode, setApplyMode] = useState<'manual' | 'auto'>('manual');
   const [savingGlobalModel, setSavingGlobalModel] = useState(false);
+
+  // Per-workspace Model State
+  const [savingWsModel, setSavingWsModel] = useState(false);
 
   // Ad-hoc Analysis States
   const [review, setReview] = useState('');
@@ -119,6 +123,7 @@ export default function UniversalHub() {
       setAuditLogs(auditRes.data || []);
       setModelOptions(modelsRes.data || []);
       if (configRes.data?.current_model_key) setGlobalModel(configRes.data.current_model_key);
+      if (configRes.data?.apply_mode) setApplyMode(configRes.data.apply_mode);
 
       if (activeProject) {
         const [alertsRes, ticketsRes, detailsRes, issuesRes, posIssuesRes, versionRes, versionNegRes, heatmapRes, ratingRes] = await Promise.all([
@@ -216,16 +221,40 @@ export default function UniversalHub() {
     setSavingGlobalModel(true);
     try {
       const token = localStorage.getItem('token');
+      // Auto mode -> let the gateway route+escalate per comment; Manual -> pin one tier
+      const params = applyMode === 'auto' ? { apply_mode: 'auto' } : { model_key: globalModel };
       await axios.post('/api/system/config', null, {
-        params: { model_key: globalModel },
+        params,
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      alert(`Successfully routed all future predictions to ${globalModel.toUpperCase()} model.`);
+      alert(applyMode === 'auto'
+        ? 'Auto Apply enabled: each comment is routed to the cheapest capable tier, escalating to a stronger tier when confidence is low.'
+        : `Successfully routed all future predictions to ${globalModel.toUpperCase()} model.`);
       fetchData();
     } catch (err) {
       alert("Failed to apply global model. You might not have admin permission.");
     } finally {
       setSavingGlobalModel(false);
+    }
+  };
+
+  // Per-workspace model routing: set this project's apply_mode (manual/auto) or tier.
+  const saveWorkspaceModel = async (params: { apply_mode?: string; model_key?: string }) => {
+    if (!activeProject) return;
+    setSavingWsModel(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`/api/projects/${activeProject.id}/model-config`, null, {
+        params,
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const updated = { ...activeProject, apply_mode: res.data.apply_mode, model_key: res.data.model_key };
+      setActiveProject(updated);
+      setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, apply_mode: updated.apply_mode, model_key: updated.model_key } : p));
+    } catch (err) {
+      alert("Failed to update this workspace's model. You might not have access.");
+    } finally {
+      setSavingWsModel(false);
     }
   };
 
@@ -479,6 +508,18 @@ export default function UniversalHub() {
                       <div>
                         <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">AI Classification</p>
                         <p className="text-4xl font-black text-white uppercase tracking-tighter">{prediction.sentiment}</p>
+                        {prediction.auto_routing && (
+                          <div className="flex items-center gap-2 mt-3">
+                            <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-brand/15 text-brand flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" /> {prediction.auto_routing.final_tier}
+                            </span>
+                            {prediction.auto_routing.escalations > 0 && (
+                              <span className="text-[9px] font-bold text-slate-400">
+                                escalated {prediction.auto_routing.escalations}× from {prediction.auto_routing.router_start}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="p-6 bg-white/5 rounded-[2rem] border border-white/10 flex flex-col justify-center">
@@ -503,10 +544,14 @@ export default function UniversalHub() {
                 <div className="bg-slate-900 p-3 rounded-2xl text-brand shadow-lg shadow-brand/10"><Settings className="w-6 h-6" /></div>
                 <div>
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Global AI Gateway</h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Route all project predictions to a specific model tier</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                    {applyMode === 'auto'
+                      ? 'Auto routing: cheapest capable tier per comment, escalate on low confidence'
+                      : 'Route all project predictions to a specific model tier'}
+                  </p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={handleSaveGlobalModel}
                 disabled={savingGlobalModel}
                 className="bg-brand text-slate-900 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-brand/20 hover:scale-105 transition-all flex items-center gap-2"
@@ -515,8 +560,33 @@ export default function UniversalHub() {
                 Apply Globally
               </button>
             </div>
-            
-            <div className="grid grid-cols-5 gap-4">
+
+            {/* Mode toggle: Manual (pin one tier) vs Auto (router + confidence cascade) */}
+            <div className="flex items-center gap-3 mb-6">
+              <button
+                onClick={() => setApplyMode('manual')}
+                className={clsx(
+                  "flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-[11px] uppercase tracking-widest border-2 transition-all",
+                  applyMode === 'manual' ? "border-brand bg-brand/5 text-slate-900" : "border-slate-200 text-slate-400 hover:border-slate-300"
+                )}
+              >
+                <Settings className="w-3.5 h-3.5" /> Manual
+              </button>
+              <button
+                onClick={() => setApplyMode('auto')}
+                className={clsx(
+                  "flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-[11px] uppercase tracking-widest border-2 transition-all",
+                  applyMode === 'auto' ? "border-brand bg-brand/5 text-slate-900" : "border-slate-200 text-slate-400 hover:border-slate-300"
+                )}
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Auto Apply
+              </button>
+              {applyMode === 'auto' && (
+                <span className="text-[10px] font-bold text-slate-400 italic ml-1">Tier is chosen per comment — manual selection is disabled.</span>
+              )}
+            </div>
+
+            <div className={clsx("grid grid-cols-5 gap-4 transition-opacity", applyMode === 'auto' && "opacity-40 pointer-events-none")}>
               {[
                 { id: 'basic', name: 'Basic', desc: 'Logistic Regression. Extremely fast, low RAM.', color: 'border-slate-200 hover:border-slate-400' },
                 { id: 'standard', name: 'Standard', desc: 'LightGBM. Good balance of speed and accuracy.', color: 'border-blue-200 hover:border-blue-400' },
@@ -570,6 +640,35 @@ export default function UniversalHub() {
                <div className="bg-brand p-3 rounded-2xl text-white shadow-lg shadow-brand/20"><LayoutGrid className="w-7 h-7" /></div> Monitoring
             </h2>
             <div className="flex items-center gap-3 bg-white p-2 rounded-[1.5rem] border border-slate-100 shadow-sm">
+              {/* Per-workspace model routing: Manual (fixed tier) vs Auto (router + cascade) */}
+              <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100" title="Model routing for this workspace">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Model</span>
+                <button
+                  onClick={() => saveWorkspaceModel({ apply_mode: activeProject?.apply_mode === 'auto' ? 'manual' : 'auto' })}
+                  disabled={savingWsModel}
+                  className={clsx("px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all",
+                    activeProject?.apply_mode === 'auto' ? "bg-brand text-white shadow-sm" : "bg-white text-slate-600 border border-slate-200")}
+                >
+                  {activeProject?.apply_mode === 'auto'
+                    ? <><Sparkles className="w-3 h-3" /> Auto</>
+                    : <><Settings className="w-3 h-3" /> Manual</>}
+                </button>
+                {activeProject?.apply_mode !== 'auto' && (
+                  <select
+                    value={activeProject?.model_key || 'basic'}
+                    onChange={(e) => saveWorkspaceModel({ model_key: e.target.value })}
+                    disabled={savingWsModel}
+                    className="bg-white text-[10px] font-black uppercase px-2 py-1 rounded-lg border border-slate-200 outline-none cursor-pointer"
+                  >
+                    <option value="basic">Basic</option>
+                    <option value="standard">Standard</option>
+                    <option value="pro">Pro</option>
+                    <option value="premium">Premium</option>
+                    <option value="vip">VIP</option>
+                  </select>
+                )}
+                {savingWsModel && <Loader2 className="w-3 h-3 animate-spin text-brand" />}
+              </div>
               <Link href="/admin/connectors" className="bg-white px-6 py-2 rounded-xl border border-slate-200 font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:bg-slate-50 shadow-sm text-slate-600">
                 <RefreshCw className="w-4 h-4 text-brand" /> Change Strategy
               </Link>
