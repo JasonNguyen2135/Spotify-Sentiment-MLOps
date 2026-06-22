@@ -59,14 +59,14 @@ AUTO_CONF_THRESHOLD = {
     "premium": float(os.getenv("AUTO_TH_PREMIUM", "0.70")),
     "vip": 0.0,
 }
-# Skip-level escalation map: on low confidence a tier jumps straight to a strong
-# tier instead of crawling one step at a time. Premium is bypassed because it is
-# LESS accurate than Pro on this corpus (pro 0.982 > premium 0.960) -- escalating
-# into it would add cost without accuracy. Path: basic/standard -> pro -> vip.
+# Escalation map: on low confidence a tier jumps to a stronger tier. Full ladder
+# through Premium: Premium is the only tier that reliably detects positive
+# sentiment on the current corpus, so the auto path must reach it before VIP.
+# Path: basic/standard -> pro -> premium -> vip.
 AUTO_ESCALATION_NEXT = {
     "basic": "pro",
     "standard": "pro",
-    "pro": "vip",
+    "pro": "premium",
     "premium": "vip",
     "vip": None,
 }
