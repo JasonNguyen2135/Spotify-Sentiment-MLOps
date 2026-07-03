@@ -4,6 +4,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
+  namespace: mlops-sentiment
   name: mongo-pvc
 spec:
   accessModes:
@@ -15,6 +16,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
+  namespace: mlops-sentiment
   name: postgres-pvc
 spec:
   accessModes:
@@ -26,6 +28,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: mongodb
 spec:
   replicas: 1
@@ -63,6 +66,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: postgres
 spec:
   replicas: 1
@@ -106,6 +110,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: mongodb
 spec:
   selector:
@@ -117,6 +122,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: postgres
 spec:
   selector:
@@ -129,6 +135,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
+  namespace: mlops-sentiment
   name: mysql-hitle-pvc
 spec:
   accessModes:
@@ -140,6 +147,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: mysql-hitl
 spec:
   replicas: 1
@@ -179,6 +187,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: mysql-hitl
 spec:
   selector:
@@ -196,6 +205,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: model-service
   namespace: mlops-sentiment
 spec:
@@ -251,6 +261,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: model-service
   namespace: mlops-sentiment
 spec:
@@ -265,6 +276,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: model-standard
   namespace: mlops-sentiment
 spec:
@@ -317,6 +329,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: model-standard-service
   namespace: mlops-sentiment
 spec:
@@ -331,6 +344,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: model-pro
   namespace: mlops-sentiment
 spec:
@@ -383,6 +397,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: model-pro-service
   namespace: mlops-sentiment
 spec:
@@ -397,6 +412,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: model-premium
   namespace: mlops-sentiment
 spec:
@@ -449,6 +465,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: model-premium-service
   namespace: mlops-sentiment
 spec:
@@ -463,6 +480,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: model-vip
   namespace: mlops-sentiment
 spec:
@@ -515,6 +533,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: model-vip-service
   namespace: mlops-sentiment
 spec:
@@ -531,6 +550,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: model-router
   namespace: mlops-sentiment
 spec:
@@ -586,6 +606,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: model-router-service
   namespace: mlops-sentiment
 spec:
@@ -602,6 +623,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: backend
 spec:
   replicas: 1
@@ -671,6 +693,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: backend
 spec:
   selector:
@@ -686,6 +709,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: frontend
 spec:
   replicas: 1
@@ -719,6 +743,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: mlops-sentiment
   name: frontend
 spec:
   type: NodePort
@@ -735,6 +760,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: mlops-sentiment
   name: crawler
 spec:
   replicas: 1
