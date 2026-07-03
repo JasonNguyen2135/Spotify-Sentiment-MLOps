@@ -215,11 +215,14 @@ def train_and_deploy():
             elif args.tier == "pro": n_feat, ngrams = 4000, (1, 2)
             else: n_feat, ngrams = 20000, (1, 2)
 
+            # Hyperparameters selected by grid search on a validation split of
+            # the shared 15k subset, criterion = macro-F1
+            # (model/grid_search_paper.py -> calib_results/grid_search_results.csv)
             tfidf = TfidfVectorizer(max_features=n_feat, ngram_range=ngrams, sublinear_tf=True)
-            if args.tier == "basic": clf = ComplementNB(alpha=10.0)
-            elif args.tier == "standard": clf = LogisticRegression(C=0.1, max_iter=1000)
-            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=170, class_weight='balanced', verbose=-1)
-            else: clf = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500)
+            if args.tier == "basic": clf = ComplementNB(alpha=0.5)
+            elif args.tier == "standard": clf = LogisticRegression(C=10.0, max_iter=1000)
+            elif args.tier == "pro": clf = lgb.LGBMClassifier(n_estimators=100, num_leaves=63, class_weight='balanced', verbose=-1)
+            else: clf = MLPClassifier(hidden_layer_sizes=(256, 128), max_iter=500, random_state=42)
 
             pipeline = Pipeline([('tfidf', tfidf), ('clf', clf)])
             t_fit = time.time()

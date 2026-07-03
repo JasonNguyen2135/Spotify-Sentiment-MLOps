@@ -1,0 +1,19 @@
+tier,param,value,val_macro_f1,fit_seconds
+basic,alpha,0.1,0.8966,0.2
+basic,alpha,0.5,0.8966,0.2
+basic,alpha,1.0,0.894,0.2
+basic,alpha,5.0,0.8848,0.2
+basic,alpha,10.0,0.8725,0.2
+standard,C,0.01,0.7449,0.9
+standard,C,0.1,0.8436,2.4
+standard,C,1.0,0.9142,5.1
+standard,C,10.0,0.9207,7.2
+pro,n_estimators/num_leaves,100/31,0.8985,3.2
+pro,n_estimators/num_leaves,100/63,0.9004,4.9
+pro,n_estimators/num_leaves,170/31,0.8973,4.9
+pro,n_estimators/num_leaves,170/63,0.895,9.1
+pro,n_estimators/num_leaves,300/31,0.8973,8.1
+pro,n_estimators/num_leaves,300/63,0.8944,14.1
+premium,hidden_layer_sizes,"(64, 32)",0.891,55.7
+premium,hidden_layer_sizes,"(128, 64)",0.8903,82.6
+premium,hidden_layer_sizes,"(256, 128)",0.8913,222.6

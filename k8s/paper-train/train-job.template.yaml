@@ -26,12 +26,34 @@ spec:
         tier: __TIER__
     spec:
       restartPolicy: Never
+      affinity:
+        # never share a node with another paper-train pod (clean CPU/RAM
+        # measurements for Table 4), and stay off the control-plane node
+        # (argocd + mlflow live there)
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: paper-train
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
       initContainers:
         - name: repository-sync
           image: alpine/git:latest
           command: ["/bin/sh", "-c"]
           args:
-            - git clone --depth 1 https://github.com/Hiunehihi/MLOps_Deployment.git /opt/repo
+            - GIT_TERMINAL_PROMPT=0 git clone --depth 1 "https://oauth2:${GITHUB_TOKEN}@github.com/Hiunehihi/MLOps_Deployment.git" /opt/repo
+          env:
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: git-token
+                  key: GITHUB_TOKEN
           volumeMounts:
             - name: source-storage
               mountPath: /opt/repo
@@ -41,10 +63,15 @@ spec:
           args:
             - |
               set -e
-              pip install --no-cache-dir --target=/opt/deps \
+              python -m pip install --no-cache-dir -U pip
+              # everything except torch from PyPI, including torch's own runtime
+              # deps, so the CPU-only torch wheel can be installed with --no-deps
+              # (the pytorch index breaks old resolvers on typing-extensions)
+              python -m pip install --no-cache-dir --target=/opt/deps \
                 mlflow==2.22.4 pandas scikit-learn lightgbm pymongo \
-                psutil requests joblib numpy transformers==4.57.6
-              pip install --no-cache-dir --target=/opt/deps \
+                psutil requests joblib numpy transformers==4.57.6 \
+                typing-extensions sympy networkx jinja2 filelock fsspec setuptools
+              python -m pip install --no-cache-dir --target=/opt/deps --no-deps \
                 torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu
           volumeMounts:
             - name: deps
