@@ -1,0 +1,98 @@
+# Paper-experiment training Job (equal-sample-size retrain, frozen test set).
+# Render with: sed "s/__TIER__/vip/" train-job.template.yaml | kubectl apply -f -
+#
+# Designed for the AWS k3s cluster (no private registry): public images only.
+# - init 1 clones the public repo (main branch);
+# - init 2 pip-installs the exact Dockerfile.base environment into a shared
+#   volume, so the trainer container's cgroup memory.peak reflects TRAINING
+#   only (Table 4 RAM figure), not pip's page cache;
+# - trainer runs with 2 vCPU / 6Gi limits (agreed config for the paper rerun).
+# All 5 tiers share: 15,000-sample balanced subset + 15,003-sample frozen test.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: paper-train-__TIER__
+  namespace: mlops-sentiment
+  labels:
+    app: paper-train
+    tier: __TIER__
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 21600   # 6h hard stop (VIP safety)
+  template:
+    metadata:
+      labels:
+        app: paper-train
+        tier: __TIER__
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: repository-sync
+          image: alpine/git:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - git clone --depth 1 https://github.com/Hiunehihi/MLOps_Deployment.git /opt/repo
+          volumeMounts:
+            - name: source-storage
+              mountPath: /opt/repo
+        - name: deps-install
+          image: python:3.10
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              pip install --no-cache-dir --target=/opt/deps \
+                mlflow==2.22.4 pandas scikit-learn lightgbm pymongo \
+                psutil requests joblib numpy transformers==4.57.6
+              pip install --no-cache-dir --target=/opt/deps \
+                torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu
+          volumeMounts:
+            - name: deps
+              mountPath: /opt/deps
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+      containers:
+        - name: trainer
+          image: python:3.10
+          command: ["python", "/opt/repo/model/train.py"]
+          env:
+            - name: PYTHONPATH
+              value: "/opt/deps"
+            - name: HF_HOME
+              value: "/tmp/hf"
+            - name: TOKENIZERS_PARALLELISM
+              value: "false"
+            - name: MODEL_TIER
+              value: "__TIER__"
+            - name: SAMPLE_LIMIT
+              value: "15000"
+            - name: DATA_SOURCE
+              value: "/opt/repo/model/dataset/paper_splits/train_15k.csv"
+            - name: TEST_SOURCE
+              value: "/opt/repo/model/dataset/paper_splits/test_15003.csv"
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow.mlops-sentiment.svc.cluster.local:5000"
+            - name: MONGO_URL
+              value: "mongodb://mongodb.mlops-sentiment.svc.cluster.local:27017"
+          volumeMounts:
+            - name: source-storage
+              mountPath: /opt/repo
+            - name: deps
+              mountPath: /opt/deps
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "6Gi"
+      volumes:
+        - name: source-storage
+          emptyDir: {}
+        - name: deps
+          emptyDir: {}
