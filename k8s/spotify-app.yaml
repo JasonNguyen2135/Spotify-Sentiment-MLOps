@@ -226,7 +226,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://mlflow.ntdevopsmlflow.io.vn"
+              value: "http://18.139.231.37:30050/"
             - name: MODEL_NAME
               value: "Sentiment_Basic_Model"
             - name: MODEL_TARGET
@@ -297,7 +297,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://mlflow.ntdevopsmlflow.io.vn"
+              value: "http://18.139.231.37:30050/"
             - name: MODEL_NAME
               value: "Sentiment_Standard_Model"
             - name: MODEL_TARGET
@@ -365,7 +365,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://mlflow.ntdevopsmlflow.io.vn"
+              value: "http://18.139.231.37:30050/"
             - name: MODEL_NAME
               value: "Sentiment_Pro_Model"
             - name: MODEL_TARGET
@@ -433,7 +433,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://mlflow.ntdevopsmlflow.io.vn"
+              value: "http://18.139.231.37:30050/"
             - name: MODEL_NAME
               value: "Sentiment_Premium_Model"
             - name: MODEL_TARGET
@@ -501,7 +501,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://mlflow.ntdevopsmlflow.io.vn"
+              value: "http://18.139.231.37:30050/"
             - name: MODEL_NAME
               value: "Sentiment_Vip_Model"
             - name: MODEL_TARGET
