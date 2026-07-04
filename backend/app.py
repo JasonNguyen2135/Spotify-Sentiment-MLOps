@@ -49,27 +49,28 @@ TIER_LADDER = ["basic", "standard", "pro", "premium", "vip"]
 ROUTER_URL = os.getenv("ROUTER_URL", "http://model-router-service:8000")
 USE_LEARNED_ROUTER = os.getenv("USE_LEARNED_ROUTER", "true").lower() == "true"
 # Auto Apply: escalate to a stronger tier when a tier's confidence (max
-# predict_proba) is below tau. Unified tau = 0.70, calibrated on a labelled
+# predict_proba) is below tau. Unified tau = 0.80, calibrated on a labelled
 # 2400-sample set (knee of the cost<->accuracy curve; FrugalGPT-style range
 # 0.5-0.8). VIP is the top of the ladder, so it never escalates.
 AUTO_CONF_THRESHOLD = {
-    "basic": float(os.getenv("AUTO_TH_BASIC", "0.70")),
-    "standard": float(os.getenv("AUTO_TH_STANDARD", "0.70")),
-    "pro": float(os.getenv("AUTO_TH_PRO", "0.70")),
-    "premium": float(os.getenv("AUTO_TH_PREMIUM", "0.70")),
+    "basic": float(os.getenv("AUTO_TH_BASIC", "0.80")),
+    "standard": float(os.getenv("AUTO_TH_STANDARD", "0.80")),
+    "pro": float(os.getenv("AUTO_TH_PRO", "0.80")),
+    "premium": float(os.getenv("AUTO_TH_PREMIUM", "0.80")),
     "vip": 0.0,
 }
-# Escalation map: on low confidence a tier jumps to a stronger tier. Full ladder
-# through Premium: Premium is the only tier that reliably detects positive
-# sentiment on the current corpus, so the auto path must reach it before VIP.
-# Path: basic/standard -> pro -> premium -> vip.
-AUTO_ESCALATION_NEXT = {
-    "basic": "pro",
-    "standard": "pro",
-    "pro": "premium",
+# Escalation map: on low confidence a tier jumps to a stronger tier
+# (skip-level, overridable via AUTO_ESCALATION_JSON). July 2026 equal-sample
+# calibration: Standard is the strongest classic tier, and inserting
+# Pro/Premium in the path lowers end-to-end accuracy (they answer confidently
+# on comments VIP would get right). Path: basic -> standard -> vip.
+AUTO_ESCALATION_NEXT = json.loads(os.getenv("AUTO_ESCALATION_JSON", json.dumps({
+    "basic": "standard",
+    "standard": "vip",
+    "pro": "vip",
     "premium": "vip",
     "vip": None,
-}
+})))
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT_VAL", 6379))

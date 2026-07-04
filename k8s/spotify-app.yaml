@@ -226,7 +226,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://18.139.231.37:30050/"
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
             - name: MODEL_NAME
               value: "Sentiment_Basic_Model"
             - name: MODEL_TARGET
@@ -250,13 +250,12 @@ spec:
               value: "rabbitmq-service.mlops-sentiment.svc.cluster.local"
           ports:
             - containerPort: 8000
+          # Không đặt CPU limit: 4 tier còn lại không có limit, giữ envelope
+          # đồng nhất để so sánh serving giữa các tier công bằng (Table 5).
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
@@ -297,7 +296,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://18.139.231.37:30050/"
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
             - name: MODEL_NAME
               value: "Sentiment_Standard_Model"
             - name: MODEL_TARGET
@@ -365,7 +364,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://18.139.231.37:30050/"
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
             - name: MODEL_NAME
               value: "Sentiment_Pro_Model"
             - name: MODEL_TARGET
@@ -433,7 +432,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://18.139.231.37:30050/"
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
             - name: MODEL_NAME
               value: "Sentiment_Premium_Model"
             - name: MODEL_TARGET
@@ -499,9 +498,14 @@ spec:
         - name: model-vip
           image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
           imagePullPolicy: Always
+          # Pin transformers khớp version đã train/pickle model VIP (4.57.6):
+          # image hiện build với transformers 5.x đã bỏ DistilBertSdpaAttention
+          # nên unpickle fail. Bỏ override này khi image rebuild với
+          # model/requirements.txt đã pin.
+          command: ["sh", "-c", "pip install --no-cache-dir transformers==4.57.6 && exec uvicorn app:app --host 0.0.0.0 --port 8000"]
           env:
             - name: MLFLOW_TRACKING_URI
-              value: "http://18.139.231.37:30050/"
+              value: "http://mlflow.ntdevopsmlflow.io.vn"
             - name: MODEL_NAME
               value: "Sentiment_Vip_Model"
             - name: MODEL_TARGET
@@ -639,7 +643,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: backend
-          image: registry.ntdevopsregistry.io.vn/mlops/backend:v1.0.0
+          image: registry.ntdevopsregistry.io.vn/mlops/backend:v1.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
@@ -658,15 +662,17 @@ spec:
               value: "mysql+pymysql://root:root123@mysql-hitl:3306/hitl_audit"
             - name: JWT_SECRET
               value: "super-secret-key-change-me-in-production"
-            # Auto-Apply cascade escalation threshold (calibrated, unified tau=0.70).
+            # Auto-Apply cascade: tau=0.80 (knee of the July 2026 equal-sample
+            # calibration on the frozen 2,400-comment set); skip-level path
+            # basic -> standard -> vip (see AUTO_ESCALATION_JSON default).
             - name: AUTO_TH_BASIC
-              value: "0.70"
+              value: "0.80"
             - name: AUTO_TH_STANDARD
-              value: "0.70"
+              value: "0.80"
             - name: AUTO_TH_PRO
-              value: "0.70"
+              value: "0.80"
             - name: AUTO_TH_PREMIUM
-              value: "0.70"
+              value: "0.80"
             - name: GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:
