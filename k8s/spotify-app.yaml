@@ -222,7 +222,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-service
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          image: http://localhost:30080/mlops/model-service:latest
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -292,7 +292,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-standard
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          image: http://localhost:30080/mlops/model-service:latest
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -360,7 +360,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-pro
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          image: http://localhost:30080/mlops/model-service:latest
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -428,7 +428,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-premium
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          image: http://localhost:30080/mlops/model-service:latest
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -496,7 +496,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-vip
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          image: http://localhost:30080/mlops/model-service:latest
           imagePullPolicy: Always
           # Pin transformers khớp version đã train/pickle model VIP (4.57.6):
           # image hiện build với transformers 5.x đã bỏ DistilBertSdpaAttention
@@ -571,7 +571,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: model-router
-          image: registry.ntdevopsregistry.io.vn/mlops/model-service:latest
+          image: http://localhost:30080/mlops/model-service:latest
           imagePullPolicy: Always
           env:
             - name: MLFLOW_TRACKING_URI
@@ -643,7 +643,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: backend
-          image: registry.ntdevopsregistry.io.vn/mlops/backend:v1.1.0
+          image: http://localhost:30080/mlops/backend:v1.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
@@ -731,7 +731,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: frontend
-          image: registry.ntdevopsregistry.io.vn/mlops/frontend:v1.0.0
+          image: http://localhost:30080/mlops/frontend:v1.0.0
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
@@ -782,7 +782,7 @@ spec:
         - name: harbor-secret
       containers:
         - name: crawler
-          image: registry.ntdevopsregistry.io.vn/mlops/crawler:v1.0.0
+          image: http://localhost:30080/mlops/crawler:v1.0.0
           imagePullPolicy: IfNotPresent
           env:
             - name: MONGO_URL
